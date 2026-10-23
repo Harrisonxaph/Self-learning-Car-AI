@@ -1,6 +1,6 @@
 # Testing
 
-> Status: the commands below exist from P1-01 onwards. Only the project foundation is tested so far (canvas sizing, page start-up and the architecture lint rules); the rest of the table under "What must be tested" applies as each feature lands. Report only results you actually ran.
+> Status: the commands below exist from P1-01 onwards. Only the project foundation (canvas sizing, page start-up and the architecture lint rules) and the fixed-timestep loop are tested so far; the rest of the table under "What must be tested" applies as each feature lands. Report only results you actually ran.
 
 ## Commands
 
@@ -45,7 +45,7 @@ Lint rules have tests too: `tests/config/eslint-boundaries.test.ts` lints sample
 
 ```
 tests/
-  sim/          physics, collision, checkpoints, laps
+  sim/          fixed-step clock, world ticks; later physics, collision, checkpoints, laps
   sensors/      ray casting
   ai/           forward pass, input and output mapping
   evolution/    operators, elitism, determinism
@@ -53,6 +53,7 @@ tests/
   persistence/  model validation, migrations, storage failures
   utils/        rng, math
   render/       canvas sizing and drawing helpers
+  ui/           frame loop (driven by fake frames and visibility changes)
   config/       tests for the tooling configuration (ESLint boundaries)
   e2e/          Playwright: driving, training, save/load, editor
 ```
@@ -63,6 +64,7 @@ Tests mirror `src/`. No tests next to source files.
 
 | Area | Required tests |
 |------|----------------|
+| Loop | The same number of ticks gives the same state at 30, 60 and 120 Hz and with uneven frame times. At most 5 ticks per frame. A hidden page runs no ticks, and showing it again causes no catch-up jump (unit tests with fake frames; e2e by emulating `visibilitychange`). |
 | RNG | Same seed gives the same sequence. Different seeds give different sequences. Known first values are pinned. |
 | Physics | Speed rises with throttle and falls with brake and drag. Brake never makes speed negative. Yaw is zero at zero speed; high-speed wheel-angle limits are respected. Results are independent of render frame rate (the same N ticks give the same state). |
 | Determinism | Two runs with the same seed and config give bit-identical car states after N ticks and identical generation-K genomes. |

@@ -1,6 +1,6 @@
 # Architecture
 
-> Status: **mostly planned**. P1-01 adds only the project foundation: `src/main.ts`, `src/render/viewport.ts` (canvas sizing) and `src/render/placeholder.ts` (start-up screen). Everything else below is the target design for later tasks. Update this document when the code shows a better design.
+> Status: **mostly planned**. Built so far: the project foundation from P1-01 (`src/main.ts`, `src/render/viewport.ts` for canvas sizing, `src/render/placeholder.ts` for the start-up screen) and the fixed-timestep loop from P1-02 (`src/sim/config.ts`, `src/sim/world.ts`, `src/sim/fixedStep.ts`, `src/ui/frameLoop.ts`). Everything else below is the target design for later tasks. Update this document when the code shows a better design.
 
 ## Goals that shape the design
 
@@ -21,6 +21,7 @@ src/
     collision.ts          car–boundary intersection
     checkpoints.ts        ordered gates, lap counting, lap timing
     world.ts              steps every car once per tick
+    fixedStep.ts          turns real elapsed time into whole fixed ticks
   sensors/
     rays.ts               7 ray casts → normalised distances
   ai/                     inference only, no evolution imports
@@ -47,6 +48,7 @@ src/
     renderer.ts
     layers/               track, cars, sensors, overlays
   ui/                     DOM controls, dashboard, editor
+    frameLoop.ts          animation frames: run ticks, draw, pause when hidden
     controls/             touch and keyboard input
     dashboard/            stats, fitness graph
     editor/               track editor
@@ -76,10 +78,10 @@ Rules (enforced by review and by `no-restricted-imports` rules in `eslint.config
 
 ## Simulation loop
 
-- Fixed timestep `DT = 1/60 s` (in `sim/config.ts`).
-- Rendered mode: an accumulator collects real elapsed time and runs `world.step(DT)` as many times as needed, capped (for example 5 steps per frame) so a slow device slows down instead of spiralling. Render once per animation frame and interpolate if needed.
-- Headless/accelerated mode: run N ticks per batch (for example inside `setTimeout` slices or a Web Worker) without drawing, then hand a snapshot to the renderer every few hundred milliseconds.
-- On `visibilitychange` to hidden, pause and drop the accumulated time so iOS Safari does not cause a large catch-up jump on return.
+- Fixed timestep `DT = 1/60 s` (`timestepSeconds` in `sim/config.ts`). The simulation only ever advances by `DT`; it is never given the frame time. Simulated time is `tick × DT`, computed from the tick count rather than summed, so it does not drift.
+- Rendered mode (built in P1-02): `ui/frameLoop.ts` runs on `requestAnimationFrame`. `sim/fixedStep.ts` turns each frame's real elapsed time into a whole number of ticks, carrying part-ticks to the next frame. At most `maxStepsPerFrame` (5) ticks run per frame; any further backlog is dropped, so a slow device slows the simulation down instead of spiralling. The loop renders once per frame after the ticks. No interpolation yet; add it if motion looks uneven once cars move.
+- On `visibilitychange` to hidden, the loop cancels its frame and drops all pending time. The first frame after the page is shown again only records the time, so returning from another tab or app (including iOS Safari suspension) never causes a catch-up jump.
+- Headless/accelerated mode (planned, P3-03): run N ticks per batch (for example inside `setTimeout` slices or a Web Worker) without drawing, then hand a snapshot to the renderer every few hundred milliseconds. It uses the same `stepWorld` and `DT`.
 
 ## Vehicle model
 

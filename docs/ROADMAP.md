@@ -15,7 +15,7 @@ _Last verified: 2026-10-23, against `main` at `dbb0782`, plus the P1-01 branch `
 | GitHub issues | Existing issues #1–#39 are preserved. Reconciliation adds #41–#50 for two missing primary-release entries and eight approval-gated research entries; #40 is the existing documentation PR. |
 | AI learning results | None. No experiments have been run, so no learning claims can be made. |
 
-P1-01 and P1-10 are **In Review**; the other 38 primary-release implementation features are **Not Started**. Eight research entries are **Blocked** pending explicit approval; Q-01 remains **In Review**. No implementation is marked Complete. The initial master specification is the owner's detailed project request; no separate specification was found. Re-verify this table against code and tests whenever statuses change.
+P1-01, P1-02 and P1-10 are **In Review**; the other 37 primary-release implementation features are **Not Started**. Eight research entries are **Blocked** pending explicit approval; Q-01 remains **In Review**. No implementation is marked Complete. The initial master specification is the owner's detailed project request; no separate specification was found. Re-verify this table against code and tests whenever statuses change.
 
 ### Existing work and reconciliation
 
@@ -58,7 +58,7 @@ Documentation-only checks are recorded as such; no application/device execution 
 | ID | Feature | Phase | Priority | Status | Depends on | Issue |
 |----|---------|-------|----------|--------|------------|-------|
 | P1-01 | Project scaffold: Vite, TypeScript, lint and test tooling | 1 | P0 | In Review | — | [#1](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/1) |
-| P1-02 | Fixed-timestep loop with simulation/render separation | 1 | P0 | Not Started | P1-01 | [#2](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/2) |
+| P1-02 | Fixed-timestep loop with simulation/render separation | 1 | P0 | In Review | P1-01 | [#2](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/2) |
 | P1-03 | Seeded pseudorandom generator | 1 | P0 | Not Started | P1-01 | [#3](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/3) |
 | P1-04 | Track model and responsive Canvas 2D racetrack | 1 | P0 | Not Started | P1-02 | [#4](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/4) |
 | P1-05 | Vehicle physics: acceleration, steering, braking and drag | 1 | P0 | Not Started | P1-02 | [#5](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/5) |
@@ -129,7 +129,7 @@ Dependencies are taken from the table above.
 
 ### P1-02 — Fixed-timestep loop with simulation/render separation
 
-- **Priority:** P0 · **Status:** Not Started · **Issue:** [#2](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/2)
+- **Priority:** P0 · **Status:** In Review · **Issue:** [#2](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/2)
 - **Depends on:** P1-01
 - **Description:** Accumulator loop that steps `world.step(DT)` at a fixed 1/60 s, caps steps per frame, renders once per frame, and pauses on `visibilitychange`. Simulation modules have no DOM imports.
 - **Acceptance criteria:**
@@ -139,6 +139,7 @@ Dependencies are taken from the table above.
 - **Test requirements:**
   - Unit: same tick count gives the same state with simulated 30/60/120 Hz frame timings.
   - E2E: pause on hidden tab.
+- **Outstanding before Complete:** a real iPhone/iPad check that switching apps or locking the screen pauses and resumes without a jump (emulated WebKit is not proof), Codex technical approval of the PR head and owner merge approval.
 
 ### P1-03 — Seeded pseudorandom generator
 
@@ -679,3 +680,4 @@ These apply to every phase and are checked in review.
 | 2026-10-23 | Owner selects Claude Code as main developer and Codex as reviewer, using explicit commit-specific technical approval in GitHub comments and separate owner merge approval. Role/workflow changes are proposed in a dedicated follow-up PR; feature statuses are unchanged. |
 | 2026-10-23 | P1-01 implemented on `feat/p1-01-project-scaffold` and moved to In Review. Not Complete: Codex review, WebKit test runs, real-device checks and owner approval are outstanding. |
 | 2026-10-23 | P1-10 CI workflow implemented on `feat/p1-10-ci` and moved to In Review; not Complete until its CI runs, the failing-test demonstration, Codex review and owner approval are recorded. |
+| 2026-10-23 | P1-02 fixed-timestep loop implemented on `feat/p1-02-fixed-timestep` and moved to In Review; not Complete until real-device pause checks, Codex review and owner approval are recorded. |
