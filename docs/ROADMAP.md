@@ -92,7 +92,7 @@ Documentation-only checks are recorded as such; no application/device execution 
 | P4-03 | Save and load custom tracks **(ST3)** | 4 | P1 | Not Started | P4-01, P4-05 | [#30](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/30) |
 | P4-04 | Training, validation and held-out track sets | 4 | P1 | Not Started | P4-01, P2-10 | [#31](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/31) |
 | P4-05 | Evaluate trained models on unfamiliar tracks | 4 | P1 | Not Started | P4-04, P3-05 | [#32](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/32) |
-| P4-06 | Silverstone: first real-world circuit (import, validation and selection) | 4 | P1 | Not Started | P4-01, P2-10, P2-05, P2-11 | [#57](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/57) |
+| P4-06 | Silverstone: first real-world circuit (import, validation and selection) | 4 | P1 | Not Started | P4-01, P2-10, P2-05, P2-07, P3-05 | [#57](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/57) |
 | P4-07 | Camera zoom and follow for large circuits | 4 | P1 | Not Started | P1-04, P2-05 | [#58](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/58) |
 | P5-01 | Rule-based baseline driver | 5 | P1 | Not Started | P2-02, P2-07, P2-10 | [#33](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/33) |
 | P5-02 | Learned braking comparative study **(ST4)** | 5 | P1 | Not Started | P2-09, P4-04, P5-01 | [#34](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/34) |
@@ -110,7 +110,7 @@ Dependencies are taken from the table above.
 - **In review:** P1-10 (CI) is merged into `main` (#60) and stays In Review until Codex's full review record is posted.
 - **Ready now:** P1-02 (next), then P1-03; also P1-11, and P2-03 (the network is pure maths and can be built alongside the simulator).
 - **Next wave:** P1-04 and P1-05 (after P1-02), then P1-06 and P1-07, then P1-08 and P1-09.
-- **Silverstone (approved 2026-10-23, planning only):** P2-11 (spatial index) after P1-06 and P2-01; P4-06 (Silverstone import) after P4-01, P2-10, P2-05 and P2-11; P4-07 (camera) after P1-04 and P2-05. None of these interrupts the current phase.
+- **Silverstone (approved 2026-10-23, planning only):** P4-06 (Silverstone import) after P4-01, P2-10, P2-05, P2-07 and P3-05; P2-11 (spatial index, after P1-06 and P2-01) only if P4-06's measured baseline misses the budget or the owner approves an architectural reason; P4-07 (camera) after P1-04 and P2-05, as a separate follow-up. Each still needs explicit owner implementation approval when its dependencies are complete; this planning approval does not authorise implementation. None of these interrupts the current phase.
 - **Phase 2 critical path:** P1-06 → P2-01 → P2-02, and P1-07 → P2-06, then P2-04 → P2-05 → P2-07 → P2-08.
 - **Early evaluation:** P1-04 + P1-07 → P2-10 supplies built-in training/validation/held-out fixtures before P2-07/P2-08; the editor is not a prerequisite.
 - **Later work:** follow the explicit dependency table rather than treating every earlier phase as a blanket blocker. Phase 4 track validation/editor work can proceed after its Phase 1 prerequisites; dashboard and persistence wait for their respective inference/trainer/experiment dependencies. P3-08 supplies Phase 3 comparisons; P5-05 extends them.
@@ -373,10 +373,22 @@ Dependencies are taken from the table above.
 
 - **Priority:** P1 · **Status:** Not Started · **Issue:** [#56](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/56)
 - **Depends on:** P1-06, P2-01
-- **Description:** A deterministic uniform-grid (or equivalent) index over track boundary segments so collision checks and ray casts only test nearby segments. Pulled forward from P5-06 because real-world circuits (Silverstone has about 2,350 boundary segments) are too slow to test exhaustively for a whole population on phones. The index must not change any result.
+- **Description:** A deterministic uniform-grid (or equivalent) index over track boundary segments so collision checks and ray casts only test nearby segments. The index must not change any result.
+- **Conditional:** this is an optimisation for a **hypothesis**, not a measured problem. Silverstone has about 2,350 boundary segments, so brute force needs about 0.9 million segment tests per tick for an example population of 50 cars × 8 queries, which *may* be too slow on phones. No measurement supports this yet. P2-11 is implemented only if one of these holds:
+  1. The brute-force baseline recorded by P4-06 (or a synthetic benchmark track with at least as many boundary segments) misses the budget below on the reference phone.
+  2. The owner approves an architectural reason recorded in #56.
+- **Performance budget (proposed; the owner may revise it in #56 before any measurement):**
+  - Reference device: the owner's iPhone in Safari, with model and iOS version recorded in #56 before measuring. Desktop Chromium figures are recorded for comparison only and never replace the phone result.
+  - Workload: Silverstone (or the synthetic stand-in), the P2-05 default population, 7 rays plus collision per car per tick.
+    - Rendered training at 1× uses the P3-03 phone draw cap.
+    - Headless training runs at maximum speed.
+  - Budget:
+    - Rendered 1×: sustains 60 ticks/s with p95 simulation update time ≤ 8 ms per frame.
+    - Headless: at least 600 ticks/s (10× real time).
 - **Acceptance criteria:**
+  - The baseline that triggered the work, with device, workload and figures, is linked from #56.
   - Collision results and ray distances are bit-identical to brute force on all test tracks and on seeded random query sets.
-  - Headless throughput is recorded before and after on the same configuration and a named device.
+  - Before/after figures under the same workload are recorded on the reference phone and the budget is met.
   - The index is derived from track geometry only and is not stored in models or experiment records.
 - **Test requirements:**
   - Unit: index vs brute-force equivalence; existing determinism suite unchanged; benchmark output in the PR.
@@ -539,14 +551,18 @@ Dependencies are taken from the table above.
 ### P4-06 — Silverstone: first real-world circuit (import, validation and selection)
 
 - **Priority:** P1 · **Status:** Not Started · **Issue:** [#57](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/57)
-- **Depends on:** P4-01, P2-10, P2-05, P2-11
+- **Depends on:** P4-01, P2-10, P2-05, P2-07, P3-05 (P2-07 supplies experiment manifests and P3-05 saved models, which both record the track version). P2-11 is a conditional prerequisite: see the performance criterion below.
 - **Description:** Import Silverstone from the TUMFTM racetrack-database (`tracks/Silverstone.csv`: centre line and right/left widths in metres) into the P4-01 track format, as the first real-world circuit. Silverstone is in the **training** split, so generalisation claims use other held-out tracks. Importer and data only, not combined with unrelated changes. Excludes the `racelines/` files, any precomputed racing line as a network input, scripted steering and car-to-car interaction (R-01/R-02).
 - **Acceptance criteria:**
   - A deterministic conversion script in `scripts/` records source URL, commit and file hash; the committed track file equals its output.
   - Boundaries built from the centre line and widths pass the P4-01 validator. Ordered gates (about every 50 m) and a documented start pose behind gate 0 are included.
   - Track ID `silverstone` and a source-commit-plus-content-hash version are recorded in experiment manifests and saved models. Episode duration and stall timeout are scaled to the ~5.9 km lap.
   - Users can select the synthetic circuits or Silverstone. Synthetic tracks and their tests are unchanged.
-  - A seeded population training run on Silverstone is deterministic, with car independence as in P2-05. Throughput and frame rate are recorded on a named phone and desktop.
+  - A seeded population training run on Silverstone is deterministic, with car independence as in P2-05.
+  - The brute-force baseline is measured against the P2-11 budget, using its reference phone and workload, and the figures are recorded in #56 and #57.
+    - If the budget is met, P2-11 is not needed for Silverstone.
+    - If it is missed, P2-11 is triggered, and P4-06 stays In Review until P2-11 is Complete and the budget is met.
+  - Display: the whole circuit is fitted to the canvas on desktop, phone and tablet. Legible individual cars on phones (zoom and follow) are P4-07, a separate display follow-up and PR, not a P4-06 completion prerequisite.
   - Licence confirmed before data is committed: the database is LGPL-3.0 and its centre lines come from OpenStreetMap (ODbL 1.0). The data file carries its own licence notice and attribution (TUM racetrack-database; "© OpenStreetMap contributors"), with owner sign-off.
 - **Test requirements:**
   - Converter golden test; validator on Silverstone; gate order and spacing; start pose inside the road; deterministic training smoke run; E2E track selection and display.
@@ -622,7 +638,7 @@ Dependencies are taken from the table above.
 
 - **Priority:** P1 · **Status:** Not Started · **Issue:** [#38](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/38)
 - **Depends on:** P3-07
-- **Description:** Profile and speed up headless training (typed arrays, Web Worker if the UI stutters, further work beyond the boundary spatial index delivered earlier by P2-11), without changing results.
+- **Description:** Profile and speed up headless training (typed arrays, Web Worker if the UI stutters, further work beyond the boundary spatial index if P2-11 was triggered earlier), without changing results.
 - **Acceptance criteria:**
   - Before implementation, record target device/browser, workload and responsiveness budget in the issue. Publish before/after FPS, mean/p95 update cost and simulation throughput under the same configuration; the agreed budget and determinism checks pass. Adopt a Worker only if profiling demonstrates main-thread blocking.
 - **Test requirements:**
@@ -736,6 +752,7 @@ These apply to every phase and are checked in review.
 | 2026-10-23 | Initial documentation work in Claude Code PR #40; verified main had no code and created issues #1–#39. |
 | 2026-10-23 | Codex reconciliation preserves existing work; adds issues #41–#50, early evaluation fixtures and Phase 3 comparison, requires full model provenance, separates research training, and makes completion/recovery evidence explicit. |
 | 2026-10-23 | Owner selects Claude Code as main developer and Codex as reviewer, using explicit commit-specific technical approval in GitHub comments and separate owner merge approval. Role/workflow changes are proposed in a dedicated follow-up PR; feature statuses are unchanged. |
-| 2026-10-23 | P1-01 implemented and merged into `main` (#55); it stays In Review because WebKit test runs, real-device checks and a full Codex review record are outstanding. |
+| 2026-10-23 | P1-01 implemented and merged into `main` (#55); it stays In Review because real-device checks and a full Codex review record are outstanding. WebKit later passed in CI (run 39985079357 on #60). |
 | 2026-10-23 | P1-10 CI workflow merged into `main` (#60). CI passed on its head (run 39985079357) and the throwaway failing-test PR (#61) failed both jobs as intended; it stays In Review until Codex's full review record with technical approval is posted. |
 | 2026-10-23 | Owner approves the Silverstone and multi-car (Option A: independent, non-interacting cars) plan. Planning only: adds P2-11 (#56), P4-06 (#57) and P4-07 (#58), adds car-independence criteria to P2-05 and a drawing cap to P3-03, and narrows P5-06. No implementation. |
+| 2026-10-23 | Codex review of #59 (`6de9693`): P2-11 becomes conditional on a measured brute-force baseline missing a recorded phone budget (or an owner-approved architectural reason) and no longer blocks P4-06. P4-06 now depends on P2-07 and P3-05, which record the track version; P4-07 is a separate display follow-up. Each item still needs owner implementation approval. |
