@@ -86,10 +86,12 @@ export function acceleration(speed: number, controls: Controls, physics: Vehicle
 const TWO_PI = 2 * Math.PI;
 /**
  * The same direction as `angle`, in (-π, π], removing any number of whole turns. An angle already in range is
- * returned unchanged. The final checks catch rounding that leaves a huge angle just outside the range.
+ * returned unchanged. `%` is an exact floating-point remainder (unlike subtracting a rounded multiple of 2π,
+ * which goes wrong for huge angles), leaving (-2π, 2π); one more turn then brings it into range, and that
+ * subtraction is exact too because both values are within a factor of two.
  */
 export function wrapAngle(angle: number): number {
-  let wrapped = angle - TWO_PI * Math.ceil((angle - Math.PI) / TWO_PI);
+  let wrapped = angle % TWO_PI;
   if (wrapped > Math.PI) wrapped -= TWO_PI;
   if (wrapped <= -Math.PI) wrapped += TWO_PI;
   return wrapped;

@@ -275,7 +275,20 @@ describe('heading range', () => {
   });
 
   it('stays in range for huge angles', () => {
-    for (const angle of [1e6, -1e6, 1e15, -1e15, 1e300, -1e300]) expect(inRange(wrapAngle(angle))).toBe(true);
+    for (const angle of [1e6, 1e15, 1e16, 1e17, 1e18, 1e19, 1e20, 2 ** 60 + 2 ** 9, 1e100, 1e300, Number.MAX_VALUE]) {
+      expect(inRange(wrapAngle(angle))).toBe(true);
+      expect(inRange(wrapAngle(-angle))).toBe(true);
+      // Already wrapped, so wrapping again changes nothing.
+      expect(wrapAngle(wrapAngle(angle))).toBe(wrapAngle(angle));
+    }
+  });
+
+  it('keeps a huge start heading in range and unchanged by a stationary step', () => {
+    for (const heading of [1e18, -1e18, Number.MAX_VALUE]) {
+      const car = createVehicle({ position: { x: 0, y: 0 }, heading });
+      expect(inRange(car.heading)).toBe(true);
+      expect(stepVehicle(car, NO_CONTROLS, PHYSICS, DT).heading).toBe(car.heading);
+    }
   });
 
   it.each([7 * Math.PI, -7 * Math.PI, 9 * Math.PI + 0.5, -9 * Math.PI - 0.5, Math.PI, -Math.PI, 2 * Math.PI])(
