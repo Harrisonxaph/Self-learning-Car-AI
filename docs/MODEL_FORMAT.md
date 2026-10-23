@@ -263,7 +263,7 @@ This is synthetic format data, not an experiment or evidence of learning. The 15
       "maxLaps": 3,
       "brakeEnabled": true,
       "physics": {
-        "maxSpeed": 30,
+        "maxSpeed": 23.722813232690143,
         "wheelbase": 2.5,
         "engineAcceleration": 8,
         "brakeDeceleration": 12,
@@ -325,6 +325,8 @@ The example contains all 159 values. Arrays serialize to JSON without precision 
 | `training.trackIds`, `training.trackVersions` | nonempty string[], object | Track identifiers and content version/hash for every training track. |
 | `training.configuration` | object | Required complete resolved configuration: physics/timestep, PRNG algorithm/version, sensors/normalisation and control contracts, population, selection, crossover, mutation, elitism, generation budget, fitness version/weights and termination settings. A hash alone is insufficient. Duplicated summary fields must agree with it. |
 | `training.seed` | unsigned 32-bit integer or null | Required key. Seeded runs store the seed. Legacy unseeded data uses null with `training.seedUnavailableReason`; mark it non-reproducible. |
+| `training.configuration.sensors.anglesDegrees` | number[] | One angle per ray input; `anglesDegrees.length + 2` (speed and heading error) must equal `architecture.layers[0]`, and the ray names in `architecture.inputs` must match the angles. |
+| `training.configuration.physics.maxSpeed` | number | Speed normaliser and limit. Must equal the terminal speed derived from engine acceleration, quadratic drag and rolling resistance (solve `quadraticDrag·v² + rollingResistance·v = engineAcceleration`); validators recompute it and reject mismatches beyond a small tolerance. The example's 23.722813232690143 is derived this way. |
 | `parameters.order` | string | Must match the layer-major ordering below; never infer a different ordering silently. |
 | `fitness` | number | Finite. Fitness is only comparable when `fitnessVersion` and the tracks match. |
 

@@ -88,9 +88,9 @@ Documentation-only checks are recorded as such; no application/device execution 
 | P3-08 | Initial saved-model comparison | 3 | P1 | Not Started | P3-04, P3-06 | [#42](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/42) |
 | P4-01 | Track data format and validation | 4 | P1 | Not Started | P1-04, P1-07 | [#28](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/28) |
 | P4-02 | Touch-friendly interactive track editor **(ST3)** | 4 | P1 | Not Started | P4-01, P1-08 | [#29](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/29) |
-| P4-03 | Save and load custom tracks **(ST3)** | 4 | P1 | Not Started | P4-01 | [#30](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/30) |
+| P4-03 | Save and load custom tracks **(ST3)** | 4 | P1 | Not Started | P4-01, P4-05 | [#30](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/30) |
 | P4-04 | Training, validation and held-out track sets | 4 | P1 | Not Started | P4-01, P2-10 | [#31](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/31) |
-| P4-05 | Evaluate trained models on unfamiliar tracks | 4 | P1 | Not Started | P4-04, P3-05, P4-02, P4-03 | [#32](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/32) |
+| P4-05 | Evaluate trained models on unfamiliar tracks | 4 | P1 | Not Started | P4-04, P3-05 | [#32](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/32) |
 | P5-01 | Rule-based baseline driver | 5 | P1 | Not Started | P2-02, P2-07, P2-10 | [#33](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/33) |
 | P5-02 | Learned braking comparative study **(ST4)** | 5 | P1 | Not Started | P2-09, P4-04, P5-01 | [#34](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/34) |
 | P5-03 | Human vs AI racing **(ST5)** | 5 | P1 | Not Started | P1-08, P3-05 | [#35](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/35) |
@@ -321,9 +321,9 @@ Dependencies are taken from the table above.
 
 - **Priority:** P0 · **Status:** Not Started · **Issue:** [#19](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/19)
 - **Depends on:** P2-07
-- **Description:** Implement random-action and untrained-network drivers and run experiments E1 and E2 from AI_EVALUATION.md over 10 training seeds.
+- **Description:** Implement random-action (A1), correlated random-action (A7), untrained-network (A2) and equal-budget random-search (A8) baselines and run experiments E1 and E2 from AI_EVALUATION.md over 10 training seeds.
 - **Acceptance criteria:**
-  - **Phase 2 acceptance:** controlled results demonstrate improvement over random actions on ordered progress, with lap completion and collisions reported, at least one valid evolved lap, ≥10 independent training seeds and the predeclared effect/uncertainty criteria in AI_EVALUATION.md. Built-in training/validation fixtures come from P2-10; held-out data stays reserved for final evaluation.
+  - **Phase 2 acceptance:** controlled results demonstrate improvement over equal-budget random search (A8) on ordered progress, with random-action floors (A1, A7), lap completion and collisions reported, at least one valid evolved lap, ≥10 independent training seeds and the predeclared effect/uncertainty criteria in AI_EVALUATION.md. Built-in training/validation fixtures come from P2-10; held-out data stays reserved for final evaluation.
   - An honest negative/inconclusive study can complete the experiment-reporting task but leaves Phase 2 acceptance unmet and requires a follow-up; rising fitness alone cannot pass the phase.
   - No claim made beyond what the data shows.
 - **Test requirements:**
@@ -472,13 +472,15 @@ Dependencies are taken from the table above.
 ### P4-03 — Save and load custom tracks
 
 - **Priority:** P1 · **Status:** Not Started · **Issue:** [#30](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/30) · **Stretch target:** ST3
-- **Depends on:** P4-01
-- **Description:** Store custom tracks in localStorage with JSON export/import, using the same safety rules as models.
+- **Depends on:** P4-01, P4-05
+- **Description:** Store custom tracks in localStorage with JSON export/import, using the same safety rules as models, and make saved custom tracks selectable in the P4-05 evaluation runner.
 - **Acceptance criteria:**
   - Round-trip identical; invalid or corrupt tracks rejected safely.
+  - A saved custom track can be chosen as an evaluation track in P4-05 (completing the custom-layout part of the Phase 4 acceptance).
 - **Test requirements:**
   - Unit: track store.
   - E2E: save, reload, load.
+  - E2E: evaluate a saved model on a saved custom track.
 
 ### P4-04 — Training, validation and held-out track sets
 
@@ -493,13 +495,13 @@ Dependencies are taken from the table above.
 ### P4-05 — Evaluate trained models on unfamiliar tracks
 
 - **Priority:** P1 · **Status:** Not Started · **Issue:** [#32](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/32)
-- **Depends on:** P4-04, P3-05, P4-02, P4-03
-- **Description:** Evaluation runner and UI that runs a saved model on chosen tracks with fixed evaluation seeds and stores results in the model's `evaluation` field.
+- **Depends on:** P4-04, P3-05
+- **Description:** Evaluation runner and UI that runs a saved model on chosen built-in tracks with fixed evaluation seeds and stores results in the model's `evaluation` field. It does not depend on the editor, so the generalisation study (P5-04) and comparisons (P5-05) are not blocked by it; P4-03 later adds saved custom tracks as selectable evaluation tracks.
 - **Acceptance criteria:**
-  - **Phase 4 acceptance:** users can evaluate trained models on layouts they did not train on and see lap completion, collisions and lap time.
+  - **Phase 4 acceptance (part):** users can evaluate trained models on built-in layouts they did not train on and see lap completion, collisions and lap time. Custom layouts are covered by P4-03.
 - **Test requirements:**
   - Integration: evaluation deterministic.
-  - E2E: evaluate a saved model on a custom track.
+  - E2E: evaluate a saved model on a built-in held-out track.
 
 ## Phase 5 — Advanced driving intelligence
 
