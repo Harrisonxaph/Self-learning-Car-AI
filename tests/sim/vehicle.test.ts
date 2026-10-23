@@ -9,6 +9,7 @@ import {
   createVehicle,
   maxSteerAngle,
   stepVehicle,
+  wrapAngle,
   type Controls,
   type VehicleState,
 } from '../../src/sim/vehicle';
@@ -22,8 +23,11 @@ const ORIGIN = { position: { x: 0, y: 0 }, heading: 0 };
 
 /** Runs `ticks` steps with fixed controls and returns every state, starting with the initial one. */
 function drive(start: VehicleState, controls: Controls, ticks: number): VehicleState[] {
+  return driveWith(PHYSICS, start, controls, ticks);
+}
+function driveWith(physics: typeof PHYSICS, start: VehicleState, controls: Controls, ticks: number): VehicleState[] {
   const states = [start];
-  for (let i = 0; i < ticks; i += 1) states.push(stepVehicle(states[i]!, controls, PHYSICS, DT));
+  for (let i = 0; i < ticks; i += 1) states.push(stepVehicle(states[i]!, controls, physics, DT));
   return states;
 }
 const last = <T>(items: readonly T[]) => items[items.length - 1]!;
@@ -34,7 +38,7 @@ const FULL_BRAKE: Controls = { steering: 0, throttle: 0, brake: 1 };
 describe('physics constants', () => {
   it('derive maxSpeed as the full-throttle terminal speed, matching docs/MODEL_FORMAT.md', () => {
     expect(PHYSICS.maxSpeed).toBe(terminalSpeed(PHYSICS));
-    expect(PHYSICS.maxSpeed).toBeCloseTo(23.722813232690143, 12);
+    expect(PHYSICS.maxSpeed).toBeCloseTo(23.722813232690147, 12);
     expect(acceleration(PHYSICS.maxSpeed, FULL_THROTTLE, PHYSICS)).toBeCloseTo(0, 12);
     expect(Object.isFrozen(PHYSICS)).toBe(true);
   });
@@ -48,6 +52,31 @@ describe('physics constants', () => {
 
   it('use engine / rolling resistance as the terminal speed when there is no drag', () => {
     expect(terminalSpeed({ engineAcceleration: 8, quadraticDrag: 0, rollingResistance: 0.5 })).toBe(16);
+  });
+
+  it('stay accurate for tiny positive drag, where the textbook quadratic formula cancels to 0', () => {
+    for (const quadraticDrag of [1e-20, 1e-12, 1e-6, 1e-3, 0.01, 1, 100]) {
+      for (const rollingResistance of [0, 0.1, 2]) {
+        const coefficients = { engineAcceleration: 8, quadraticDrag, rollingResistance };
+        const v = terminalSpeed(coefficients);
+        expect(v).toBeGreaterThan(0);
+        // Force balance: the drag and resistance at v cancel the full-throttle acceleration.
+        expect((quadraticDrag * v * v + rollingResistance * v) / 8).toBeCloseTo(1, 12);
+      }
+    }
+    expect(terminalSpeed({ engineAcceleration: 8, quadraticDrag: 1e-20, rollingResistance: 0.1 })).toBeCloseTo(80, 9);
+  });
+
+  it('let a car with tiny drag actually move at full throttle', () => {
+    const physics = { ...PHYSICS, quadraticDrag: 1e-20 };
+    const lowDrag = { ...physics, maxSpeed: terminalSpeed(physics) };
+    const end = last(driveWith(lowDrag, createVehicle(ORIGIN), FULL_THROTTLE, TICKS_PER_SECOND));
+    expect(end.speed).toBeGreaterThan(7);
+    expect(end.position.x).toBeGreaterThan(3);
+  });
+
+  it('give an unlimited terminal speed with no drag and no rolling resistance', () => {
+    expect(terminalSpeed({ engineAcceleration: 8, quadraticDrag: 0, rollingResistance: 0 })).toBe(Infinity);
   });
 });
 
@@ -180,6 +209,15 @@ describe('controls', () => {
     expect(() => stepVehicle(atSpeed(5), controls as unknown as Controls, PHYSICS, DT)).toThrow(RangeError);
   });
 
+  it.each([
+    ['NaN heading', { position: { x: 0, y: 0 }, heading: Number.NaN }],
+    ['infinite heading', { position: { x: 0, y: 0 }, heading: Number.NEGATIVE_INFINITY }],
+    ['NaN position', { position: { x: Number.NaN, y: 0 }, heading: 0 }],
+    ['infinite position', { position: { x: 0, y: Number.POSITIVE_INFINITY }, heading: 0 }],
+  ])('rejects a start pose with a %s', (_label, pose) => {
+    expect(() => createVehicle(pose)).toThrow(RangeError);
+  });
+
   it('starts stationary at a given pose without sharing the pose object', () => {
     const pose = { position: { x: -6, y: 40 }, heading: 0 };
     const car = createVehicle(pose);
@@ -208,6 +246,50 @@ describe('integration (semi-implicit Euler)', () => {
     expect(turned.heading).toBeLessThan(0);
     expect(turned.heading).toBeCloseTo(-Math.PI - 0.001 + (turned.speed * Math.tan(maxSteerAngle(turned.speed, PHYSICS))) / PHYSICS.wheelbase * DT, 12);
   });
+});
+
+describe('heading range', () => {
+  const inRange = (heading: number) => heading > -Math.PI && heading <= Math.PI;
+
+  it.each([
+    ['π stays π', Math.PI, Math.PI],
+    ['-π becomes π', -Math.PI, Math.PI],
+    ['0 stays 0', 0, 0],
+    ['2π becomes 0', 2 * Math.PI, 0],
+    ['3π becomes π', 3 * Math.PI, Math.PI],
+    ['7π becomes π', 7 * Math.PI, Math.PI],
+    ['-7π becomes π', -7 * Math.PI, Math.PI],
+    ['5 turns plus 1 rad becomes 1', 10 * Math.PI + 1, 1],
+    ['-5 turns minus 1 rad becomes -1', -10 * Math.PI - 1, -1],
+    ['π + 0.001 becomes -π + 0.001', Math.PI + 0.001, -Math.PI + 0.001],
+  ])('wrapAngle: %s', (_label, angle, expected) => {
+    const wrapped = wrapAngle(angle);
+    expect(inRange(wrapped)).toBe(true);
+    expect(wrapped).toBeCloseTo(expected, 9);
+  });
+
+  it('returns angles already in range unchanged, bit for bit', () => {
+    for (const angle of [0, 1e-300, -1e-300, 1, -1, Math.PI, -Math.PI + 1e-15, Math.PI - 1e-15]) {
+      expect(wrapAngle(angle)).toBe(angle);
+    }
+  });
+
+  it('stays in range for huge angles', () => {
+    for (const angle of [1e6, -1e6, 1e15, -1e15, 1e300, -1e300]) expect(inRange(wrapAngle(angle))).toBe(true);
+  });
+
+  it.each([7 * Math.PI, -7 * Math.PI, 9 * Math.PI + 0.5, -9 * Math.PI - 0.5, Math.PI, -Math.PI, 2 * Math.PI])(
+    'keeps a start heading of %s in (-π, π] after creation and after stepping',
+    (heading) => {
+      const car = createVehicle({ position: { x: 0, y: 0 }, heading });
+      expect(inRange(car.heading)).toBe(true);
+      expect(Math.cos(car.heading)).toBeCloseTo(Math.cos(heading), 9);
+      expect(Math.sin(car.heading)).toBeCloseTo(Math.sin(heading), 9);
+      for (const controls of [NO_CONTROLS, FULL_THROTTLE, { steering: 1, throttle: 1, brake: 0 }]) {
+        expect(inRange(stepVehicle(car, controls, PHYSICS, DT).heading)).toBe(true);
+      }
+    },
+  );
 });
 
 describe('determinism and stability', () => {

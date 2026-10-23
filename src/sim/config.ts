@@ -46,11 +46,16 @@ export interface VehiclePhysics {
 /**
  * Speed where full throttle is balanced by drag and rolling resistance: the positive root of
  * quadraticDrag·v² + rollingResistance·v = engineAcceleration.
+ *
+ * Uses the form 2a / (r + √(r² + 4ca)), which equals the textbook (−r + √(r² + 4ca)) / 2c but has no
+ * subtraction, so it stays accurate when drag is tiny (the textbook form cancels to 0 there) and needs no
+ * special case for zero drag, where it gives a / r. With no drag and no rolling resistance nothing limits
+ * the speed, so it returns Infinity.
  */
 export function terminalSpeed(physics: Pick<VehiclePhysics, 'engineAcceleration' | 'quadraticDrag' | 'rollingResistance'>): number {
   const { engineAcceleration: a, quadraticDrag: c, rollingResistance: r } = physics;
-  if (c === 0) return a / r;
-  return (-r + Math.sqrt(r * r + 4 * c * a)) / (2 * c);
+  const denominator = r + Math.sqrt(r * r + 4 * c * a);
+  return denominator === 0 ? Infinity : (2 * a) / denominator;
 }
 
 const PHYSICS_WITHOUT_MAX_SPEED = {

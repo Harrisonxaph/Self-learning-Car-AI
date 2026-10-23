@@ -28,9 +28,16 @@ export interface Controls {
 
 export const NO_CONTROLS: Controls = Object.freeze({ steering: 0, throttle: 0, brake: 0 });
 
-/** A stationary car at the given pose, for example a track's start pose. */
+/**
+ * A stationary car at the given pose, for example a track's start pose. The heading may be any finite angle,
+ * including several turns; it is stored in (-π, π]. A non-finite coordinate or heading throws RangeError.
+ */
 export function createVehicle(pose: Pose): VehicleState {
-  return { position: { x: pose.position.x, y: pose.position.y }, heading: pose.heading, speed: 0 };
+  const { x, y } = pose.position;
+  if (![x, y, pose.heading].every(Number.isFinite)) {
+    throw new RangeError(`Vehicle pose must be finite, got (${x}, ${y}) heading ${pose.heading}.`);
+  }
+  return { position: { x, y }, heading: wrapAngle(pose.heading), speed: 0 };
 }
 
 /**
@@ -77,11 +84,15 @@ export function acceleration(speed: number, controls: Controls, physics: Vehicle
 }
 
 const TWO_PI = 2 * Math.PI;
-/** Keeps an angle in (-π, π] so it never grows without bound. */
-function wrapAngle(angle: number): number {
-  if (angle > Math.PI) return angle - TWO_PI;
-  if (angle <= -Math.PI) return angle + TWO_PI;
-  return angle;
+/**
+ * The same direction as `angle`, in (-π, π], removing any number of whole turns. An angle already in range is
+ * returned unchanged. The final checks catch rounding that leaves a huge angle just outside the range.
+ */
+export function wrapAngle(angle: number): number {
+  let wrapped = angle - TWO_PI * Math.ceil((angle - Math.PI) / TWO_PI);
+  if (wrapped > Math.PI) wrapped -= TWO_PI;
+  if (wrapped <= -Math.PI) wrapped += TWO_PI;
+  return wrapped;
 }
 
 /**
