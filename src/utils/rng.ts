@@ -154,7 +154,8 @@ function fromWords(initialA: number, initialB: number, initialC: number, initial
       return value;
     },
     pick(items) {
-      if (items.length === 0) throw new RangeError('pick() needs a non-empty array.');
+      // Array.isArray rejects array-like values such as strings or { length: 3 }, which would return undefined.
+      if (!Array.isArray(items) || items.length === 0) throw new RangeError('pick() needs a non-empty array.');
       return items[int(0, items.length)] as (typeof items)[number];
     },
     getState() {

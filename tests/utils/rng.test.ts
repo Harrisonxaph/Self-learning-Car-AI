@@ -239,6 +239,17 @@ describe('int and pick', () => {
   it('refuses to pick from an empty array', () => {
     expect(() => createRng(0).pick([])).toThrow(RangeError);
   });
+
+  it.each([
+    ['an array-like object', { length: 3 }],
+    ['a string', 'abc'],
+    ['null', null],
+  ])('refuses to pick from %s without consuming state', (_label, items) => {
+    const rng = createRng(16);
+    const before = rng.getState();
+    expect(() => rng.pick(items as unknown as readonly unknown[])).toThrow(RangeError);
+    expect(rng.getState()).toEqual(before);
+  });
 });
 
 describe('gaussian', () => {
