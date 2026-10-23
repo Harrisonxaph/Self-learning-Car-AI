@@ -38,10 +38,10 @@ A feature is **Complete** only when:
 4. Existing functionality still works.
 5. It meets its acceptance criteria below.
 6. Documentation is updated.
-7. A second development agent has independently reviewed relevant changes (Claude Code reviews Codex PRs and vice versa); human review does not replace this gate.
-8. The PR has been reviewed and approved by the owner.
+7. Codex independently reviews Claude's implementation at the current head, with no blocking findings; Codex-authored exceptions require a separate development agent. Human review does not replace this gate.
+8. Codex technical approval and the owner's explicit merge approval are recorded for the reviewed version. Under the chosen shared-account workflow, GitHub review comments are valid evidence; a formal Approved badge is not required.
 
-Documentation-only checks are recorded as such; no application/device execution is implied. Q-01 stays In Review until independent review and owner PR approval. Missing relevant manual checks prevent application features from becoming Complete.
+Documentation-only checks are recorded as such; no application/device execution is implied. Q-01 stays In Review until independent review and owner PR approval. Missing relevant manual checks prevent application features from becoming Complete. Claude Code is now the main developer and Codex the independent reviewer; follow [AGENTS.md](../AGENTS.md) for commit-specific review comments, re-review after changes and owner merge approval. This role assignment supersedes earlier role descriptions; historical authorship remains recorded below.
 
 ## Stretch targets (must stay visible in every revision)
 
@@ -577,9 +577,9 @@ Dependencies are taken from the table above.
 
 - **Priority:** P0 · **Status:** In Review · **Issue:** [#39](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/39)
 - **Depends on:** none
-- **Description:** Adopt the completion criteria in AGENTS.md: PR template with test output, device checks and reviewer sign-off; a second development agent independently reviews relevant changes, with Claude Code reviewing Codex PRs and vice versa.
+- **Description:** Adopt AGENTS.md completion criteria: Claude Code implements approved tasks and addresses findings; Codex independently reviews the current commit through GitHub review comments. Include actual tests, relevant device checks and explicit owner merge approval. A formal same-account approval badge is not required.
 - **Acceptance criteria:**
-  - PR template in `.github/`; every feature PR lists roadmap ID, commands run with results, manual checks done and outstanding.
+  - PR template in `.github/`; every feature PR lists roadmap ID, actual command results, manual checks done/outstanding, current head SHA, Codex review link/outcome and the owner's separate merge-approval reference. Later commits receive re-review; no agent merges automatically.
 - **Test requirements:**
   - Documentation consistency checks and independent review; no simulator/mobile checks apply to this documentation-only PR. Owner approval is outstanding.
 
@@ -676,3 +676,4 @@ These apply to every phase and are checked in review.
 |------|--------|
 | 2026-10-23 | Initial documentation work in Claude Code PR #40; verified main had no code and created issues #1–#39. |
 | 2026-10-23 | Codex reconciliation preserves existing work; adds issues #41–#50, early evaluation fixtures and Phase 3 comparison, requires full model provenance, separates research training, and makes completion/recovery evidence explicit. |
+| 2026-10-23 | Owner selects Claude Code as main developer and Codex as reviewer, using explicit commit-specific technical approval in GitHub comments and separate owner merge approval. Role/workflow changes are proposed in a dedicated follow-up PR; feature statuses are unchanged. |

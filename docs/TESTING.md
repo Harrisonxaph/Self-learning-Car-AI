@@ -78,6 +78,8 @@ If no real device is available, say so in the pull request and leave the item as
 
 Record roadmap ID and issue, commit, acceptance criteria exercised, exact commands and exit codes/output counts, engine/version, browser/device/OS, manual steps and observed outcomes, skipped checks and reason, independent second-agent findings and dispositions, and owner PR approval. Emulator results do not replace real iPhone/iPad checks. Keep status In Review while a required check or approval is outstanding.
 
+Claude Code is responsible for implementation and test evidence; Codex independently verifies the submitted evidence and reviews the current PR head. Link Codex's commit-specific `Changes required` or `Technical approval` comment and the owner's separate explicit merge approval. Shared-account review comments satisfy the review-record requirement; GitHub's formal Approved badge is optional. Neither role may claim to have run a command it did not execute. New commits require re-review/confirmation covering the new SHA. Codex-authored exceptions require another independent development agent, not Codex self-review. Follow [AGENTS.md](../AGENTS.md) for the complete workflow.
+
 For documentation-only changes, application and mobile execution checks are not applicable when no application behaviour changes. Instead check IDs, dependencies, links, issue mappings, status claims and parseable examples, and obtain independent review. This exception does not waive device testing for future application features.
 
 ## Roadmap reconciliation verification record
