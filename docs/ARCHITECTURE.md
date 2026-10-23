@@ -1,10 +1,10 @@
 # Architecture
 
-> Status: **mostly planned**. Built so far: the project foundation from P1-01 (`src/main.ts`, `src/render/viewport.ts` for canvas sizing, `src/render/placeholder.ts` for the start-up screen) and the fixed-timestep loop from P1-02 (`src/sim/config.ts`, `src/sim/world.ts`, `src/sim/fixedStep.ts`, `src/ui/frameLoop.ts`). Everything else below is the target design for later tasks. Update this document when the code shows a better design.
+> Status: **mostly planned**. Built so far: the project foundation from P1-01 (`src/main.ts`, `src/render/viewport.ts` for canvas sizing, `src/render/placeholder.ts` for the start-up screen) and the fixed-timestep loop from P1-02 (`src/sim/config.ts`, `src/sim/world.ts`, `src/sim/fixedStep.ts`, `src/ui/frameLoop.ts`) and the seeded generator from P1-03 (`src/utils/rng.ts`). Everything else below is the target design for later tasks. Update this document when the code shows a better design.
 
 ## Goals that shape the design
 
-- **Reproducible**: the same seed and configuration produce the same run in the same JavaScript engine.
+- **Reproducible**: the same seed and configuration produce the same run in the same JavaScript engine. All randomness comes from `utils/rng.ts` (sfc32 with splitmix32 seeding, recorded as `RNG_ALGORITHM`); `Math.random` is banned by lint in headless code. The integer outputs are exact everywhere; `gaussian()` uses `Math.log` and `Math.cos`, whose last bits may differ between engines.
 - **Headless-capable**: simulation, sensors, inference and evolution run without a DOM, so they can be unit-tested in Node and trained faster than real time.
 - **Observable**: every number the AI sees and every decision it makes can be shown on screen.
 - **Small and beginner-readable**: plain TypeScript modules with pure functions where practical, and no framework until one is needed.
@@ -53,7 +53,7 @@ src/
     dashboard/            stats, fitness graph
     editor/               track editor
   utils/
-    rng.ts                seeded PRNG (e.g. mulberry32 or sfc32)
+    rng.ts                seeded PRNG: sfc32 seeded by splitmix32
     math.ts               vectors, angles, segment intersection
   data/
     tracks/               built-in training, validation and held-out tracks (JSON)
