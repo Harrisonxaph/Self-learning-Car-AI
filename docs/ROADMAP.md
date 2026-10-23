@@ -4,18 +4,18 @@ A free, browser-based sandbox where 2D cars learn steering, acceleration and bra
 
 ## Verified project status
 
-_Last verified: 2026-10-23, against `main` at `ec6f51c` ("Initial commit")._
+_Last verified: 2026-10-23, against `main` at `dbb0782`, plus the P1-01 branch `feat/p1-01-project-scaffold` (in review, not yet merged)._
 
 | Area | State |
 |------|-------|
-| Application code | **None.** `main` contains only `README.md` and `LICENSE` (MIT). |
-| Tests and CI | None. No `package.json`, test runner or workflows. |
+| Application code | **`main`: none** (documentation only). The P1-01 branch adds the project foundation only: a Vite + strict TypeScript page with a responsive Canvas 2D placeholder. No simulation, AI or controls exist. |
+| Tests and CI | **`main`: none.** The P1-01 branch adds `package.json`, ESLint with architecture boundary rules, Vitest unit tests and Playwright browser tests. No CI workflow yet (P1-10). |
 | Deployment | None. |
 | Planning docs | Added by this roadmap PR: `AGENTS.md`, `docs/ROADMAP.md`, `docs/ARCHITECTURE.md`, `docs/AI_EVALUATION.md`, `docs/MODEL_FORMAT.md`, `docs/TESTING.md`. |
 | GitHub issues | Existing issues #1–#39 are preserved. Reconciliation adds #41–#50 for two missing primary-release entries and eight approval-gated research entries; #40 is the existing documentation PR. |
 | AI learning results | None. No experiments have been run, so no learning claims can be made. |
 
-All 43 primary-release implementation features are **Not Started**. Eight research entries are **Blocked** pending explicit approval; Q-01 remains **In Review**. No implementation is marked Complete. The initial master specification is the owner's detailed project request; no separate specification was found. Re-verify this table against code and tests whenever statuses change.
+P1-01 is **In Review**; the other 42 primary-release implementation features are **Not Started**. Eight research entries are **Blocked** pending explicit approval; Q-01 remains **In Review**. No implementation is marked Complete. The initial master specification is the owner's detailed project request; no separate specification was found. Re-verify this table against code and tests whenever statuses change.
 
 ### Existing work and reconciliation
 
@@ -57,7 +57,7 @@ Documentation-only checks are recorded as such; no application/device execution 
 
 | ID | Feature | Phase | Priority | Status | Depends on | Issue |
 |----|---------|-------|----------|--------|------------|-------|
-| P1-01 | Project scaffold: Vite, TypeScript, lint and test tooling | 1 | P0 | Not Started | — | [#1](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/1) |
+| P1-01 | Project scaffold: Vite, TypeScript, lint and test tooling | 1 | P0 | In Review | — | [#1](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/1) |
 | P1-02 | Fixed-timestep loop with simulation/render separation | 1 | P0 | Not Started | P1-01 | [#2](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/2) |
 | P1-03 | Seeded pseudorandom generator | 1 | P0 | Not Started | P1-01 | [#3](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/3) |
 | P1-04 | Track model and responsive Canvas 2D racetrack | 1 | P0 | Not Started | P1-02 | [#4](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/4) |
@@ -106,7 +106,7 @@ Documentation-only checks are recorded as such; no application/device execution 
 
 Dependencies are taken from the table above.
 
-- **Ready to start now:** P1-01 (scaffold). Q-01 is in review as part of this PR.
+- **In review:** P1-01 (scaffold), on branch `feat/p1-01-project-scaffold`; WebKit runs and real iPhone/iPad checks are still outstanding. Q-01 remains in review.
 - **Ready as soon as P1-01 merges:** P1-02, P1-03, P1-10 and P1-11, and P2-03 (the network is pure maths and can be built alongside the simulator).
 - **Next wave:** P1-04 and P1-05 (after P1-02), then P1-06 and P1-07, then P1-08 and P1-09.
 - **Silverstone (approved 2026-10-23, planning only):** P2-11 (spatial index) after P1-06 and P2-01; P4-06 (Silverstone import) after P4-01, P2-10, P2-05 and P2-11; P4-07 (camera) after P1-04 and P2-05. None of these interrupts the current phase.
@@ -121,7 +121,7 @@ Dependencies are taken from the table above.
 
 ### P1-01 — Project scaffold: Vite, TypeScript, lint and test tooling
 
-- **Priority:** P0 · **Status:** Not Started · **Issue:** [#1](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/1)
+- **Priority:** P0 · **Status:** In Review · **Issue:** [#1](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/1)
 - **Depends on:** none
 - **Description:** Create the Vite + strict TypeScript project for Node 24 with ESLint (including import-boundary rules), Vitest, Playwright, the `src/` and `tests/` layout from ARCHITECTURE.md and the npm scripts from TESTING.md.
 - **Acceptance criteria:**
@@ -723,4 +723,5 @@ These apply to every phase and are checked in review.
 | 2026-10-23 | Initial documentation work in Claude Code PR #40; verified main had no code and created issues #1–#39. |
 | 2026-10-23 | Codex reconciliation preserves existing work; adds issues #41–#50, early evaluation fixtures and Phase 3 comparison, requires full model provenance, separates research training, and makes completion/recovery evidence explicit. |
 | 2026-10-23 | Owner selects Claude Code as main developer and Codex as reviewer, using explicit commit-specific technical approval in GitHub comments and separate owner merge approval. Role/workflow changes are proposed in a dedicated follow-up PR; feature statuses are unchanged. |
+| 2026-10-23 | P1-01 implemented on `feat/p1-01-project-scaffold` and moved to In Review. Not Complete: Codex review, WebKit test runs, real-device checks and owner approval are outstanding. |
 | 2026-10-23 | Owner approves the Silverstone and multi-car (Option A: independent, non-interacting cars) plan. Planning only: adds P2-11 (#56), P4-06 (#57) and P4-07 (#58), adds car-independence criteria to P2-05 and a drawing cap to P3-03, and narrows P5-06. No implementation. |

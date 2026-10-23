@@ -1,6 +1,6 @@
 # Architecture
 
-> Status: **planned**. No application code exists yet (verified 2026-10-23: `main` holds only `README.md` and `LICENSE`). This document is the target design that Phase 1 implements. Update it when the code shows a better design.
+> Status: **mostly planned**. P1-01 adds only the project foundation: `src/main.ts`, `src/render/viewport.ts` (canvas sizing) and `src/render/placeholder.ts` (start-up screen). Everything else below is the target design for later tasks. Update this document when the code shows a better design.
 
 ## Goals that shape the design
 
@@ -68,7 +68,7 @@ ui ──► training ──► evolution
  └──► persistence ──► ai, sim (types)
 ```
 
-Rules (enforced by review, and later by an ESLint `no-restricted-imports` rule):
+Rules (enforced by review and by `no-restricted-imports` rules in `eslint.config.js`, which `tests/config/eslint-boundaries.test.ts` checks):
 
 - `sim`, `sensors`, `ai`, `evolution`, `training` and `utils` never import `render`, `ui` or DOM globals.
 - `ai` never imports `evolution`. A trained model is just weights plus architecture.
@@ -129,7 +129,7 @@ Every car is controlled through one `Driver` interface (`decide(observation) →
 
 ## Rendering and UI
 
-- Canvas 2D, resized to the container with `devicePixelRatio` capped (for example at 2) on phones.
+- Canvas 2D, resized to the container with `devicePixelRatio` capped at 2 (`MAX_PIXEL_RATIO` in `src/render/viewport.ts`). The canvas is measured in CSS pixels and its drawing buffer is only reassigned when the size changes, because reassigning it clears the canvas. Simulation code never sees these pixel sizes.
 - Layers: static track (cached to an offscreen canvas and redrawn only on resize or edit), cars, optional sensor rays and an optional champion decision overlay.
 - During fast training draw only the best few cars, or none, and update the dashboard a few times per second.
 
