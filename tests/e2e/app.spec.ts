@@ -103,12 +103,19 @@ async function setPageHidden(page: Page, hidden: boolean) {
   }, hidden);
 }
 
-/** Waits for two animation frames inside the page and then returns the tick count. */
+/**
+ * Waits for two animation frames inside the page and reads the tick count in the second frame,
+ * so no extra frames can run between the wait and the read on a busy device.
+ */
 async function tickAfterTwoFrames(page: Page): Promise<number> {
-  await page.evaluate(
-    () => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))),
+  return page.evaluate(
+    () =>
+      new Promise<number>((resolve) =>
+        requestAnimationFrame(() =>
+          requestAnimationFrame(() => resolve(Number(document.querySelector('#sim-time')?.getAttribute('data-tick')))),
+        ),
+      ),
   );
-  return simTick(page);
 }
 
 test('runs the simulation clock while the page is visible', async ({ page }) => {
