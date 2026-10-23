@@ -15,7 +15,7 @@ _Last verified: 2026-10-23, against `main` at `dbb0782`, plus the P1-01 branch `
 | GitHub issues | Existing issues #1–#39 are preserved. Reconciliation adds #41–#50 for two missing primary-release entries and eight approval-gated research entries; #40 is the existing documentation PR. |
 | AI learning results | None. No experiments have been run, so no learning claims can be made. |
 
-P1-01 is **In Review**; the other 39 primary-release implementation features are **Not Started**. Eight research entries are **Blocked** pending explicit approval; Q-01 remains **In Review**. No implementation is marked Complete. The initial master specification is the owner's detailed project request; no separate specification was found. Re-verify this table against code and tests whenever statuses change.
+P1-01 and P1-10 are **In Review**; the other 38 primary-release implementation features are **Not Started**. Eight research entries are **Blocked** pending explicit approval; Q-01 remains **In Review**. No implementation is marked Complete. The initial master specification is the owner's detailed project request; no separate specification was found. Re-verify this table against code and tests whenever statuses change.
 
 ### Existing work and reconciliation
 
@@ -66,7 +66,7 @@ Documentation-only checks are recorded as such; no application/device execution 
 | P1-07 | Ordered checkpoints, lap counting and lap timing | 1 | P0 | Not Started | P1-04, P1-05 | [#7](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/7) |
 | P1-08 | Manual driving with keyboard and mobile touch controls | 1 | P0 | Not Started | P1-05, P1-06, P1-07 | [#8](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/8) |
 | P1-09 | Deterministic physics test suite | 1 | P0 | Not Started | P1-03, P1-05, P1-06, P1-07 | [#9](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/9) |
-| P1-10 | GitHub Actions CI | 1 | P0 | Not Started | P1-01 | [#10](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/10) |
+| P1-10 | GitHub Actions CI | 1 | P0 | In Review | P1-01 | [#10](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/10) |
 | P1-11 | Vercel deployment compatibility | 1 | P1 | Not Started | P1-01 | [#11](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/11) |
 | P2-01 | Seven forward ray sensors | 2 | P0 | Not Started | P1-06 | [#12](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/12) |
 | P2-02 | Nine network inputs: rays, speed and checkpoint heading error | 2 | P0 | Not Started | P2-01, P1-07 | [#13](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/13) |
@@ -221,7 +221,7 @@ Dependencies are taken from the table above.
 
 ### P1-10 — GitHub Actions CI
 
-- **Priority:** P0 · **Status:** Not Started · **Issue:** [#10](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/10)
+- **Priority:** P0 · **Status:** In Review · **Issue:** [#10](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/10)
 - **Depends on:** P1-01
 - **Description:** Workflow on pull requests and `main`: `npm ci`, lint, typecheck, unit tests, build and Playwright (Chromium and WebKit).
 - **Acceptance criteria:**
@@ -678,3 +678,4 @@ These apply to every phase and are checked in review.
 | 2026-10-23 | Codex reconciliation preserves existing work; adds issues #41–#50, early evaluation fixtures and Phase 3 comparison, requires full model provenance, separates research training, and makes completion/recovery evidence explicit. |
 | 2026-10-23 | Owner selects Claude Code as main developer and Codex as reviewer, using explicit commit-specific technical approval in GitHub comments and separate owner merge approval. Role/workflow changes are proposed in a dedicated follow-up PR; feature statuses are unchanged. |
 | 2026-10-23 | P1-01 implemented on `feat/p1-01-project-scaffold` and moved to In Review. Not Complete: Codex review, WebKit test runs, real-device checks and owner approval are outstanding. |
+| 2026-10-23 | P1-10 CI workflow implemented on `feat/p1-10-ci` and moved to In Review; not Complete until its CI runs, the failing-test demonstration, Codex review and owner approval are recorded. |
