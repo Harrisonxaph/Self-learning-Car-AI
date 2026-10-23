@@ -321,9 +321,9 @@ Dependencies are taken from the table above.
 
 - **Priority:** P0 · **Status:** Not Started · **Issue:** [#19](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/19)
 - **Depends on:** P2-07
-- **Description:** Implement random-action (A1), correlated random-action (A7), untrained-network (A2) and equal-budget random-search (A8) baselines and run experiments E1 and E2 from AI_EVALUATION.md over 10 training seeds.
+- **Description:** Implement random-action (A1), correlated random-action (A7), untrained-network (A2), best-of-initial-population (A9) and equal-budget random-search (A8) baselines and run experiments E1 and E2 from AI_EVALUATION.md over 10 training seeds.
 - **Acceptance criteria:**
-  - **Phase 2 acceptance:** controlled results demonstrate improvement over equal-budget random search (A8) on ordered progress, with random-action floors (A1, A7), lap completion and collisions reported, at least one valid evolved lap, ≥10 independent training seeds and the predeclared effect/uncertainty criteria in AI_EVALUATION.md. Built-in training/validation fixtures come from P2-10; held-out data stays reserved for final evaluation.
+  - **Phase 2 acceptance:** controlled results demonstrate improvement over equal-budget random search (A8) on ordered progress, with random-action floors (A1, A7), the best-of-initial-population baseline (A9), lap completion and collisions reported, at least one valid evolved lap, ≥10 independent training seeds and the predeclared effect/uncertainty criteria in AI_EVALUATION.md. Built-in training/validation fixtures come from P2-10; held-out data stays reserved for final evaluation.
   - An honest negative/inconclusive study can complete the experiment-reporting task but leaves Phase 2 acceptance unmet and requires a follow-up; rising fitness alone cannot pass the phase.
   - No claim made beyond what the data shows.
 - **Test requirements:**
