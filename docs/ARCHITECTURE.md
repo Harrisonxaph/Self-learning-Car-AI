@@ -88,7 +88,7 @@ A simple kinematic-bicycle-style model is enough for this project:
 - State: position, heading, forward speed (and optionally lateral velocity for a little slide).
 - Controls per tick: `steering ∈ [-1, 1]`, `throttle ∈ [0, 1]`, `brake ∈ [0, 1]`.
 - Acceleration = throttle × engine force − brake × brake force − drag × speed² − rolling resistance × speed.
-- Steering rate falls with speed so cars cannot pivot on the spot.
+- Bicycle-model yaw rate is zero at zero forward speed, so cars cannot pivot on the spot. Limit wheel angle as speed rises for stability; do not confuse wheel-angle limits with yaw rate.
 - Speed never goes negative from braking (no reverse in the first version). Document any change.
 
 All constants live in `sim/config.ts` and are recorded with every experiment and saved model.
@@ -96,7 +96,7 @@ All constants live in `sim/config.ts` and are recorded with every experiment and
 ## Track, collision and checkpoints
 
 - A track is two closed polylines (inner and outer boundary), a start pose and an ordered list of checkpoint gates (segments across the road).
-- Collision: test the car's four rectangle edges against boundary segments. On collision the car stops and is marked crashed (training) or reset (manual mode).
+- Collision: test the car footprint against the drivable region, including containment and boundary contacts; use swept checks or sufficient deterministic substeps to prevent tunnelling at the configured maximum speed. Edge intersections alone miss an entirely off-road footprint. On collision the car stops and is marked crashed; manual mode exposes an explicit restart.
 - Checkpoints: only the **next** gate in order counts, crossed in the forward direction. Crossing gate 0 after all others completes a lap. This blocks reward from crossing the same gate back and forth.
 
 ## Sensors and network inputs
@@ -120,7 +120,7 @@ Seven rays fanned across the car's front (for example −90°, −60°, −30°,
 ## Evolution
 
 - Population of P genomes (start with P = 50, configurable).
-- Each generation: evaluate every car on the training track(s) under identical start conditions → sort by fitness → copy the top E unchanged (elitism) → fill the rest by tournament selection, crossover and Gaussian mutation.
+- Each generation: evaluate every car on one selected training circuit under identical start conditions → sort by fitness → copy the top E unchanged (elitism) → fill the rest by tournament selection, crossover and Gaussian mutation. Multiple selectable circuits are required; training one evolutionary run across multiple circuits is optional R-06, not a primary-release prerequisite.
 - Mutation rate, mutation scale, crossover type, population size, elitism count, max episode time and seed are all part of the experiment configuration.
 
 ## Drivers
@@ -140,8 +140,16 @@ Every car is controlled through one `Driver` interface (`decide(observation) →
 3. Skip rendering in accelerated training.
 4. Move training into a Web Worker only if measurements show the UI stutters (roadmap P5-06).
 
+## Evaluation, replay and recovery boundaries
+
+- P2-10 supplies versioned built-in track splits before the editor. P2-07 records raw episode/generation data and complete resolved configurations; the Phase 3 dashboard reads these records rather than defining metrics independently.
+- P3-08 provides initial saved-model inspection and comparison in Phase 3. P5-05 adds repeated multi-track evaluation, spread and statistical comparisons.
+- ST5 is simultaneous human-versus-AI racing with non-colliding cars, identical physics/start conditions and separate wall-collision/lap results. Car-car contact, overtaking and avoidance stay in R-01/R-02.
+- A champion replay needs its frozen parameters, track version, simulation configuration and initial conditions. It cannot resume a whole evolutionary population.
+- A generation-boundary training checkpoint additionally needs population genomes, champion, completed generation and next-generation index, metrics, resolved configuration, track versions and every PRNG stream's state, including a cached Gaussian sample if applicable. Version and validate this separate checkpoint format in P3-07; defer mid-episode snapshots. Compare resumed and uninterrupted runs at the same boundary.
+- Use bounded training batches so UI events can run. Tab hiding pauses and clears elapsed-time accumulation; do not rely on a final background write, since iOS may terminate a tab without delivering it. Persist checkpoints at generation boundaries when enabled and offer file export if storage is unavailable.
+
 ## Open questions
 
 - Which PRNG: mulberry32 (tiny) or sfc32 (better statistics)? Decide in P1-03 and document it.
-- Whether cars should collide with each other in human-vs-AI races (default: no, ghost cars).
 - Whether the vehicle model needs lateral slip for braking to matter. Check this in P2-09 before the braking study.

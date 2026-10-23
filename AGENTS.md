@@ -45,7 +45,7 @@ A roadmap feature can be marked **Complete** only when all of the following are 
 4. Existing functionality still works.
 5. It meets its acceptance criteria in `docs/ROADMAP.md`.
 6. Documentation is updated.
-7. A second agent or person has reviewed the change.
+7. A second development agent has independently reviewed the relevant changes; human review is additional and does not replace this gate.
 8. The pull request has been reviewed and approved.
 
 Until then, use `Not Started`, `In Progress`, `Blocked` or `In Review`. Never describe tests as passing unless you ran them in this change and they passed. Report unavailable environments (for example, no real iPhone) and outstanding manual checks explicitly.
@@ -78,3 +78,13 @@ Until then, use `Not Started`, `In Progress`, `Blocked` or `In Review`. Never de
 - Do not edit the same files as another agent at the same time unless coordinated in the issue or PR.
 - Phase 6 items in `docs/ROADMAP.md` are documented research ideas only. Do not implement them without approval.
 - Stretch targets ST1 to ST5 must stay visible in every roadmap revision.
+
+## Roadmap reconciliation defaults
+
+- The owner's detailed project request is the initial master specification. Preserve useful existing work and verify code, tests and PR history before changing statuses.
+- Built-in training, validation and held-out fixtures are required in Phase 2 (P2-10); the Phase 4 editor must not block controlled experiments.
+- The primary release evolves each run on one selected training circuit. Selecting from multiple circuits and evaluating on unseen circuits are required; evolving over multiple training tracks is approval-gated R-06.
+- ST5 uses simultaneous non-colliding human and AI cars on the same track. Physical multi-car racing is R-01 and requires separate approval.
+- A completed experiment with a negative result is useful evidence, but it does not satisfy Phase 2's requirement to demonstrate improvement over random baselines. Track experiment completion and phase acceptance separately.
+- A champion model is not a resumable population checkpoint. Follow MODEL_FORMAT.md for the additional state needed to resume evolution.
+- Documentation-only PRs record application/device tests as not applicable when no executable behaviour changes. Feature PRs retain all eight completion gates. Keep Q-01 In Review until independent review and PR approval; a reviewer must not approve their own PR.
