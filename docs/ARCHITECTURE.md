@@ -1,6 +1,6 @@
 # Architecture
 
-> Status: **mostly planned**. Built so far: the project foundation from P1-01 (`src/main.ts`, `src/render/viewport.ts` for canvas sizing) and the fixed-timestep loop from P1-02 (`src/sim/config.ts`, `src/sim/world.ts`, `src/sim/fixedStep.ts`, `src/ui/frameLoop.ts`) the seeded generator from P1-03 (`src/utils/rng.ts`) and the track model and static track layer from P1-04 (`src/sim/track.ts`, `src/data/tracks/stadium-oval.json`, `src/render/trackView.ts`, `src/render/trackLayer.ts`). Everything else below is the target design for later tasks. Update this document when the code shows a better design.
+> Status: **mostly planned**. Built so far: the project foundation from P1-01 (`src/main.ts`, `src/render/viewport.ts` for canvas sizing) and the fixed-timestep loop from P1-02 (`src/sim/config.ts`, `src/sim/world.ts`, `src/sim/fixedStep.ts`, `src/ui/frameLoop.ts`) the seeded generator from P1-03 (`src/utils/rng.ts`) the track model and static track layer from P1-04 (`src/sim/track.ts`, `src/data/tracks/stadium-oval.json`, `src/render/trackView.ts`, `src/render/trackLayer.ts`) and the vehicle model from P1-05 (`src/sim/vehicle.ts`, physics constants in `src/sim/config.ts`). Cars are not yet placed in the world or drawn. Everything else below is the target design for later tasks. Update this document when the code shows a better design.
 
 ## Goals that shape the design
 
@@ -113,13 +113,16 @@ Built in P1-03 (`src/utils/rng.ts`).
 
 ## Vehicle model
 
-A simple kinematic-bicycle-style model is enough for this project:
+Built in P1-05 (`sim/vehicle.ts`): a kinematic bicycle model, pure and headless, stepped only by the fixed timestep.
 
-- State: position, heading, forward speed (and optionally lateral velocity for a little slide).
-- Controls per tick: `steering ∈ [-1, 1]`, `throttle ∈ [0, 1]`, `brake ∈ [0, 1]`.
-- Acceleration = throttle × engine force − brake × brake force − drag × speed² − rolling resistance × speed.
-- Bicycle-model yaw rate is zero at zero forward speed, so cars cannot pivot on the spot. Limit wheel angle as speed rises for stability; do not confuse wheel-angle limits with yaw rate.
-- Speed never goes negative from braking (no reverse in the first version). Document any change.
+- **State:** rear-axle `position` (world metres, y down), `heading` (radians from +x towards +y, kept in (−π, π]: `createVehicle` accepts any finite start heading, including several turns, and normalises it; each step re-wraps it; a non-finite start pose throws `RangeError`) and forward `speed` (m/s, never negative). No lateral slide.
+- **Controls per tick:** `steering ∈ [−1, 1]` (positive increases the heading: a right turn, clockwise on screen), `throttle ∈ [0, 1]`, `brake ∈ [0, 1]`. Finite out-of-range values are clamped; non-finite or non-number values throw `RangeError`, because they mean a bug in the driver.
+- **Acceleration** = throttle × `engineAcceleration` − brake × `brakeDeceleration` − `quadraticDrag` × speed² − `rollingResistance` × speed.
+- **Speed limits:** speed is clamped to [0, `maxSpeed`], so brakes and resistance never reverse the car and a stopped car with the brake on stays put. With no throttle, a speed below `stopSpeed` becomes 0, so coasting cars come to rest. `maxSpeed` is the full-throttle terminal speed, derived by `terminalSpeed()` from the positive root of `quadraticDrag·v² + rollingResistance·v = engineAcceleration`, evaluated as `2·a / (r + √(r² + 4·c·a))` so tiny drag does not cancel to 0 (23.72 m/s for the defaults), never set by hand.
+- **Steering:** wheel angle = steering × `maxSteerAngle(speed)`, where `maxSteerAngle = min(maxSteerRadians, atan(maxLateralAcceleration × wheelbase / speed²))`. Yaw rate = speed × tan(wheel angle) / `wheelbase`, so it is zero at zero speed (no pivoting on the spot) and sideways acceleration never exceeds `maxLateralAcceleration` (8 m/s² by default) at full steering.
+- **Integration:** semi-implicit Euler per tick: speed first, then heading from the new speed, then position along the new heading.
+- **Defaults** (`DEFAULT_VEHICLE_PHYSICS`): wheelbase 2.5 m, engine 8 m/s², brake 12 m/s², drag 0.01, rolling resistance 0.1, max steer 0.5 rad, max lateral 8 m/s², stop speed 0.05 m/s, body 4 × 2 m. These match the `physics` block in `docs/MODEL_FORMAT.md`.
+- **Demonstration:** `npm run demo:vehicle` prints a scripted accelerate / turn / coast / brake run through the same `stepVehicle`.
 
 All constants live in `sim/config.ts` and are recorded with every experiment and saved model.
 

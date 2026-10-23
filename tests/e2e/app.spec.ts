@@ -109,17 +109,22 @@ async function setPageHidden(page: Page, hidden: boolean) {
 }
 
 /**
- * Waits for two animation frames inside the page and reads the tick count in the second frame,
- * so no extra frames can run between the wait and the read on a busy device.
+ * Shows the page again and counts the ticks run in the first two animation frames after that, all inside one
+ * page.evaluate so no frames can slip in between (separate calls let a busy runner draw several frames during
+ * the round trip, each adding a normal tick). Our frame callback is queued after the app's, so in each frame
+ * the app has already run when we read the tick.
  */
-async function tickAfterTwoFrames(page: Page): Promise<number> {
+async function ticksInTwoFramesAfterShowing(page: Page): Promise<{ before: number; after: number }> {
   return page.evaluate(
     () =>
-      new Promise<number>((resolve) =>
-        requestAnimationFrame(() =>
-          requestAnimationFrame(() => resolve(Number(document.querySelector('#sim-time')?.getAttribute('data-tick')))),
-        ),
-      ),
+      new Promise<{ before: number; after: number }>((resolve) => {
+        const tick = () => Number(document.querySelector('#sim-time')?.getAttribute('data-tick'));
+        const before = tick();
+        Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'visible' });
+        Object.defineProperty(document, 'hidden', { configurable: true, get: () => false });
+        document.dispatchEvent(new Event('visibilitychange'));
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve({ before, after: tick() })));
+      }),
   );
 }
 
@@ -137,12 +142,13 @@ test('pauses while the page is hidden and resumes without a catch-up jump', asyn
   await page.waitForTimeout(1000);
   expect(await simTick(page)).toBe(paused);
 
-  await setPageHidden(page, false);
-  // The first frame back only records the time, so two frames run at most one frame's worth of
-  // ticks (at most 5 under the per-frame cap), not the 60 that the hidden second would give.
-  const afterResume = await tickAfterTwoFrames(page);
-  expect(afterResume - paused).toBeLessThanOrEqual(5);
-  await expect.poll(() => simTick(page)).toBeGreaterThan(afterResume);
+  // The first frame back only records the time, so the first two frames run at most one frame's worth
+  // of ticks (at most 5 under the per-frame cap). An app that caught up on the hidden second would
+  // already run 5 in the first frame, and more in the second.
+  const { before, after } = await ticksInTwoFramesAfterShowing(page);
+  expect(before).toBe(paused);
+  expect(after - before).toBeLessThanOrEqual(5);
+  await expect.poll(() => simTick(page)).toBeGreaterThan(after);
 });
 
 // The built-in track's bounds in world metres, and points known to be on the road and in the infield.

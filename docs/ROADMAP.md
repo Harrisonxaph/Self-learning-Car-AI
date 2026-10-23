@@ -15,7 +15,7 @@ _Last verified: 2026-10-23, against `main` at `ab1436c` (P1-01 merged in #55, P1
 | GitHub issues | Existing issues #1–#39 are preserved. Reconciliation adds #41–#50 for two missing primary-release entries and eight approval-gated research entries; #40 is the existing documentation PR. |
 | AI learning results | None. No experiments have been run, so no learning claims can be made. |
 
-P1-01, P1-02, P1-03, P1-04 and P1-10 are **In Review**; the other 38 primary-release implementation features are **Not Started**. Eight research entries are **Blocked** pending explicit approval; Q-01 remains **In Review**. No implementation is marked Complete. The initial master specification is the owner's detailed project request; no separate specification was found. Re-verify this table against code and tests whenever statuses change.
+P1-01, P1-02, P1-03, P1-04, P1-05 and P1-10 are **In Review**; the other 37 primary-release implementation features are **Not Started**. Eight research entries are **Blocked** pending explicit approval; Q-01 remains **In Review**. No implementation is marked Complete. The initial master specification is the owner's detailed project request; no separate specification was found. Re-verify this table against code and tests whenever statuses change.
 
 ### Existing work and reconciliation
 
@@ -61,7 +61,7 @@ Documentation-only checks are recorded as such; no application/device execution 
 | P1-02 | Fixed-timestep loop with simulation/render separation | 1 | P0 | In Review | P1-01 | [#2](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/2) |
 | P1-03 | Seeded pseudorandom generator | 1 | P0 | In Review | P1-01 | [#3](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/3) |
 | P1-04 | Track model and responsive Canvas 2D racetrack | 1 | P0 | In Review | P1-02 | [#4](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/4) |
-| P1-05 | Vehicle physics: acceleration, steering, braking and drag | 1 | P0 | Not Started | P1-02 | [#5](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/5) |
+| P1-05 | Vehicle physics: acceleration, steering, braking and drag | 1 | P0 | In Review | P1-02 | [#5](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/5) |
 | P1-06 | Collision detection with track boundaries | 1 | P0 | Not Started | P1-04, P1-05 | [#6](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/6) |
 | P1-07 | Ordered checkpoints, lap counting and lap timing | 1 | P0 | Not Started | P1-04, P1-05 | [#7](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/7) |
 | P1-08 | Manual driving with keyboard and mobile touch controls | 1 | P0 | Not Started | P1-05, P1-06, P1-07 | [#8](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/8) |
@@ -111,8 +111,9 @@ Dependencies are taken from the table above.
 - **In review:** P1-02 (fixed-timestep loop, #62) stays In Review until its real iPhone/iPad pause check and owner merge approval are recorded.
 - **In review:** P1-03 (seeded generator).
 - **In review:** P1-04 (track model and static track layer).
+- **In review:** P1-05 (vehicle physics).
 - **Ready now:** P1-11, and P2-03 (the network is pure maths and can be built alongside the simulator).
-- **Next wave:** P1-05 (after P1-02), then P1-06 and P1-07, then P1-08 and P1-09.
+- **Next wave:** P1-06 and P1-07, then P1-08 and P1-09.
 - **Silverstone (approved 2026-10-23, planning only):** P4-06 (Silverstone import) after P4-01, P2-10, P2-05, P2-07 and P3-05; P2-11 (spatial index, after P1-06 and P2-01) only if P4-06's measured baseline misses the budget or the owner approves an architectural reason; P4-07 (camera) after P1-04 and P2-05, as a separate follow-up. Each still needs explicit owner implementation approval when its dependencies are complete; this planning approval does not authorise implementation. None of these interrupts the current phase.
 - **Phase 2 critical path:** P1-06 → P2-01 → P2-02, and P1-07 → P2-06, then P2-04 → P2-05 → P2-07 → P2-08.
 - **Early evaluation:** P1-04 + P1-07 → P2-10 supplies built-in training/validation/held-out fixtures before P2-07/P2-08; the editor is not a prerequisite.
@@ -185,7 +186,7 @@ Dependencies are taken from the table above.
 
 ### P1-05 — Vehicle physics: acceleration, steering, braking and drag
 
-- **Priority:** P0 · **Status:** Not Started · **Issue:** [#5](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/5)
+- **Priority:** P0 · **Status:** In Review · **Issue:** [#5](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/5)
 - **Depends on:** P1-02
 - **Description:** Kinematic car model with throttle, brake, quadratic drag, rolling resistance and speed-dependent steering; constants in `src/sim/config.ts`.
 - **Acceptance criteria:**
@@ -193,6 +194,8 @@ Dependencies are taken from the table above.
   - Car cannot turn while stationary.
 - **Test requirements:**
   - Unit tests for each property above with fixed inputs over N ticks.
+- **Built:** `sim/vehicle.ts` (kinematic bicycle, semi-implicit Euler) with constants in `sim/config.ts` matching MODEL_FORMAT.md, plus `maxLateralAcceleration` (high-speed steering limit) and `stopSpeed` (coasting to rest). `maxSpeed` is derived as the terminal speed. Headless only: cars are not yet placed in the world or drawn, so no visible behaviour changes. `npm run demo:vehicle` prints a scripted run.
+- **Outstanding before Complete:** Codex technical approval of the PR head and owner merge approval. No device check applies until cars are drawn (P1-08).
 
 ### P1-06 — Collision detection with track boundaries
 
@@ -768,3 +771,4 @@ These apply to every phase and are checked in review.
 | 2026-10-23 | P1-02 fixed-timestep loop implemented on `feat/p1-02-fixed-timestep` and moved to In Review; not Complete until real-device pause checks, Codex review and owner approval are recorded. |
 | 2026-10-23 | P1-03 seeded generator (sfc32 with splitmix32 seeding) implemented on `feat/p1-03-seeded-rng` and moved to In Review; not Complete until Codex review and owner approval are recorded. |
 | 2026-10-23 | P1-04 track model, stadium-oval fixture and cached static track layer implemented on `feat/p1-04-track-foundation` and moved to In Review; not Complete until real iPhone/iPad rendering checks, Codex review and owner approval are recorded. |
+| 2026-10-23 | P1-05 vehicle physics (kinematic bicycle, derived terminal speed, high-speed steering limit) implemented on `feat/p1-05-vehicle-physics` and moved to In Review; not Complete until Codex review and owner approval are recorded. MODEL_FORMAT physics gains `maxLateralAcceleration` and `stopSpeed`. |
