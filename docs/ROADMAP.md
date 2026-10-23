@@ -135,7 +135,7 @@ Dependencies are taken from the table above.
   - Lint, typecheck, 29 unit tests, build and the 9 Chromium browser tests (desktop, phone, tablet) passed from a clean clone with Node 24.22.1.
   - Codex: automated receipt only ("Didn't find any major issues" on `9ba08e8`). No full AGENTS.md review record was posted.
   - WebKit: desktop, iPhone 13 and iPad WebKit projects passed (3 tests each) in CI run 39985079357 on #60, whose app code is identical to `main`'s P1-01 code.
-  - **Outstanding before Complete:** real iPhone and iPad Safari checks (none recorded; a Vercel preview exists for them) and a full Codex review record (or explicit owner acceptance).
+  - **Outstanding before Complete:** real iPhone and iPad Safari checks (none recorded; a Vercel preview exists for them) and a full Codex review record with commit-specific technical approval (AGENTS.md completion gates 7 and 8; owner acceptance does not replace it).
 
 ### P1-02 — Fixed-timestep loop with simulation/render separation
 
