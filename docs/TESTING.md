@@ -36,7 +36,7 @@ Tests mirror `src/`. No tests next to source files.
 | Area | Required tests |
 |------|----------------|
 | RNG | Same seed gives the same sequence. Different seeds give different sequences. Known first values are pinned. |
-| Physics | Speed rises with throttle and falls with brake and drag. Brake never makes speed negative. Steering rate falls with speed. Results are independent of render frame rate (the same N ticks give the same state). |
+| Physics | Speed rises with throttle and falls with brake and drag. Brake never makes speed negative. Yaw is zero at zero speed; high-speed wheel-angle limits are respected. Results are independent of render frame rate (the same N ticks give the same state). |
 | Determinism | Two runs with the same seed and config give bit-identical car states after N ticks and identical generation-K genomes. |
 | Collision | Hand-made cases: touching, crossing a corner, no tunnelling at maximum speed. |
 | Checkpoints | Only the next gate counts. Backwards crossings are ignored. Laps are counted and timed in simulation time. |
@@ -44,7 +44,7 @@ Tests mirror `src/`. No tests next to source files.
 | Network | A hand-computed tiny network matches. 9-12-3 has 159 parameters. Parameter order is pinned. |
 | Outputs | Steering is in [−1, 1] and throttle and brake are in [0, 1]. A no-brake mask forces 0. |
 | Evolution | Elites are copied unchanged. Mutation rate 0 changes nothing. Crossover children only contain parent genes (uniform). Population size stays constant. |
-| Fitness guards | Each exploit in `docs/AI_EVALUATION.md` §6 is scripted and shown not to raise fitness. |
+| Fitness guards | Each exploit in `docs/AI_EVALUATION.md` §6 is scripted and shown not to accumulate repeat credit without new valid ordered progress; a bounded legitimate initial approach is allowed. |
 | Persistence | Valid model round-trip. Every invalid case is rejected with an error (bad JSON, wrong count, `NaN`, unknown version, oversized file). localStorage that throws or is empty is handled. |
 | Track validation | Closed boundaries, no self-intersections, start pose inside the road, at least 3 ordered gates spanning the road. |
 | E2E | Drive with keyboard. Drive with touch controls (mobile viewport). Crash and restart. Complete a lap on a test track. Start, pause and resume training. Save, export and import a model. Create and validate a track. |
@@ -65,3 +65,21 @@ If no real device is available, say so in the pull request and leave the item as
 - Paste the actual command output summary (counts of passed and failed tests) in pull requests.
 - Never write "tests pass" for commands that were not run in that change.
 - List skipped environments and outstanding manual checks explicitly.
+
+## Additional acceptance checks
+
+- **Evaluation:** deterministic baselines, disjoint versioned track splits before Phase 2 experiments, held-out leakage rejection, metric denominators including failures, and seed-cluster analysis. An all-failure cohort has unavailable lap time, not zero. Run the anti-farming cases in AI_EVALUATION.md against the actual scorer.
+- **Persistence:** require full resolved training configuration; reject absent required fields, unsupported observation/output contracts, wrong activation/order, non-finite values (including overflowing JSON exponents), malformed metadata, incompatible versions and oversized files. Test corrupted indexes, quota failures and unavailable storage without deleting other models.
+- **Replay and recovery:** replay uses frozen model/configuration/track versions. Test generation-boundary checkpoint continuation against an uninterrupted run with population and PRNG state restored. Champion-only JSON must not be accepted as a population checkpoint.
+- **Comparison:** Phase 3 compares two saved models and handles absent evaluations or incompatible fitness conditions. Phase 5 compares repeated evaluations on identical tracks, versions, start conditions and budgets. ST5 verifies simultaneous non-colliding cars with independent wall-collision outcomes.
+- **Mobile/performance:** record named hardware, OS/browser, population, render mode, track, duration, FPS, mean/p95 update time and simulated ticks/second. Before performance work, set a device-specific responsiveness budget in its issue; verify it and publish before/after figures. A Worker is conditional on measured UI blocking, not a prerequisite.
+
+## Evidence record for each feature PR
+
+Record roadmap ID and issue, commit, acceptance criteria exercised, exact commands and exit codes/output counts, engine/version, browser/device/OS, manual steps and observed outcomes, skipped checks and reason, independent second-agent findings and dispositions, and owner PR approval. Emulator results do not replace real iPhone/iPad checks. Keep status In Review while a required check or approval is outstanding.
+
+For documentation-only changes, application and mobile execution checks are not applicable when no application behaviour changes. Instead check IDs, dependencies, links, issue mappings, status claims and parseable examples, and obtain independent review. This exception does not waive device testing for future application features.
+
+## Roadmap reconciliation verification record
+
+The baseline `main` commit ec6f51cf0dea5e25310dce8f2e9972b825aa6779 has no package.json, application, tests or CI workflow. The existing documentation branch was reviewed at 59f63a6f09eb047bc15adbc262b1830e1293ed97. No npm checks, simulation experiments, device tests or performance benchmarks have been run for this documentation task. Documentation validation and independent review outcomes are recorded in the reconciliation PR; Q-01 remains In Review until approval. Claude Code authored PR #40; this follow-up receives a separate agent review and does not claim to be a Claude Code approval.

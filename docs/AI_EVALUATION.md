@@ -28,6 +28,8 @@ This document explains how we tell genuine learned driving apart from luck, memo
 
 A4 and A5 share population size, generations, mutation settings, fitness function, physics constants and training seeds. Only the brake mask differs.
 
+The standard evolved driver is A5, with braking enabled; it is the primary evolved-neural-network cohort, not an additional independent treatment. A4/A5 comparisons train separate populations with matched budgets and paired seed lists; masking the brake of an already trained A5 is a separate inference ablation and must not be presented as no-brake training. The required comparisons use random A1, rule-based A3, standard evolved A5 and the no-brake/with-brake A4/A5 ablation; A2 provides an additional untrained control.
+
 ## 3. Metrics
 
 Measured per evaluation episode and then summarised:
@@ -37,13 +39,15 @@ Measured per evaluation episode and then summarised:
 | Lap completion % | Episodes that complete at least one full lap ÷ episodes. |
 | Checkpoint progress | Ordered checkpoints reached ÷ checkpoints per lap (can exceed 1 over several laps). Out-of-order crossings are ignored. |
 | Collision rate | Episodes ending in a wall collision ÷ episodes. |
-| Average lap time | Mean simulated seconds per completed lap (only episodes that completed a lap; always report n). |
+| Average lap time | Primary: mean simulated seconds for the first completed lap of each successful episode; report n and completion percentage. An all-completed-laps summary may be reported separately as a secondary measure. |
 | Best fitness | Highest fitness in the population for that generation (training track). |
 | Mean population fitness | Mean fitness across the population for that generation. |
 | Performance across generations | The metrics above, plotted per generation for the champion and for the population. |
 | Unseen-track success | Lap completion % and checkpoint progress on held-out tracks. |
 
 Lap time is measured in **simulation time** (ticks × DT), not wall-clock time, so device speed does not matter.
+
+Use a fixed, recorded episode duration for all agents, ending early only on the same documented collision/stagnation/lap-cap rules. Report counts for every terminal outcome. Timeouts and failures remain in the completion and collision denominators; collision rate alone cannot distinguish safe driving from idling. Report lap-time sample count together with completion percentage, and use the first completed lap per episode for the primary time comparison so fast drivers do not receive extra statistical weight. If no laps complete, lap time is unavailable, never zero. Multiply completion and collision fractions by 100 when displaying percentages.
 
 ## 4. Controlled conditions
 
@@ -62,7 +66,9 @@ Lap time is measured in **simulation time** (ticks × DT), not wall-clock time, 
 | Validation | Choosing hyperparameters and the champion checkpoint | Look at results, but never train on them. |
 | Held-out test | Final generalisation claims only | Not used for tuning. Results reported once per agreed experiment. If held-out results drive a change, those tracks become validation tracks and new held-out tracks are made. |
 
-Held-out tracks should vary corner geometry (hairpins, chicanes, long sweepers, mirrored layouts and different widths) so that one memorised steering sequence cannot complete them. Track IDs and their split are listed in `src/data/tracks/index.json` once P4-04 exists.
+Held-out tracks should vary corner geometry (hairpins, chicanes, long sweepers, mirrored layouts and different widths) so that one memorised steering sequence cannot complete them. P2-10 provides at least one built-in circuit per split before early experiments; P4-04 expands the set. Track IDs, content versions/hashes and split membership are recorded in the planned `src/data/tracks/index.json` and copied into each experiment manifest. The editor is not required for these fixtures. Training a run over multiple circuits remains optional R-06.
+
+Choose hyperparameters and the saved champion using training/validation data, then freeze the model identifier and analysis protocol before opening the held-out results. Keep held-out tracks out of interim dashboards and automatic champion selection. Record start perturbations if used. Repeating identical deterministic episodes with the same start and model does not create independent trials: uncertainty comes primarily from independent training runs, and from genuine recorded scenario variation where present.
 
 ## 6. Preventing reward exploitation
 
@@ -87,18 +93,22 @@ fitness = 1000 × checkpointsReached
         − (crashed ? 500 : 0)
 ```
 
-Each guard needs a unit test that scripts the exploit (for example a car oscillating across gate 3) and asserts that fitness does not grow.
+Each guard needs a unit test that scripts the exploit (for example a car oscillating across gate 3) and asserts that repeated farming without new valid progress cannot accumulate fitness.
+
+The suggested partial-progress term is an absolute, bounded episode value, not a sum paid every tick. Compute progress along the current ordered track segment, clamp it to [0, 1), and never accumulate repeated credit for approaching, reversing or circling near a gate. Reset it only after a valid next-gate crossing. Check wall collision and gate validity consistently within a swept tick so crossing outside the road earns no credit. Tests must distinguish legitimate new ordered progress from repeat farming; an initial bounded approach can increase fitness, while repeated oscillation without a new valid gate cannot accumulate it. Test start/finish wrapping, overlapping gates, reverse crossings and high-speed corner cuts.
 
 ## 7. Experiments
 
 Each experiment records: experiment ID, git commit, config (population, generations, mutation rate and scale, crossover, elitism, physics constants, sensor layout, fitness weights, max episode time), training seeds, evaluation seeds, track IDs per split, engine and version, date, and raw per-episode results (JSON in `experiments/results/`).
 
+Also record PRNG algorithm/version, simulation version, track content versions, control/normalisation settings, completed evaluation count, total simulated-tick budget, termination rules, selected frozen model IDs and validation-selection rule. Store raw episode outcomes before aggregation; keep large artifacts outside champion JSON and link them by manifest/hash.
+
 | ID | Question | Agents | Tracks | Seeds | Depends on |
 |----|----------|--------|--------|-------|------------|
 | E1 | Do random agents ever finish laps? (sets the floor) | A1, A2 | training | 10 eval seeds × population | P2-08 |
-| E2 | Does evolution improve on generation 0? | A2 vs A5 across generations | training (validation once P4-04 exists) | 10 training seeds | P2-08 |
+| E2 | Does evolution improve on generation 0 and random actions? | A1, A2 vs A5 across generations | training and validation | 10 training seeds | P2-08, P2-10 |
 | E3 | Does evolution beat a hand-written rule? | A3 vs A5 | validation, held-out | 10 training seeds | P5-01 |
-| E4 | Does braking change behaviour on the training track? | A4 vs A5 | training (validation once P4-04 exists) | 10 paired training seeds | P2-09 |
+| E4 | Does braking change behaviour on the training track? | A4 vs A5 | training and validation | 10 paired training seeds | P2-09, P2-10 |
 | E5 | Does learned braking improve lap time or collisions on unseen tracks? | A4 vs A5 | held-out | 10 paired training seeds | P5-02 |
 | E6 | Do evolved drivers generalise? | A1, A2, A3, A4, A5 | held-out | 10 training seeds | P5-04 |
 
@@ -109,6 +119,10 @@ Each experiment records: experiment ID, git commit, config (population, generati
 - Choose the hypotheses and metric for an experiment **before** running it on held-out tracks.
 - With 10 seeds, treat p-values as a guide, not proof. Say "no clear difference" when that is what the data shows.
 - Plots: champion and mean fitness per generation (median line with IQR band across seeds), and lap completion % per agent per track.
+
+- Aggregate episodes within each independent training seed before computing cross-seed confidence intervals or significance tests. Pair A4/A5 differences by training seed; do not treat every car, tick, generation or repeated identical episode as an independent sample. Bootstrap training-seed clusters and report effect sizes and per-track results.
+- Predeclare the primary metric, minimum meaningful improvement and analysis procedure in the experiment manifest before evaluation. For Phase 2, use ordered checkpoint progress as the primary metric, require its paired 95% interval versus random actions to exclude zero in the positive direction, and report lap completion/collision alongside it; at least one valid evolved lap must be observed. Define a meaningful effect threshold on training/validation data before the confirmatory run. Fitness-only gains fail this gate.
+- Negative or inconclusive results are valid experiment outputs. They do not satisfy Phase 2's demonstrable-improvement acceptance; keep that phase unaccepted and plan a follow-up rather than relabel the result. Phase 5 asks whether braking/generalisation help, so an honest supported negative conclusion can satisfy that study's reporting criteria.
 
 ## 9. Results
 
