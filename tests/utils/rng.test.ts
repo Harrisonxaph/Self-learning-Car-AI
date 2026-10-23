@@ -130,6 +130,8 @@ describe('getState and restoreRng', () => {
     ['a fractional word', { algorithm: RNG_ALGORITHM, words: [1, 2.5, 3, 4] }],
     ['a string word', { algorithm: RNG_ALGORITHM, words: [1, '2', 3, 4] }],
     ['missing words', { algorithm: RNG_ALGORITHM }],
+    ['a sparse words array', { algorithm: RNG_ALGORITHM, words: Array(4) }],
+    ['a words array with one hole', { algorithm: RNG_ALGORITHM, words: Object.assign(Array(4), { 0: 1, 1: 2, 3: 4 }) }],
     ['null', null],
   ])('rejects a state with %s', (_label, state) => {
     expect(() => restoreRng(state as unknown as RngState)).toThrow(RangeError);
@@ -174,6 +176,24 @@ describe('next and range', () => {
     [-Number.MAX_VALUE, Number.MAX_VALUE],
   ])('rejects range(%s, %s)', (min, max) => {
     expect(() => createRng(0).range(min, max)).toThrow(RangeError);
+  });
+
+  // Values like these can arrive from untrusted JSON at runtime, whatever the TypeScript types say.
+  // Before the fix, range('1', 2) never returned, so these must throw before any drawing happens.
+  it.each([
+    ['0', 1],
+    ['1', 2],
+    [0, '1'],
+    [null, 0],
+    [0, null],
+    [true, 2],
+    [0, false],
+    [undefined, 1],
+  ])('rejects the non-number bound in range(%j, %j) without consuming state', (min, max) => {
+    const rng = createRng(15);
+    const before = rng.getState();
+    expect(() => rng.range(min as unknown as number, max as unknown as number)).toThrow(RangeError);
+    expect(rng.getState()).toEqual(before);
   });
 });
 

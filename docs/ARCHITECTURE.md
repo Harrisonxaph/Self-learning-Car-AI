@@ -87,7 +87,7 @@ Rules (enforced by review and by `no-restricted-imports` rules in `eslint.config
 
 Built in P1-03 (`src/utils/rng.ts`).
 
-- **Algorithm:** sfc32 (128-bit state), seeded by expanding a 32-bit seed with splitmix32 and discarding the first 12 outputs. It is recorded as `RNG_ALGORITHM = 'sfc32-splitmix32-v1'`. Chosen over mulberry32 for its larger state and period.
+- **Algorithm:** sfc32 (128-bit state; reference implementation in [PractRand](https://pracrand.sourceforge.net/)). The 32-bit seed sets the three state words through a Weyl sequence (step `0x9e3779b9`) and MurmurHash3's fmix32 finaliser; the counter starts at 1, and the first 12 outputs are discarded. It is recorded as `RNG_ALGORITHM = 'sfc32-splitmix32-v1'`. Chosen over mulberry32 for its larger state and period.
 - **Seeds:** an integer from 0 to 4,294,967,295. Anything else (negative, fractional, too large, `NaN`, not a number) throws `RangeError`. Nothing is silently truncated.
 - **Outputs:**
   - `nextUint32()`: an integer in [0, 2^32).

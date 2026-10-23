@@ -1,9 +1,11 @@
 // Seeded pseudorandom numbers. All simulation, AI and evolution randomness comes from here, never Math.random,
 // so the same seed and configuration give the same run.
 //
-// Algorithm: sfc32 (Chris Doty-Humphrey's Small Fast Chaotic generator, 128-bit state, passes PractRand),
-// chosen over mulberry32 for its larger state and period. The 32-bit seed is expanded into the state with
-// splitmix32, and the first 12 outputs are discarded so similar seeds start far apart.
+// Algorithm: sfc32, Chris Doty-Humphrey's Small Fast Chaotic generator (128-bit state; reference implementation in
+// PractRand, https://pracrand.sourceforge.net/), chosen over mulberry32 for its larger state and period.
+// Seeding ("splitmix32" here): a Weyl sequence with step 0x9e3779b9 passed through MurmurHash3's fmix32 finaliser
+// (constants 0x85ebca6b and 0xc2b2ae35) gives the three state words a, b and c; the counter starts at 1.
+// The first 12 outputs are then discarded so similar seeds start far apart.
 // Changing any of this changes every recorded run, so bump RNG_ALGORITHM if it ever changes.
 //
 // How to use it (see docs/ARCHITECTURE.md, "Randomness"):
@@ -75,9 +77,13 @@ export function createRng(seed: number): Rng {
  */
 export function restoreRng(state: RngState): Rng {
   const words: unknown = state?.words;
-  if (state?.algorithm !== RNG_ALGORITHM || !Array.isArray(words) || words.length !== 4 || !words.every(isUint32)) {
-    throw new RangeError(`Not a valid ${RNG_ALGORITHM} generator state.`);
-  }
+  // Check each index explicitly: every() would skip holes in a sparse array such as Array(4).
+  const valid =
+    state?.algorithm === RNG_ALGORITHM &&
+    Array.isArray(words) &&
+    words.length === 4 &&
+    [0, 1, 2, 3].every((i) => isUint32(words[i]));
+  if (!valid) throw new RangeError(`Not a valid ${RNG_ALGORITHM} generator state.`);
   const [a, b, c, counter] = words as [number, number, number, number];
   return fromWords(a, b, c, counter);
 }
@@ -116,9 +122,11 @@ function fromWords(initialA: number, initialB: number, initialC: number, initial
     nextUint32,
     next,
     range(min, max) {
+      // Check each bound before any arithmetic: subtraction would quietly turn "1" or null into a number,
+      // and addition would then join strings. Number.isFinite rejects anything that is not a number.
       const span = max - min;
-      // span is not finite when either bound is not, or when finite bounds overflow (e.g. -1e308 to 1e308).
-      if (!Number.isFinite(span) || span < 0) {
+      // span is not finite when finite bounds overflow (e.g. -1e308 to 1e308).
+      if (!Number.isFinite(min) || !Number.isFinite(max) || !Number.isFinite(span) || span < 0) {
         throw new RangeError(`range(min, max) needs finite numbers with min <= max, got ${min} and ${max}.`);
       }
       if (span === 0) return min;
