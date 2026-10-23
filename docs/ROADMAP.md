@@ -15,7 +15,7 @@ _Last verified: 2026-10-23, against `main` at `ab1436c` (P1-01 merged in #55, P1
 | GitHub issues | Existing issues #1–#39 are preserved. Reconciliation adds #41–#50 for two missing primary-release entries and eight approval-gated research entries; #40 is the existing documentation PR. |
 | AI learning results | None. No experiments have been run, so no learning claims can be made. |
 
-P1-02 is **Complete**. P1-01 and P1-10 are **In Review**; the other 40 primary-release implementation features are **Not Started**. Eight research entries are **Blocked** pending explicit approval; Q-01 remains **In Review**. P1-02 is the only implementation feature marked Complete. The initial master specification is the owner's detailed project request; no separate specification was found. Re-verify this table against code and tests whenever statuses change.
+P1-02 and P1-03 are **Complete**. P1-01 and P1-10 are **In Review**; the other 39 primary-release implementation features are **Not Started**. Eight research entries are **Blocked** pending explicit approval; Q-01 remains **In Review**. P1-02 and P1-03 are the only implementation features marked Complete. The initial master specification is the owner's detailed project request; no separate specification was found. Re-verify this table against code and tests whenever statuses change.
 
 ### Existing work and reconciliation
 
@@ -59,7 +59,7 @@ Documentation-only checks are recorded as such; no application/device execution 
 |----|---------|-------|----------|--------|------------|-------|
 | P1-01 | Project scaffold: Vite, TypeScript, lint and test tooling | 1 | P0 | In Review | — | [#1](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/1) |
 | P1-02 | Fixed-timestep loop with simulation/render separation | 1 | P0 | Complete | P1-01 | [#2](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/2) |
-| P1-03 | Seeded pseudorandom generator | 1 | P0 | Not Started | P1-01 | [#3](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/3) |
+| P1-03 | Seeded pseudorandom generator | 1 | P0 | Complete | P1-01 | [#3](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/3) |
 | P1-04 | Track model and responsive Canvas 2D racetrack | 1 | P0 | Not Started | P1-02 | [#4](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/4) |
 | P1-05 | Vehicle physics: acceleration, steering, braking and drag | 1 | P0 | Not Started | P1-02 | [#5](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/5) |
 | P1-06 | Collision detection with track boundaries | 1 | P0 | Not Started | P1-04, P1-05 | [#6](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/6) |
@@ -108,8 +108,8 @@ Dependencies are taken from the table above.
 
 - **In review:** P1-01 (scaffold) is merged into `main` (#55) but stays In Review until Codex's full review record is posted. WebKit emulation has passed in CI, and real iPhone/iPad evidence was recorded with P1-02. Q-01 remains in review.
 - **In review:** P1-10 (CI) is merged into `main` (#60) and stays In Review until Codex's full review record is posted.
-- **Complete:** P1-02 (fixed-timestep loop, #62).
-- **Ready now:** P1-03 (next); also P1-11, and P2-03 (the network is pure maths and can be built alongside the simulator).
+- **Complete:** P1-02 (fixed-timestep loop, #62) and P1-03 (seeded generator, #64).
+- **Ready now:** P1-11, and P2-03 (the network is pure maths and can be built alongside the simulator).
 - **Next wave:** P1-04 and P1-05 (after P1-02), then P1-06 and P1-07, then P1-08 and P1-09.
 - **Silverstone (approved 2026-10-23, planning only):** P4-06 (Silverstone import) after P4-01, P2-10, P2-05, P2-07 and P3-05; P2-11 (spatial index, after P1-06 and P2-01) only if P4-06's measured baseline misses the budget or the owner approves an architectural reason; P4-07 (camera) after P1-04 and P2-05, as a separate follow-up. Each still needs explicit owner implementation approval when its dependencies are complete; this planning approval does not authorise implementation. None of these interrupts the current phase.
 - **Phase 2 critical path:** P1-06 → P2-01 → P2-02, and P1-07 → P2-06, then P2-04 → P2-05 → P2-07 → P2-08.
@@ -160,7 +160,7 @@ Dependencies are taken from the table above.
 
 ### P1-03 — Seeded pseudorandom generator
 
-- **Priority:** P0 · **Status:** Not Started · **Issue:** [#3](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/3)
+- **Priority:** P0 · **Status:** Complete · **Issue:** [#3](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/3)
 - **Depends on:** P1-01
 - **Description:** Add `src/utils/rng.ts` (mulberry32 or sfc32, documented choice) with helpers for uniform floats, ranges, Gaussian and integer picks. All sim/AI/evolution randomness uses it.
 - **Acceptance criteria:**
@@ -168,6 +168,13 @@ Dependencies are taken from the table above.
   - No `Math.random()` in sim, sensors, ai, evolution or training (lint rule).
 - **Test requirements:**
   - Unit: determinism, ranges, Gaussian mean and variance within tolerance over 10k samples.
+- **Choice:** sfc32 (128-bit state) seeded by splitmix32 with 12 warm-up outputs, recorded as `RNG_ALGORITHM = 'sfc32-splitmix32-v1'`. Chosen over mulberry32 for its larger state and period. Seeds are integers from 0 to 4294967295; invalid seeds throw. `getState()` and `restoreRng()` provide checkpoint state; persisting it belongs to P3-07. Usage rules are in ARCHITECTURE.md, "Randomness".
+- **Completion record (#64, merged by the owner at `c5fe051`; reviewed head `c0416c0`):**
+  - Automated: lint, typecheck, 124 unit tests and build passed locally; [CI run 40008147161](https://github.com/Harrisonxaph/Self-learning-Car-AI/actions/runs/40008147161) passed, including WebKit browser tests.
+  - Pinned outputs match an independent Python reference; Codex independently matched 1,000 outputs for each of 4 seeds.
+  - Devices: not applicable. The generator is headless with no callers; real-device checks start once it affects the simulator (P1-05 onward). Codex agreed.
+  - Independent review: [Codex technical approval of `c0416c0`](https://github.com/Harrisonxaph/Self-learning-Car-AI/pull/64#pullrequestreview-5633237539), after it ran all checks itself.
+  - Owner merge approval: #64 merged by the owner.
 
 ### P1-04 — Track model and responsive Canvas 2D racetrack
 
@@ -764,4 +771,6 @@ These apply to every phase and are checked in review.
 | 2026-10-23 | Owner approves the Silverstone and multi-car (Option A: independent, non-interacting cars) plan. Planning only: adds P2-11 (#56), P4-06 (#57) and P4-07 (#58), adds car-independence criteria to P2-05 and a drawing cap to P3-03, and narrows P5-06. No implementation. |
 | 2026-10-23 | Codex review of #59 (`6de9693`): P2-11 becomes conditional on a measured brute-force baseline missing a recorded phone budget (or an owner-approved architectural reason) and no longer blocks P4-06. P4-06 now depends on P2-07 and P3-05, which record the track version; P4-07 is a separate display follow-up. Each item still needs owner implementation approval. The budget's workload fixes a population of 50 cars. |
 | 2026-10-23 | P1-02 fixed-timestep loop implemented on `feat/p1-02-fixed-timestep` and moved to In Review; not Complete until real-device pause checks, Codex review and owner approval are recorded. |
+| 2026-10-23 | P1-03 seeded generator (sfc32 with splitmix32 seeding) implemented on `feat/p1-03-seeded-rng` and moved to In Review; not Complete until Codex review and owner approval are recorded. |
 | 2026-10-23 | P1-02 Complete: #62 merged by the owner after Codex technical approval of `c3c7b0c`, green CI and owner-reported real iPhone 15 and iPad Pro checks. The same device checks are recorded as evidence for P1-01, which stays In Review. |
+| 2026-10-23 | P1-03 Complete: #64 merged by the owner after Codex technical approval of `c0416c0` and green CI (run 40008147161). No device check applies: the generator is headless and has no callers yet. |
