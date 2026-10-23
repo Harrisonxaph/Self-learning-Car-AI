@@ -75,10 +75,21 @@ describe('next and range', () => {
     expect(rng.range(4, 4)).toBe(4);
   });
 
+  it('never returns max, even where rounding would reach it at large magnitudes', () => {
+    // Doubles near 1e16 are 2 apart, so without a redraw about half of these results round up to max.
+    const rng = createRng(8);
+    for (let i = 0; i < 1000; i += 1) {
+      expect(rng.range(1e16, 1e16 + 2)).toBe(1e16);
+    }
+  });
+
   it.each([
     [1, 0],
     [0, Number.NaN],
     [Number.NEGATIVE_INFINITY, 0],
+    // Finite bounds whose difference overflows to Infinity.
+    [-1e308, 1e308],
+    [-Number.MAX_VALUE, Number.MAX_VALUE],
   ])('rejects range(%s, %s)', (min, max) => {
     expect(() => createRng(0).range(min, max)).toThrow(RangeError);
   });

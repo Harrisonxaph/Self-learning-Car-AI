@@ -78,10 +78,18 @@ export function createRng(seed: number): Rng {
     nextUint32,
     next,
     range(min, max) {
-      if (!Number.isFinite(min) || !Number.isFinite(max) || max < min) {
+      const span = max - min;
+      // span is not finite when either bound is not, or when finite bounds overflow (e.g. -1e308 to 1e308).
+      if (!Number.isFinite(span) || span < 0) {
         throw new RangeError(`range(min, max) needs finite numbers with min <= max, got ${min} and ${max}.`);
       }
-      return min + next() * (max - min);
+      if (span === 0) return min;
+      // At large magnitudes min + next() * span can round up to max; draw again so max is never returned.
+      // A draw of 0 always gives min, so this ends.
+      for (;;) {
+        const value = min + next() * span;
+        if (value < max) return value;
+      }
     },
     int,
     gaussian(mean = 0, standardDeviation = 1) {
