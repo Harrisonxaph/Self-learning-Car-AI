@@ -4,13 +4,13 @@ A free, browser-based sandbox where 2D cars learn steering, acceleration and bra
 
 ## Verified project status
 
-_Last verified: 2026-10-23, against `main` at `dbb0782`, plus the P1-01 branch `feat/p1-01-project-scaffold` (in review, not yet merged)._
+_Last verified: 2026-10-23, against `main` at `5a3e494` (P1-01 merged in #55)._
 
 | Area | State |
 |------|-------|
-| Application code | **`main`: none** (documentation only). The P1-01 branch adds the project foundation only: a Vite + strict TypeScript page with a responsive Canvas 2D placeholder. No simulation, AI or controls exist. |
-| Tests and CI | **`main`: none.** The P1-01 branch adds `package.json`, ESLint with architecture boundary rules, Vitest unit tests and Playwright browser tests. No CI workflow yet (P1-10). |
-| Deployment | None. |
+| Application code | Project foundation only (P1-01): a Vite + strict TypeScript page with a responsive Canvas 2D placeholder. No simulation, AI or controls exist. |
+| Tests and CI | `package.json` scripts, ESLint with architecture boundary rules, Vitest unit tests and Playwright browser tests (P1-01). Chromium and unit tests have run locally; **the WebKit projects have not run anywhere yet**. No CI workflow yet (P1-10). |
+| Deployment | The owner's Vercel Git integration builds preview deployments for pull requests (observed as Ready on #55 and #59). Production deployment and P1-11's acceptance checks are not verified. |
 | Planning docs | Added by this roadmap PR: `AGENTS.md`, `docs/ROADMAP.md`, `docs/ARCHITECTURE.md`, `docs/AI_EVALUATION.md`, `docs/MODEL_FORMAT.md`, `docs/TESTING.md`. |
 | GitHub issues | Existing issues #1–#39 are preserved. Reconciliation adds #41–#50 for two missing primary-release entries and eight approval-gated research entries; #40 is the existing documentation PR. |
 | AI learning results | None. No experiments have been run, so no learning claims can be made. |
@@ -106,8 +106,8 @@ Documentation-only checks are recorded as such; no application/device execution 
 
 Dependencies are taken from the table above.
 
-- **In review:** P1-01 (scaffold), on branch `feat/p1-01-project-scaffold`; WebKit runs and real iPhone/iPad checks are still outstanding. Q-01 remains in review.
-- **Ready as soon as P1-01 merges:** P1-02, P1-03, P1-10 and P1-11, and P2-03 (the network is pure maths and can be built alongside the simulator).
+- **In review:** P1-01 (scaffold) is merged into `main` (#55) but stays In Review until its WebKit tests and real iPhone/iPad checks are recorded. Q-01 remains in review.
+- **Ready now (P1-01 merged):** P1-10 (CI, next), then P1-02 and P1-03; also P1-11, and P2-03 (the network is pure maths and can be built alongside the simulator).
 - **Next wave:** P1-04 and P1-05 (after P1-02), then P1-06 and P1-07, then P1-08 and P1-09.
 - **Silverstone (approved 2026-10-23, planning only):** P2-11 (spatial index) after P1-06 and P2-01; P4-06 (Silverstone import) after P4-01, P2-10, P2-05 and P2-11; P4-07 (camera) after P1-04 and P2-05. None of these interrupts the current phase.
 - **Phase 2 critical path:** P1-06 → P2-01 → P2-02, and P1-07 → P2-06, then P2-04 → P2-05 → P2-07 → P2-08.
@@ -130,6 +130,11 @@ Dependencies are taken from the table above.
   - `package-lock.json` committed; runtime dependencies pinned exactly.
 - **Test requirements:**
   - One smoke unit test and one Playwright smoke test (Chromium and WebKit).
+- **Evidence so far (2026-10-23):**
+  - Merged into `main` by the owner in [#55](https://github.com/Harrisonxaph/Self-learning-Car-AI/pull/55) at `9ba08e8`.
+  - Lint, typecheck, 29 unit tests, build and the 9 Chromium browser tests (desktop, phone, tablet) passed from a clean clone with Node 24.22.1.
+  - Codex: automated receipt only ("Didn't find any major issues" on `9ba08e8`). No full AGENTS.md review record was posted.
+  - **Outstanding before Complete:** WebKit projects (blocked in the development sandbox; to run in P1-10 CI), and real iPhone and iPad Safari checks (none recorded; a Vercel preview exists for them).
 
 ### P1-02 — Fixed-timestep loop with simulation/render separation
 
@@ -723,5 +728,5 @@ These apply to every phase and are checked in review.
 | 2026-10-23 | Initial documentation work in Claude Code PR #40; verified main had no code and created issues #1–#39. |
 | 2026-10-23 | Codex reconciliation preserves existing work; adds issues #41–#50, early evaluation fixtures and Phase 3 comparison, requires full model provenance, separates research training, and makes completion/recovery evidence explicit. |
 | 2026-10-23 | Owner selects Claude Code as main developer and Codex as reviewer, using explicit commit-specific technical approval in GitHub comments and separate owner merge approval. Role/workflow changes are proposed in a dedicated follow-up PR; feature statuses are unchanged. |
-| 2026-10-23 | P1-01 implemented on `feat/p1-01-project-scaffold` and moved to In Review. Not Complete: Codex review, WebKit test runs, real-device checks and owner approval are outstanding. |
+| 2026-10-23 | P1-01 implemented and merged into `main` (#55); it stays In Review because WebKit test runs, real-device checks and a full Codex review record are outstanding. |
 | 2026-10-23 | Owner approves the Silverstone and multi-car (Option A: independent, non-interacting cars) plan. Planning only: adds P2-11 (#56), P4-06 (#57) and P4-07 (#58), adds car-independence criteria to P2-05 and a drawing cap to P3-03, and narrows P5-06. No implementation. |
