@@ -48,6 +48,20 @@ describe('headless determinism rules', () => {
     expect(await ruleIdsFor('src/sim/world.ts', code)).toContain(rule);
   });
 
+  it.each(['sim', 'sensors', 'ai', 'evolution', 'training', 'utils'])(
+    'rejects Math.random in src/%s, which must use the seeded generator',
+    async (folder) => {
+      expect(await ruleIdsFor(`src/${folder}/example.ts`, 'export const r = Math.random();')).toContain(
+        'no-restricted-properties',
+      );
+    },
+  );
+
+  it('allows headless code to use the seeded generator', async () => {
+    const code = "import { createRng } from '../utils/rng';\nexport const r = createRng(1).next();\n";
+    expect(await ruleIdsFor('src/evolution/mutation.ts', code)).toEqual([]);
+  });
+
   it('still allows DOM access in rendering code', async () => {
     const rules = await ruleIdsFor('src/render/renderer.ts', "export const el = document.querySelector('canvas');");
     expect(rules).toEqual([]);
