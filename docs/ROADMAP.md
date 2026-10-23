@@ -9,7 +9,7 @@ _Last verified: 2026-10-23, against `main` at `5a3e494` (P1-01 merged in #55)._
 | Area | State |
 |------|-------|
 | Application code | Project foundation only (P1-01): a Vite + strict TypeScript page with a responsive Canvas 2D placeholder. No simulation, AI or controls exist. |
-| Tests and CI | `package.json` scripts, ESLint with architecture boundary rules, Vitest unit tests and Playwright browser tests (P1-01). Chromium and unit tests have run locally; **the WebKit projects have not run anywhere yet**. No CI workflow yet (P1-10). |
+| Tests and CI | `package.json` scripts, ESLint with architecture boundary rules, Vitest unit tests and Playwright browser tests (P1-01). Chromium and unit tests have run locally. The WebKit projects first ran in CI on the P1-10 PR (#60, run 39985079357: 18/18 browser tests passed, including desktop, iPhone 13 and iPad WebKit). No CI workflow on `main` until P1-10 merges. |
 | Deployment | The owner's Vercel Git integration builds preview deployments for pull requests (observed as Ready on #55 and #59). Production deployment and P1-11's acceptance checks are not verified. |
 | Planning docs | Added by this roadmap PR: `AGENTS.md`, `docs/ROADMAP.md`, `docs/ARCHITECTURE.md`, `docs/AI_EVALUATION.md`, `docs/MODEL_FORMAT.md`, `docs/TESTING.md`. |
 | GitHub issues | Existing issues #1–#39 are preserved. Reconciliation adds #41–#50 for two missing primary-release entries and eight approval-gated research entries; #40 is the existing documentation PR. |
@@ -106,7 +106,7 @@ Documentation-only checks are recorded as such; no application/device execution 
 
 Dependencies are taken from the table above.
 
-- **In review:** P1-01 (scaffold) is merged into `main` (#55) but stays In Review until its WebKit tests and real iPhone/iPad checks are recorded. Q-01 remains in review.
+- **In review:** P1-01 (scaffold) is merged into `main` (#55) but stays In Review until its real iPhone/iPad checks are recorded (WebKit emulation has passed in CI). Q-01 remains in review.
 - **Ready now (P1-01 merged):** P1-10 (CI, next), then P1-02 and P1-03; also P1-11, and P2-03 (the network is pure maths and can be built alongside the simulator).
 - **Next wave:** P1-04 and P1-05 (after P1-02), then P1-06 and P1-07, then P1-08 and P1-09.
 - **Silverstone (approved 2026-10-23, planning only):** P2-11 (spatial index) after P1-06 and P2-01; P4-06 (Silverstone import) after P4-01, P2-10, P2-05 and P2-11; P4-07 (camera) after P1-04 and P2-05. None of these interrupts the current phase.
@@ -134,7 +134,8 @@ Dependencies are taken from the table above.
   - Merged into `main` by the owner in [#55](https://github.com/Harrisonxaph/Self-learning-Car-AI/pull/55) at `9ba08e8`.
   - Lint, typecheck, 29 unit tests, build and the 9 Chromium browser tests (desktop, phone, tablet) passed from a clean clone with Node 24.22.1.
   - Codex: automated receipt only ("Didn't find any major issues" on `9ba08e8`). No full AGENTS.md review record was posted.
-  - **Outstanding before Complete:** WebKit projects (blocked in the development sandbox; to run in P1-10 CI), and real iPhone and iPad Safari checks (none recorded; a Vercel preview exists for them).
+  - WebKit: desktop, iPhone 13 and iPad WebKit projects passed (3 tests each) in CI run 39985079357 on #60, whose app code is identical to `main`'s P1-01 code.
+  - **Outstanding before Complete:** real iPhone and iPad Safari checks (none recorded; a Vercel preview exists for them) and a full Codex review record (or explicit owner acceptance).
 
 ### P1-02 — Fixed-timestep loop with simulation/render separation
 
