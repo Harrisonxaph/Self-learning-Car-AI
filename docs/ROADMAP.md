@@ -8,14 +8,14 @@ _Last verified: 2026-10-23, against `main` at `ab1436c` (P1-01 merged in #55, P1
 
 | Area | State |
 |------|-------|
-| Application code | Project foundation only (P1-01): a Vite + strict TypeScript page with a responsive Canvas 2D placeholder. No simulation, AI or controls exist. |
+| Application code | Project foundation (P1-01): a Vite + strict TypeScript page with a responsive Canvas 2D placeholder. P1-02 (#62) adds the fixed-timestep loop: a tick-counting world, a headless fixed-step clock and a frame loop that pauses while the page is hidden. No vehicle physics, track, AI or controls exist. |
 | Tests and CI | `package.json` scripts, ESLint with architecture boundary rules, Vitest unit tests and Playwright browser tests (P1-01). Chromium and unit tests have run locally. The WebKit projects first ran in CI on the P1-10 PR (#60, run 39985079357: 18/18 browser tests passed, including desktop, iPhone 13 and iPad WebKit). GitHub Actions CI (P1-10, #60) now runs lint, typecheck, unit tests, build and all six Playwright projects on every pull request and push to `main`. |
 | Deployment | The owner's Vercel Git integration builds preview deployments for pull requests (observed as Ready on #55 and #59). Production deployment and P1-11's acceptance checks are not verified. |
 | Planning docs | Added by this roadmap PR: `AGENTS.md`, `docs/ROADMAP.md`, `docs/ARCHITECTURE.md`, `docs/AI_EVALUATION.md`, `docs/MODEL_FORMAT.md`, `docs/TESTING.md`. |
 | GitHub issues | Existing issues #1–#39 are preserved. Reconciliation adds #41–#50 for two missing primary-release entries and eight approval-gated research entries; #40 is the existing documentation PR. |
 | AI learning results | None. No experiments have been run, so no learning claims can be made. |
 
-P1-01 and P1-10 are **In Review**; the other 41 primary-release implementation features are **Not Started**. Eight research entries are **Blocked** pending explicit approval; Q-01 remains **In Review**. No implementation is marked Complete. The initial master specification is the owner's detailed project request; no separate specification was found. Re-verify this table against code and tests whenever statuses change.
+P1-01, P1-02 and P1-10 are **In Review**; the other 40 primary-release implementation features are **Not Started**. Eight research entries are **Blocked** pending explicit approval; Q-01 remains **In Review**. No implementation is marked Complete. The initial master specification is the owner's detailed project request; no separate specification was found. Re-verify this table against code and tests whenever statuses change.
 
 ### Existing work and reconciliation
 
@@ -58,7 +58,7 @@ Documentation-only checks are recorded as such; no application/device execution 
 | ID | Feature | Phase | Priority | Status | Depends on | Issue |
 |----|---------|-------|----------|--------|------------|-------|
 | P1-01 | Project scaffold: Vite, TypeScript, lint and test tooling | 1 | P0 | In Review | — | [#1](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/1) |
-| P1-02 | Fixed-timestep loop with simulation/render separation | 1 | P0 | Not Started | P1-01 | [#2](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/2) |
+| P1-02 | Fixed-timestep loop with simulation/render separation | 1 | P0 | In Review | P1-01 | [#2](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/2) |
 | P1-03 | Seeded pseudorandom generator | 1 | P0 | Not Started | P1-01 | [#3](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/3) |
 | P1-04 | Track model and responsive Canvas 2D racetrack | 1 | P0 | Not Started | P1-02 | [#4](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/4) |
 | P1-05 | Vehicle physics: acceleration, steering, braking and drag | 1 | P0 | Not Started | P1-02 | [#5](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/5) |
@@ -108,7 +108,8 @@ Dependencies are taken from the table above.
 
 - **In review:** P1-01 (scaffold) is merged into `main` (#55) but stays In Review until its real iPhone/iPad checks are recorded (WebKit emulation has passed in CI). Q-01 remains in review.
 - **In review:** P1-10 (CI) is merged into `main` (#60) and stays In Review until Codex's full review record is posted.
-- **Ready now:** P1-02 (next), then P1-03; also P1-11, and P2-03 (the network is pure maths and can be built alongside the simulator).
+- **In review:** P1-02 (fixed-timestep loop, #62) stays In Review until its real iPhone/iPad pause check and owner merge approval are recorded.
+- **Ready now:** P1-03 (next); also P1-11, and P2-03 (the network is pure maths and can be built alongside the simulator).
 - **Next wave:** P1-04 and P1-05 (after P1-02), then P1-06 and P1-07, then P1-08 and P1-09.
 - **Silverstone (approved 2026-10-23, planning only):** P4-06 (Silverstone import) after P4-01, P2-10, P2-05, P2-07 and P3-05; P2-11 (spatial index, after P1-06 and P2-01) only if P4-06's measured baseline misses the budget or the owner approves an architectural reason; P4-07 (camera) after P1-04 and P2-05, as a separate follow-up. Each still needs explicit owner implementation approval when its dependencies are complete; this planning approval does not authorise implementation. None of these interrupts the current phase.
 - **Phase 2 critical path:** P1-06 → P2-01 → P2-02, and P1-07 → P2-06, then P2-04 → P2-05 → P2-07 → P2-08.
@@ -140,7 +141,7 @@ Dependencies are taken from the table above.
 
 ### P1-02 — Fixed-timestep loop with simulation/render separation
 
-- **Priority:** P0 · **Status:** Not Started · **Issue:** [#2](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/2)
+- **Priority:** P0 · **Status:** In Review · **Issue:** [#2](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/2)
 - **Depends on:** P1-01
 - **Description:** Accumulator loop that steps `world.step(DT)` at a fixed 1/60 s, caps steps per frame, renders once per frame, and pauses on `visibilitychange`. Simulation modules have no DOM imports.
 - **Acceptance criteria:**
@@ -150,6 +151,8 @@ Dependencies are taken from the table above.
 - **Test requirements:**
   - Unit: same tick count gives the same state with simulated 30/60/120 Hz frame timings.
   - E2E: pause on hidden tab.
+- **Evidence so far:** CI run 39987983466 passed on `7979929` (30/30 browser tests, including desktop, iPhone 13 and iPad WebKit). Codex gave technical approval of `7979929` on #62 after running all checks independently.
+- **Outstanding before Complete:** a real iPhone/iPad check that switching apps or locking the screen pauses and resumes without a jump (emulated WebKit is not proof), Codex confirmation of the current PR head after the merge from `main`, and owner merge approval.
 
 ### P1-03 — Seeded pseudorandom generator
 
@@ -756,3 +759,4 @@ These apply to every phase and are checked in review.
 | 2026-10-23 | P1-10 CI workflow merged into `main` (#60). CI passed on its head (run 39985079357) and the throwaway failing-test PR (#61) failed both jobs as intended; it stays In Review until Codex's full review record with technical approval is posted. |
 | 2026-10-23 | Owner approves the Silverstone and multi-car (Option A: independent, non-interacting cars) plan. Planning only: adds P2-11 (#56), P4-06 (#57) and P4-07 (#58), adds car-independence criteria to P2-05 and a drawing cap to P3-03, and narrows P5-06. No implementation. |
 | 2026-10-23 | Codex review of #59 (`6de9693`): P2-11 becomes conditional on a measured brute-force baseline missing a recorded phone budget (or an owner-approved architectural reason) and no longer blocks P4-06. P4-06 now depends on P2-07 and P3-05, which record the track version; P4-07 is a separate display follow-up. Each item still needs owner implementation approval. The budget's workload fixes a population of 50 cars. |
+| 2026-10-23 | P1-02 fixed-timestep loop implemented on `feat/p1-02-fixed-timestep` and moved to In Review; not Complete until real-device pause checks, Codex review and owner approval are recorded. |

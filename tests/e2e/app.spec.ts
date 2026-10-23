@@ -83,3 +83,59 @@ test('resizes the drawing buffer when the window resizes or the device rotates',
   expect(after.paintedAlpha).toBe(255);
   expect(after.pageScrollWidth).toBeLessThanOrEqual(after.viewportWidth);
 });
+
+/** The number of simulation ticks the page has run, read from the time readout. */
+async function simTick(page: Page): Promise<number> {
+  return Number(await page.locator('#sim-time').getAttribute('data-tick'));
+}
+
+/**
+ * Makes the page report itself hidden or visible and fires `visibilitychange`, as a browser does when
+ * the user switches tab or app. Animation frames keep running, so only the app's own pause can stop
+ * the simulation.
+ */
+async function setPageHidden(page: Page, hidden: boolean) {
+  await page.evaluate((isHidden) => {
+    const state = isHidden ? 'hidden' : 'visible';
+    Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => state });
+    Object.defineProperty(document, 'hidden', { configurable: true, get: () => isHidden });
+    document.dispatchEvent(new Event('visibilitychange'));
+  }, hidden);
+}
+
+/**
+ * Waits for two animation frames inside the page and reads the tick count in the second frame,
+ * so no extra frames can run between the wait and the read on a busy device.
+ */
+async function tickAfterTwoFrames(page: Page): Promise<number> {
+  return page.evaluate(
+    () =>
+      new Promise<number>((resolve) =>
+        requestAnimationFrame(() =>
+          requestAnimationFrame(() => resolve(Number(document.querySelector('#sim-time')?.getAttribute('data-tick')))),
+        ),
+      ),
+  );
+}
+
+test('runs the simulation clock while the page is visible', async ({ page }) => {
+  await expect.poll(() => simTick(page)).toBeGreaterThan(30);
+  await expect(page.locator('#sim-time')).toHaveText(/^\d+\.\d s$/);
+});
+
+test('pauses while the page is hidden and resumes without a catch-up jump', async ({ page }) => {
+  await expect.poll(() => simTick(page)).toBeGreaterThan(0);
+
+  await setPageHidden(page, true);
+  const paused = await simTick(page);
+  // One second hidden: about 60 ticks would run if the app did not pause.
+  await page.waitForTimeout(1000);
+  expect(await simTick(page)).toBe(paused);
+
+  await setPageHidden(page, false);
+  // The first frame back only records the time, so two frames run at most one frame's worth of
+  // ticks (at most 5 under the per-frame cap), not the 60 that the hidden second would give.
+  const afterResume = await tickAfterTwoFrames(page);
+  expect(afterResume - paused).toBeLessThanOrEqual(5);
+  await expect.poll(() => simTick(page)).toBeGreaterThan(afterResume);
+});
