@@ -1,8 +1,8 @@
 # Testing
 
-> Status: **planned**. No tooling, scripts or tests exist yet (verified 2026-10-23). The commands below are what P1-01 must set up. Do not report them as passing until they exist and have been run.
+> Status: the commands below exist from P1-01 onwards. Only the project foundation is tested so far (canvas sizing, page start-up and the architecture lint rules); the rest of the table under "What must be tested" applies as each feature lands. Report only results you actually ran.
 
-## Commands (to be created in P1-01)
+## Commands
 
 | Command | Purpose |
 |---------|---------|
@@ -11,9 +11,30 @@
 | `npm run typecheck` | `tsc --noEmit` with `strict: true`. |
 | `npm test` | Vitest unit and integration tests in Node. |
 | `npm run build` | Vite production build. |
-| `npm run test:e2e` | Playwright tests against the built app in Chromium and WebKit, with mobile-viewport projects. |
+| `npm run test:e2e` | Builds the app, serves it with `vite preview` and runs the Playwright tests in Chromium and WebKit, including phone and tablet touch projects. |
 
 CI (P1-10) runs all of them on every pull request and on `main`.
+
+## Running the tests locally
+
+1. Use Node 24 (`nvm use` reads `.nvmrc`), then `npm ci`.
+2. Install the browsers once: `npx playwright install --with-deps chromium webkit`.
+3. Run `npm run lint`, `npm run typecheck`, `npm test`, `npm run build` and `npm run test:e2e`.
+
+`npm run test:e2e` runs these Playwright projects against the production build:
+
+| Project | Browser | Emulated device |
+|---------|---------|-----------------|
+| `desktop-chromium` | Chromium | Desktop, 1280 × 720 |
+| `desktop-webkit` | WebKit | Desktop Safari, 1280 × 720 |
+| `phone-webkit` | WebKit | iPhone 13 (touch, 3× pixel ratio) |
+| `tablet-webkit` | WebKit | iPad (gen 7) (touch) |
+| `phone-chromium` | Chromium | Pixel 7 (touch) |
+| `tablet-chromium` | Chromium | Galaxy Tab S4 (touch) |
+
+Run one project with `npx playwright test --project=phone-webkit`. Emulated WebKit approximates iOS Safari but does not replace checks on a real iPhone or iPad.
+
+Lint rules have tests too: `tests/config/eslint-boundaries.test.ts` lints sample imports as if they were in each `src/` folder and checks that the architecture boundaries and determinism rules fire.
 
 ## Layout
 
@@ -26,6 +47,8 @@ tests/
   training/     fitness guards, trainer, experiment records
   persistence/  model validation, migrations, storage failures
   utils/        rng, math
+  render/       canvas sizing and drawing helpers
+  config/       tests for the tooling configuration (ESLint boundaries)
   e2e/          Playwright: driving, training, save/load, editor
 ```
 
