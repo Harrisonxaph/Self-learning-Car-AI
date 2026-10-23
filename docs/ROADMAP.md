@@ -8,14 +8,14 @@ _Last verified: 2026-10-23, against `main` at `ab1436c` (P1-01 merged in #55, P1
 
 | Area | State |
 |------|-------|
-| Application code | Project foundation (P1-01): a Vite + strict TypeScript page with a responsive Canvas 2D placeholder. P1-02 (#62) adds the fixed-timestep loop: a tick-counting world, a headless fixed-step clock and a frame loop that pauses while the page is hidden. No vehicle physics, track, AI or controls exist. |
+| Application code | Project foundation (P1-01): a Vite + strict TypeScript page with a responsive Canvas 2D placeholder. P1-02 (#62, merged) adds the fixed-timestep loop: a tick-counting world, a headless fixed-step clock and a frame loop that pauses while the page is hidden. No vehicle physics, track, AI or controls exist. |
 | Tests and CI | `package.json` scripts, ESLint with architecture boundary rules, Vitest unit tests and Playwright browser tests (P1-01). Chromium and unit tests have run locally. The WebKit projects first ran in CI on the P1-10 PR (#60, run 39985079357: 18/18 browser tests passed, including desktop, iPhone 13 and iPad WebKit). GitHub Actions CI (P1-10, #60) now runs lint, typecheck, unit tests, build and all six Playwright projects on every pull request and push to `main`. |
 | Deployment | The owner's Vercel Git integration builds preview deployments for pull requests (observed as Ready on #55 and #59). Production deployment and P1-11's acceptance checks are not verified. |
 | Planning docs | Added by this roadmap PR: `AGENTS.md`, `docs/ROADMAP.md`, `docs/ARCHITECTURE.md`, `docs/AI_EVALUATION.md`, `docs/MODEL_FORMAT.md`, `docs/TESTING.md`. |
 | GitHub issues | Existing issues #1–#39 are preserved. Reconciliation adds #41–#50 for two missing primary-release entries and eight approval-gated research entries; #40 is the existing documentation PR. |
 | AI learning results | None. No experiments have been run, so no learning claims can be made. |
 
-P1-01, P1-02, P1-03, P1-04, P1-05 and P1-10 are **In Review**; the other 37 primary-release implementation features are **Not Started**. Eight research entries are **Blocked** pending explicit approval; Q-01 remains **In Review**. No implementation is marked Complete. The initial master specification is the owner's detailed project request; no separate specification was found. Re-verify this table against code and tests whenever statuses change.
+P1-02, P1-03, P1-04 and P1-05 are **Complete**. P1-01 and P1-10 are **In Review**; the other 37 primary-release implementation features are **Not Started**. Eight research entries are **Blocked** pending explicit approval; Q-01 remains **In Review**. P1-02, P1-03, P1-04 and P1-05 are the only implementation features marked Complete. The initial master specification is the owner's detailed project request; no separate specification was found. Re-verify this table against code and tests whenever statuses change.
 
 ### Existing work and reconciliation
 
@@ -58,10 +58,10 @@ Documentation-only checks are recorded as such; no application/device execution 
 | ID | Feature | Phase | Priority | Status | Depends on | Issue |
 |----|---------|-------|----------|--------|------------|-------|
 | P1-01 | Project scaffold: Vite, TypeScript, lint and test tooling | 1 | P0 | In Review | — | [#1](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/1) |
-| P1-02 | Fixed-timestep loop with simulation/render separation | 1 | P0 | In Review | P1-01 | [#2](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/2) |
-| P1-03 | Seeded pseudorandom generator | 1 | P0 | In Review | P1-01 | [#3](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/3) |
-| P1-04 | Track model and responsive Canvas 2D racetrack | 1 | P0 | In Review | P1-02 | [#4](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/4) |
-| P1-05 | Vehicle physics: acceleration, steering, braking and drag | 1 | P0 | In Review | P1-02 | [#5](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/5) |
+| P1-02 | Fixed-timestep loop with simulation/render separation | 1 | P0 | Complete | P1-01 | [#2](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/2) |
+| P1-03 | Seeded pseudorandom generator | 1 | P0 | Complete | P1-01 | [#3](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/3) |
+| P1-04 | Track model and responsive Canvas 2D racetrack | 1 | P0 | Complete | P1-02 | [#4](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/4) |
+| P1-05 | Vehicle physics: acceleration, steering, braking and drag | 1 | P0 | Complete | P1-02 | [#5](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/5) |
 | P1-06 | Collision detection with track boundaries | 1 | P0 | Not Started | P1-04, P1-05 | [#6](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/6) |
 | P1-07 | Ordered checkpoints, lap counting and lap timing | 1 | P0 | Not Started | P1-04, P1-05 | [#7](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/7) |
 | P1-08 | Manual driving with keyboard and mobile touch controls | 1 | P0 | Not Started | P1-05, P1-06, P1-07 | [#8](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/8) |
@@ -106,14 +106,11 @@ Documentation-only checks are recorded as such; no application/device execution 
 
 Dependencies are taken from the table above.
 
-- **In review:** P1-01 (scaffold) is merged into `main` (#55) but stays In Review until its real iPhone/iPad checks are recorded (WebKit emulation has passed in CI). Q-01 remains in review.
+- **In review:** P1-01 (scaffold) is merged into `main` (#55) but stays In Review until Codex's full review record is posted. WebKit emulation has passed in CI, and real iPhone/iPad evidence was recorded with P1-02. Q-01 remains in review.
 - **In review:** P1-10 (CI) is merged into `main` (#60) and stays In Review until Codex's full review record is posted.
-- **In review:** P1-02 (fixed-timestep loop, #62) stays In Review until its real iPhone/iPad pause check and owner merge approval are recorded.
-- **In review:** P1-03 (seeded generator).
-- **In review:** P1-04 (track model and static track layer).
-- **In review:** P1-05 (vehicle physics).
-- **Ready now:** P1-11, and P2-03 (the network is pure maths and can be built alongside the simulator).
-- **Next wave:** P1-06 and P1-07, then P1-08 and P1-09.
+- **Complete:** P1-02 (fixed-timestep loop, #62), P1-03 (seeded generator, #64), P1-04 (track model and static track layer, #65) and P1-05 (vehicle physics, #66).
+- **Ready now:** P1-06 and P1-07 (their dependencies P1-04 and P1-05 are Complete), P1-11, and P2-03 (the network is pure maths and can be built alongside the simulator).
+- **Next wave:** P1-08 and P1-09, after P1-06 and P1-07.
 - **Silverstone (approved 2026-10-23, planning only):** P4-06 (Silverstone import) after P4-01, P2-10, P2-05, P2-07 and P3-05; P2-11 (spatial index, after P1-06 and P2-01) only if P4-06's measured baseline misses the budget or the owner approves an architectural reason; P4-07 (camera) after P1-04 and P2-05, as a separate follow-up. Each still needs explicit owner implementation approval when its dependencies are complete; this planning approval does not authorise implementation. None of these interrupts the current phase.
 - **Phase 2 critical path:** P1-06 → P2-01 → P2-02, and P1-07 → P2-06, then P2-04 → P2-05 → P2-07 → P2-08.
 - **Early evaluation:** P1-04 + P1-07 → P2-10 supplies built-in training/validation/held-out fixtures before P2-07/P2-08; the editor is not a prerequisite.
@@ -140,11 +137,12 @@ Dependencies are taken from the table above.
   - Lint, typecheck, 29 unit tests, build and the 9 Chromium browser tests (desktop, phone, tablet) passed from a clean clone with Node 24.22.1.
   - Codex: automated receipt only ("Didn't find any major issues" on `9ba08e8`). No full AGENTS.md review record was posted.
   - WebKit: desktop, iPhone 13 and iPad WebKit projects passed (3 tests each) in CI run 39985079357 on #60, whose app code is identical to `main`'s P1-01 code.
-  - **Outstanding before Complete:** real iPhone and iPad Safari checks (none recorded; a Vercel preview exists for them) and a full Codex review record with commit-specific technical approval (AGENTS.md completion gates 7 and 8; owner acceptance does not replace it).
+  - **Device evidence since:** the owner's real-device checks for P1-02 ran on a build that contains the whole P1-01 page. The iPhone 15 (iOS 27.0.1) and iPad Pro 11-inch, 3rd generation (iPadOS 26.6.2) in Safari loaded the page, fitted it without scrolling and refitted on rotation ([record](https://github.com/Harrisonxaph/Self-learning-Car-AI/pull/62#issuecomment-6371615878)).
+  - **Outstanding before Complete:** a full Codex review record with commit-specific technical approval (AGENTS.md completion gates 7 and 8; owner acceptance does not replace it). That record should also confirm whether the device evidence above covers P1-01's iPhone acceptance criterion.
 
 ### P1-02 — Fixed-timestep loop with simulation/render separation
 
-- **Priority:** P0 · **Status:** In Review · **Issue:** [#2](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/2)
+- **Priority:** P0 · **Status:** Complete · **Issue:** [#2](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/2)
 - **Depends on:** P1-01
 - **Description:** Accumulator loop that steps `world.step(DT)` at a fixed 1/60 s, caps steps per frame, renders once per frame, and pauses on `visibilitychange`. Simulation modules have no DOM imports.
 - **Acceptance criteria:**
@@ -154,12 +152,15 @@ Dependencies are taken from the table above.
 - **Test requirements:**
   - Unit: same tick count gives the same state with simulated 30/60/120 Hz frame timings.
   - E2E: pause on hidden tab.
-- **Evidence so far:** CI run 39987983466 passed on `7979929` (30/30 browser tests, including desktop, iPhone 13 and iPad WebKit). Codex gave technical approval of `7979929` on #62 after running all checks independently.
-- **Outstanding before Complete:** a real iPhone/iPad check that switching apps or locking the screen pauses and resumes without a jump (emulated WebKit is not proof), Codex confirmation of the current PR head after the merge from `main`, and owner merge approval.
+- **Completion record (#62, merged by the owner at `0706ad2`; reviewed head `c3c7b0c`):**
+  - Automated: lint, typecheck, 53 unit tests and build passed locally. [CI run 39998203123](https://github.com/Harrisonxaph/Self-learning-Car-AI/actions/runs/39998203123) passed with 30/30 browser tests, including desktop, iPhone 13 and iPad WebKit.
+  - Real devices ([record](https://github.com/Harrisonxaph/Self-learning-Car-AI/pull/62#issuecomment-6371615878), owner-reported, on the Vercel preview of `c3c7b0c` in Safari): iPhone 15 (iOS 27.0.1, 24A446) and iPad Pro 11-inch, 3rd generation (iPadOS 26.6.2, 23G90). Load and fit, screen lock, app switch and rotate all passed, with no catch-up jump.
+  - Independent review: [Codex technical approval of `c3c7b0c`](https://github.com/Harrisonxaph/Self-learning-Car-AI/pull/62#pullrequestreview-5632630779), after running lint, typecheck and all 30 browser tests itself.
+  - Owner merge approval: #62 merged by the owner.
 
 ### P1-03 — Seeded pseudorandom generator
 
-- **Priority:** P0 · **Status:** In Review · **Issue:** [#3](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/3)
+- **Priority:** P0 · **Status:** Complete · **Issue:** [#3](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/3)
 - **Depends on:** P1-01
 - **Description:** Add `src/utils/rng.ts` (mulberry32 or sfc32, documented choice) with helpers for uniform floats, ranges, Gaussian and integer picks. All sim/AI/evolution randomness uses it.
 - **Acceptance criteria:**
@@ -168,11 +169,16 @@ Dependencies are taken from the table above.
 - **Test requirements:**
   - Unit: determinism, ranges, Gaussian mean and variance within tolerance over 10k samples.
 - **Choice:** sfc32 (128-bit state) seeded by splitmix32 with 12 warm-up outputs, recorded as `RNG_ALGORITHM = 'sfc32-splitmix32-v1'`. Chosen over mulberry32 for its larger state and period. Seeds are integers from 0 to 4294967295; invalid seeds throw. `getState()` and `restoreRng()` provide checkpoint state; persisting it belongs to P3-07. Usage rules are in ARCHITECTURE.md, "Randomness".
-- **Outstanding before Complete:** Codex technical approval of the PR head and owner merge approval. P1-03 has no user-visible behaviour, so no device check applies.
+- **Completion record (#64, merged by the owner at `c5fe051`; reviewed head `c0416c0`):**
+  - Automated: lint, typecheck, 124 unit tests and build passed locally; [CI run 40008147161](https://github.com/Harrisonxaph/Self-learning-Car-AI/actions/runs/40008147161) passed, including WebKit browser tests.
+  - Pinned outputs match an independent Python reference; Codex independently matched 1,000 outputs for each of 4 seeds.
+  - Devices: not applicable. The generator is headless with no callers; real-device checks start once it affects the simulator (P1-05 onward). Codex agreed.
+  - Independent review: [Codex technical approval of `c0416c0`](https://github.com/Harrisonxaph/Self-learning-Car-AI/pull/64#pullrequestreview-5633237539), after it ran all checks itself.
+  - Owner merge approval: #64 merged by the owner.
 
 ### P1-04 — Track model and responsive Canvas 2D racetrack
 
-- **Priority:** P0 · **Status:** In Review · **Issue:** [#4](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/4)
+- **Priority:** P0 · **Status:** Complete · **Issue:** [#4](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/4)
 - **Depends on:** P1-02
 - **Description:** Track type (inner/outer boundary polylines, start pose, ordered checkpoint gates) with one built-in track, rendered responsively with capped devicePixelRatio and a cached static track layer.
 - **Acceptance criteria:**
@@ -182,11 +188,15 @@ Dependencies are taken from the table above.
   - Unit: track loading and coordinate scaling.
   - E2E: canvas visible at mobile and desktop viewports.
 - **Built:** `stadium-oval` (214 m × 94 m) in `src/data/tracks/`, loaded by `sim/track.ts`, fitted with one uniform scale and a margin by `render/trackView.ts`, and drawn once into a cached layer by `render/trackLayer.ts`, rebuilt only on resize, pixel-ratio change or track change. Gates and start pose are data only; their behaviour is P1-05/P1-07.
-- **Outstanding before Complete:** real iPhone (portrait and landscape) and iPad Safari rendering checks, Codex technical approval of the PR head and owner merge approval.
+- **Completion record (#65, merged by the owner at `26bf599`; reviewed head `7c61906`):**
+  - Automated: lint, typecheck, 163 unit tests and build passed locally; [CI run 40011479878](https://github.com/Harrisonxaph/Self-learning-Car-AI/actions/runs/40011479878) passed with 48/48 browser tests, including desktop, iPhone 13 and iPad WebKit.
+  - Real devices ([record](https://github.com/Harrisonxaph/Self-learning-Car-AI/pull/65#issuecomment-6373080700), owner-reported, on the Vercel preview of `7c61906` in Safari): iPhone 15 (iOS 27.0.1, 24A446) and iPad Pro 11-inch, 3rd generation (iPadOS 26.6.2, 23G90). Fit without distortion, portrait/landscape rotation, no page scroll or zoom, and sharp lines all passed.
+  - Independent review: [Codex technical approval of `7c61906`](https://github.com/Harrisonxaph/Self-learning-Car-AI/pull/65#pullrequestreview-5633514234), after it ran all checks itself.
+  - Owner merge approval: #65 merged by the owner.
 
 ### P1-05 — Vehicle physics: acceleration, steering, braking and drag
 
-- **Priority:** P0 · **Status:** In Review · **Issue:** [#5](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/5)
+- **Priority:** P0 · **Status:** Complete · **Issue:** [#5](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/5)
 - **Depends on:** P1-02
 - **Description:** Kinematic car model with throttle, brake, quadratic drag, rolling resistance and speed-dependent steering; constants in `src/sim/config.ts`.
 - **Acceptance criteria:**
@@ -195,7 +205,12 @@ Dependencies are taken from the table above.
 - **Test requirements:**
   - Unit tests for each property above with fixed inputs over N ticks.
 - **Built:** `sim/vehicle.ts` (kinematic bicycle, semi-implicit Euler) with constants in `sim/config.ts` matching MODEL_FORMAT.md, plus `maxLateralAcceleration` (high-speed steering limit) and `stopSpeed` (coasting to rest). `maxSpeed` is derived as the terminal speed. Headless only: cars are not yet placed in the world or drawn, so no visible behaviour changes. `npm run demo:vehicle` prints a scripted run.
-- **Outstanding before Complete:** Codex technical approval of the PR head and owner merge approval. No device check applies until cars are drawn (P1-08).
+- **Completion record (#66, merged by the owner at `998437e`; reviewed head `45b72bd`):**
+  - Automated: lint, typecheck, 218 unit tests, build and `npm run demo:vehicle` passed locally; [CI run 40017368055](https://github.com/Harrisonxaph/Self-learning-Car-AI/actions/runs/40017368055) passed at the first attempt with 48/48 browser tests, including desktop, iPhone 13 and iPad WebKit.
+  - Review fixes: stable terminal-speed root for tiny drag, and heading normalisation for multi-turn and huge start headings (Codex findings on `03e5ab9` and `8784fbd`). `45b72bd` also made the existing P1-10 pause/resume browser test race-free after a WebKit timing failure, keeping its 5-tick limit.
+  - Devices: not applicable. The physics is headless and the page is unchanged; real-device checks apply once cars are drawn and driven (P1-08).
+  - Independent review: [Codex technical approval of `45b72bd`](https://github.com/Harrisonxaph/Self-learning-Car-AI/pull/66#pullrequestreview-5633928748), after it ran lint, typecheck and all 48 browser tests itself (and the unit tests, build and demo on the physics-identical `f1e74d7`).
+  - Owner merge approval: #66 merged by the owner.
 
 ### P1-06 — Collision detection with track boundaries
 
@@ -770,5 +785,9 @@ These apply to every phase and are checked in review.
 | 2026-10-23 | Codex review of #59 (`6de9693`): P2-11 becomes conditional on a measured brute-force baseline missing a recorded phone budget (or an owner-approved architectural reason) and no longer blocks P4-06. P4-06 now depends on P2-07 and P3-05, which record the track version; P4-07 is a separate display follow-up. Each item still needs owner implementation approval. The budget's workload fixes a population of 50 cars. |
 | 2026-10-23 | P1-02 fixed-timestep loop implemented on `feat/p1-02-fixed-timestep` and moved to In Review; not Complete until real-device pause checks, Codex review and owner approval are recorded. |
 | 2026-10-23 | P1-03 seeded generator (sfc32 with splitmix32 seeding) implemented on `feat/p1-03-seeded-rng` and moved to In Review; not Complete until Codex review and owner approval are recorded. |
+| 2026-10-23 | P1-02 Complete: #62 merged by the owner after Codex technical approval of `c3c7b0c`, green CI and owner-reported real iPhone 15 and iPad Pro checks. The same device checks are recorded as evidence for P1-01, which stays In Review. |
+| 2026-10-23 | P1-03 Complete: #64 merged by the owner after Codex technical approval of `c0416c0` and green CI (run 40008147161). No device check applies: the generator is headless and has no callers yet. |
 | 2026-10-23 | P1-04 track model, stadium-oval fixture and cached static track layer implemented on `feat/p1-04-track-foundation` and moved to In Review; not Complete until real iPhone/iPad rendering checks, Codex review and owner approval are recorded. |
+| 2026-10-23 | P1-04 Complete: #65 merged by the owner after Codex technical approval of `7c61906`, green CI (run 40011479878, 48/48 browser tests including WebKit) and owner-reported real iPhone 15 and iPad Pro rendering checks. |
 | 2026-10-23 | P1-05 vehicle physics (kinematic bicycle, derived terminal speed, high-speed steering limit) implemented on `feat/p1-05-vehicle-physics` and moved to In Review; not Complete until Codex review and owner approval are recorded. MODEL_FORMAT physics gains `maxLateralAcceleration` and `stopSpeed`. |
+| 2026-10-23 | P1-05 Complete: #66 merged by the owner at `998437e` after Codex technical approval of `45b72bd` and green CI (run 40017368055, 48/48 browser tests including WebKit, first attempt). Headless physics; no device check applies until cars are drawn (P1-08). |
