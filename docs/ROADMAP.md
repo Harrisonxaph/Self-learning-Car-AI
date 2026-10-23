@@ -379,7 +379,7 @@ Dependencies are taken from the table above.
   2. The owner approves an architectural reason recorded in #56.
 - **Performance budget (proposed; the owner may revise it in #56 before any measurement):**
   - Reference device: the owner's iPhone in Safari, with model and iOS version recorded in #56 before measuring. Desktop Chromium figures are recorded for comparison only and never replace the phone result.
-  - Workload: Silverstone (or the synthetic stand-in), the P2-05 default population, 7 rays plus collision per car per tick.
+  - Workload: Silverstone (or the synthetic stand-in), a population of 50 cars, 7 rays plus collision per car per tick. P2-05 does not fix a default population yet; if its default differs from 50, measure and record both.
     - Rendered training at 1× uses the P3-03 phone draw cap.
     - Headless training runs at maximum speed.
   - Budget:
@@ -755,4 +755,4 @@ These apply to every phase and are checked in review.
 | 2026-10-23 | P1-01 implemented and merged into `main` (#55); it stays In Review because real-device checks and a full Codex review record are outstanding. WebKit later passed in CI (run 39985079357 on #60). |
 | 2026-10-23 | P1-10 CI workflow merged into `main` (#60). CI passed on its head (run 39985079357) and the throwaway failing-test PR (#61) failed both jobs as intended; it stays In Review until Codex's full review record with technical approval is posted. |
 | 2026-10-23 | Owner approves the Silverstone and multi-car (Option A: independent, non-interacting cars) plan. Planning only: adds P2-11 (#56), P4-06 (#57) and P4-07 (#58), adds car-independence criteria to P2-05 and a drawing cap to P3-03, and narrows P5-06. No implementation. |
-| 2026-10-23 | Codex review of #59 (`6de9693`): P2-11 becomes conditional on a measured brute-force baseline missing a recorded phone budget (or an owner-approved architectural reason) and no longer blocks P4-06. P4-06 now depends on P2-07 and P3-05, which record the track version; P4-07 is a separate display follow-up. Each item still needs owner implementation approval. |
+| 2026-10-23 | Codex review of #59 (`6de9693`): P2-11 becomes conditional on a measured brute-force baseline missing a recorded phone budget (or an owner-approved architectural reason) and no longer blocks P4-06. P4-06 now depends on P2-07 and P3-05, which record the track version; P4-07 is a separate display follow-up. Each item still needs owner implementation approval. The budget's workload fixes a population of 50 cars. |
