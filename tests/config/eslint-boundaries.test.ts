@@ -12,7 +12,7 @@ async function ruleIdsFor(filePath: string, code: string): Promise<string[]> {
 
 describe('architecture import boundaries', () => {
   it.each([
-    ['src/sim/vehicle.ts', "import { drawPlaceholder } from '../render/placeholder';"],
+    ['src/sim/vehicle.ts', "import { drawTrack } from '../render/trackLayer';"],
     ['src/sim/world.ts', "import { trainer } from '../training/trainer';"],
     ['src/sim/fixedStep.ts', "import { startFrameLoop } from '../ui/frameLoop';"],
     ['src/ai/network.ts', "import { mutate } from '../evolution/mutation';"],
