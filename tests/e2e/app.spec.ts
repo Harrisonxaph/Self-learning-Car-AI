@@ -35,22 +35,27 @@ async function expectSharpCanvas(page: Page) {
     .toBe(true);
 }
 
+let errors: string[] = [];
+
 test.beforeEach(async ({ page }) => {
-  const errors: string[] = [];
+  errors = [];
   page.on('pageerror', (error) => errors.push(error.message));
   page.on('console', (message) => {
     if (message.type() === 'error') errors.push(message.text());
   });
   await page.goto('/');
-  // Fail on any runtime error during start-up.
   await page.waitForLoadState('load');
+});
+
+// Fail on any runtime error or console error during start-up or the test itself.
+test.afterEach(() => {
   expect(errors).toEqual([]);
 });
 
 test('starts with a visible, painted canvas and readable heading', async ({ page }) => {
   await expect(page).toHaveTitle('Self-Driving AI Evolution');
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Self-Driving AI Evolution');
-  await expect(page.getByRole('img', { name: /simulation area/i })).toBeVisible();
+  await expect(page.getByRole('img', { name: /racetrack/i })).toBeVisible();
   await expectSharpCanvas(page);
 
   const state = await canvasState(page);
@@ -138,4 +143,90 @@ test('pauses while the page is hidden and resumes without a catch-up jump', asyn
   const afterResume = await tickAfterTwoFrames(page);
   expect(afterResume - paused).toBeLessThanOrEqual(5);
   await expect.poll(() => simTick(page)).toBeGreaterThan(afterResume);
+});
+
+// The built-in track's bounds in world metres, and points known to be on the road and in the infield.
+const TRACK_BOUNDS = { minX: -107, minY: -47, maxX: 107, maxY: 47 };
+const ROAD_POINT = { x: 15, y: 40 }; // bottom straight, between gates
+const INFIELD_POINT = { x: 0, y: 0 };
+const ROAD_RGB = [0x3b, 0x46, 0x54];
+const BACKGROUND_RGB = [0x1f, 0x2a, 0x36];
+
+/** Reads the track transform the page uses and samples real canvas pixels at given world points. */
+async function trackState(page: Page) {
+  return page.locator('#sim-canvas').evaluate(
+    (node, args) => {
+      const canvas = node as HTMLCanvasElement;
+      const rect = canvas.getBoundingClientRect();
+      const scale = Number(canvas.dataset.trackScale);
+      const offsetX = Number(canvas.dataset.trackOffsetX);
+      const offsetY = Number(canvas.dataset.trackOffsetY);
+      const toCss = (p: { x: number; y: number }) => ({ x: p.x * scale + offsetX, y: p.y * scale + offsetY });
+      const ratio = canvas.width / rect.width;
+      const context = canvas.getContext('2d');
+      const sample = (p: { x: number; y: number }) => {
+        const css = toCss(p);
+        const data = context?.getImageData(Math.round(css.x * ratio), Math.round(css.y * ratio), 1, 1).data;
+        return data ? [data[0], data[1], data[2]] : [];
+      };
+      const topLeft = toCss({ x: args.bounds.minX, y: args.bounds.minY });
+      const bottomRight = toCss({ x: args.bounds.maxX, y: args.bounds.maxY });
+      return {
+        cssWidth: rect.width,
+        cssHeight: rect.height,
+        builds: Number(canvas.dataset.trackLayerBuilds),
+        track: { left: topLeft.x, top: topLeft.y, right: bottomRight.x, bottom: bottomRight.y },
+        road: sample(args.road),
+        infield: sample(args.infield),
+      };
+    },
+    { bounds: TRACK_BOUNDS, road: ROAD_POINT, infield: INFIELD_POINT },
+  );
+}
+
+function expectColour(actual: (number | undefined)[], expected: number[]) {
+  expected.forEach((channel, i) => expect(Math.abs((actual[i] ?? -999) - channel)).toBeLessThanOrEqual(3));
+}
+
+/** The track sits inside the canvas with its margin, fills the limiting direction and keeps its shape. */
+function expectTrackFits(state: Awaited<ReturnType<typeof trackState>>) {
+  const { cssWidth, cssHeight, track } = state;
+  const margin = Math.max(8, 0.04 * Math.min(cssWidth, cssHeight));
+  expect(track.left).toBeGreaterThanOrEqual(margin - 0.5);
+  expect(track.top).toBeGreaterThanOrEqual(margin - 0.5);
+  expect(track.right).toBeLessThanOrEqual(cssWidth - margin + 0.5);
+  expect(track.bottom).toBeLessThanOrEqual(cssHeight - margin + 0.5);
+  const fillsWidth = Math.abs(track.right - track.left - (cssWidth - 2 * margin)) < 0.5;
+  const fillsHeight = Math.abs(track.bottom - track.top - (cssHeight - 2 * margin)) < 0.5;
+  expect(fillsWidth || fillsHeight).toBe(true);
+  expect((track.right - track.left) / (track.bottom - track.top)).toBeCloseTo(214 / 94, 3);
+}
+
+test('draws the racetrack fitted to the screen, keeping its shape', async ({ page }) => {
+  await expect.poll(async () => (await trackState(page)).builds).toBeGreaterThan(0);
+  const state = await trackState(page);
+  expectTrackFits(state);
+  expectColour(state.road, ROAD_RGB);
+  expectColour(state.infield, BACKGROUND_RGB);
+});
+
+test('keeps reusing the cached track layer while the size stays the same', async ({ page }) => {
+  await expect.poll(async () => (await simTick(page))).toBeGreaterThan(10);
+  const before = (await trackState(page)).builds;
+  // About 30 more frames, each copying the layer to the screen.
+  await expect.poll(async () => (await simTick(page))).toBeGreaterThan(40);
+  expect((await trackState(page)).builds).toBe(before);
+});
+
+test('redraws and refits the track when the device rotates', async ({ page }) => {
+  await expect.poll(async () => (await trackState(page)).builds).toBeGreaterThan(0);
+  const before = await trackState(page);
+  const viewport = page.viewportSize();
+  if (!viewport) throw new Error('No viewport size');
+  await page.setViewportSize({ width: viewport.height, height: viewport.width });
+  await expect.poll(async () => (await trackState(page)).builds).toBeGreaterThan(before.builds);
+  const after = await trackState(page);
+  expectTrackFits(after);
+  expectColour(after.road, ROAD_RGB);
+  expect(after.cssWidth).not.toBe(before.cssWidth);
 });

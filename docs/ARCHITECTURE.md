@@ -1,6 +1,6 @@
 # Architecture
 
-> Status: **mostly planned**. Built so far: the project foundation from P1-01 (`src/main.ts`, `src/render/viewport.ts` for canvas sizing, `src/render/placeholder.ts` for the start-up screen) and the fixed-timestep loop from P1-02 (`src/sim/config.ts`, `src/sim/world.ts`, `src/sim/fixedStep.ts`, `src/ui/frameLoop.ts`) and the seeded generator from P1-03 (`src/utils/rng.ts`). Everything else below is the target design for later tasks. Update this document when the code shows a better design.
+> Status: **mostly planned**. Built so far: the project foundation from P1-01 (`src/main.ts`, `src/render/viewport.ts` for canvas sizing) and the fixed-timestep loop from P1-02 (`src/sim/config.ts`, `src/sim/world.ts`, `src/sim/fixedStep.ts`, `src/ui/frameLoop.ts`) the seeded generator from P1-03 (`src/utils/rng.ts`) and the track model and static track layer from P1-04 (`src/sim/track.ts`, `src/data/tracks/stadium-oval.json`, `src/render/trackView.ts`, `src/render/trackLayer.ts`). Everything else below is the target design for later tasks. Update this document when the code shows a better design.
 
 ## Goals that shape the design
 
@@ -17,7 +17,7 @@ src/
   sim/                    pure simulation, no DOM
     config.ts             fixed timestep, physics constants
     vehicle.ts            car state and physics step
-    track.ts              track geometry types and helpers
+    track.ts              track geometry types, loading and bounds
     collision.ts          car–boundary intersection
     checkpoints.ts        ordered gates, lap counting, lap timing
     world.ts              steps every car once per tick
@@ -45,6 +45,9 @@ src/
     modelStore.ts         localStorage + JSON import/export
     trackStore.ts         custom track save/load
   render/                 Canvas 2D only; reads state, never mutates it
+    viewport.ts           canvas sizing with capped pixel ratio
+    trackView.ts          world-to-screen fit (uniform scale, centred, margin)
+    trackLayer.ts         cached static track layer
     renderer.ts
     layers/               track, cars, sensors, overlays
   ui/                     DOM controls, dashboard, editor
@@ -122,7 +125,11 @@ All constants live in `sim/config.ts` and are recorded with every experiment and
 
 ## Track, collision and checkpoints
 
-- A track is two closed polylines (inner and outer boundary), a start pose and an ordered list of checkpoint gates (segments across the road).
+- A track is two closed polylines (inner and outer boundary), a start pose and an ordered list of checkpoint gates (segments across the road). Built in P1-04 (`sim/track.ts`):
+  - Coordinates are world metres with x to the right and y **downwards**, matching the canvas; headings are radians from +x towards +y. The renderer only scales and shifts, so world and screen never mix.
+  - Boundaries are listed without repeating the first point; the last point joins back to the first. Gates go from the inner boundary (`a`) to the outer (`b`); gate 0 is the start/finish line.
+  - `loadTrack(data)` checks only the data's shape (strings, finite numbers, at least 3 points and 3 gates, no holes) and returns a deep-frozen `Track`. Geometric validation (non-crossing boundaries, start on the road, gates spanning the road) is P4-01; until then the built-in fixture's geometry is checked by unit tests.
+  - Built-in track: `data/tracks/stadium-oval.json`, id `stadium-oval`, version `1`. Two 120 m straights joined by semicircles of 40 m centre-line radius, road 14 m wide, vertices every 15°, 20 gates; bounds 214 m × 94 m. Gates and the start pose are data only until P1-05 and P1-07 use them.
 - Collision: test the car footprint against the drivable region, including containment and boundary contacts; use swept checks or sufficient deterministic substeps to prevent tunnelling at the configured maximum speed. Edge intersections alone miss an entirely off-road footprint. On collision the car stops and is marked crashed; manual mode exposes an explicit restart.
 - Checkpoints: only the **next** gate in order counts, crossed in the forward direction. Crossing gate 0 after all others completes a lap. This blocks reward from crossing the same gate back and forth.
 
@@ -158,6 +165,8 @@ Every car is controlled through one `Driver` interface (`decide(observation) →
 
 - Canvas 2D, resized to the container with `devicePixelRatio` capped at 2 (`MAX_PIXEL_RATIO` in `src/render/viewport.ts`). The canvas is measured in CSS pixels and its drawing buffer is only reassigned when the size changes, because reassigning it clears the canvas. Simulation code never sees these pixel sizes.
 - Layers: static track (cached to an offscreen canvas and redrawn only on resize or edit), cars, optional sensor rays and an optional champion decision overlay.
+- Track fit (built in P1-04, `render/trackView.ts`): one uniform scale for both axes, the largest that fits the track bounds inside the canvas less a margin of 4% of the shorter side (at least 8 CSS px), centred. The track never stretches; the spare space goes to whichever direction does not limit the scale.
+- Static track layer (built in P1-04, `render/trackLayer.ts`): background, road, boundaries, gates and start pose are drawn onto a separate canvas at the drawing-buffer size. Each frame only copies it with `drawImage`. It is redrawn only when the track or the viewport (CSS size, buffer size or pixel ratio) changes.
 - During fast training draw only the best few cars, or none, and update the dashboard a few times per second.
 
 ## Performance plan

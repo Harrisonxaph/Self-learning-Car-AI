@@ -1,6 +1,6 @@
 # Testing
 
-> Status: the commands below exist from P1-01 onwards. Only the project foundation (canvas sizing, page start-up and the architecture lint rules) the fixed-timestep loop and the seeded random generator are tested so far; the rest of the table under "What must be tested" applies as each feature lands. Report only results you actually ran.
+> Status: the commands below exist from P1-01 onwards. Only the project foundation (canvas sizing, page start-up and the architecture lint rules) the fixed-timestep loop, the seeded random generator and the track model and static track layer are tested so far; the rest of the table under "What must be tested" applies as each feature lands. Report only results you actually ran.
 
 ## Commands
 
@@ -45,14 +45,14 @@ Lint rules have tests too: `tests/config/eslint-boundaries.test.ts` lints sample
 
 ```
 tests/
-  sim/          fixed-step clock, world ticks; later physics, collision, checkpoints, laps
+  sim/          fixed-step clock, world ticks, track loading and fixture geometry; later physics, collision, checkpoints, laps
   sensors/      ray casting
   ai/           forward pass, input and output mapping
   evolution/    operators, elitism, determinism
   training/     fitness guards, trainer, experiment records
   persistence/  model validation, migrations, storage failures
   utils/        rng, math
-  render/       canvas sizing and drawing helpers
+  render/       canvas sizing, world-to-screen fit and the cached track layer
   ui/           frame loop (driven by fake frames and visibility changes)
   config/       tests for the tooling configuration (ESLint boundaries)
   e2e/          Playwright: driving, training, save/load, editor
@@ -76,6 +76,7 @@ Tests mirror `src/`. No tests next to source files.
 | Evolution | Elites are copied unchanged. Mutation rate 0 changes nothing. Crossover children only contain parent genes (uniform). Population size stays constant. |
 | Fitness guards | Each exploit in `docs/AI_EVALUATION.md` §6 is scripted and shown not to accumulate repeat credit without new valid ordered progress; a bounded legitimate initial approach is allowed. |
 | Persistence | Valid model round-trip. Every invalid case is rejected with an error (bad JSON, wrong count, `NaN`, unknown version, oversized file). localStorage that throws or is empty is handled. |
+| Track rendering | World-to-screen fit keeps the aspect ratio for negative coordinates, non-square bounds and portrait/landscape screens. The static layer is reused while the size is unchanged and redrawn on resize, pixel-ratio change or track change. Browser tests sample real pixels for road and infield, check the fit and margins, and check the layer is not redrawn every frame. |
 | Track validation | Closed boundaries, no self-intersections, start pose inside the road, at least 3 ordered gates spanning the road. |
 | E2E | Drive with keyboard. Drive with touch controls (mobile viewport). Crash and restart. Complete a lap on a test track. Start, pause and resume training. Save, export and import a model. Create and validate a track. |
 
