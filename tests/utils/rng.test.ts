@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { RNG_ALGORITHM, createRng } from '../../src/utils/rng';
+import { RNG_ALGORITHM, createRng, restoreRng, type RngState } from '../../src/utils/rng';
 
 const SAMPLES = 10_000;
 
@@ -49,8 +49,90 @@ describe('createRng', () => {
     expect([b.nextUint32(), b.nextUint32()]).toEqual(fromA);
   });
 
+  it('accepts both ends of the seed range, 0 and 4294967295, as different seeds', () => {
+    expect(draw(0, 5)).not.toEqual(draw(0xffffffff, 5));
+  });
+
   it.each([-1, 0x1_0000_0000, 1.5, Number.NaN, Number.POSITIVE_INFINITY])('rejects the seed %s', (seed) => {
     expect(() => createRng(seed)).toThrow(RangeError);
+  });
+
+  it('rejects a seed that is not a number at runtime, for example from untrusted JSON', () => {
+    expect(() => createRng('42' as unknown as number)).toThrow(RangeError);
+  });
+
+  it('does not let one generator change another, however they are interleaved', () => {
+    const alone = draw(9, 50);
+    const shared = createRng(9);
+    const other = createRng(9);
+    const interleaved: number[] = [];
+    for (let i = 0; i < 50; i += 1) {
+      interleaved.push(shared.nextUint32());
+      // Draws from a second generator with the same seed, and from methods that consume several values.
+      other.gaussian();
+      other.int(0, 7);
+    }
+    expect(interleaved).toEqual(alone);
+  });
+
+  it('gives finite numbers from every method', () => {
+    const rng = createRng(10);
+    for (let i = 0; i < 2000; i += 1) {
+      const values = [rng.nextUint32(), rng.next(), rng.range(-5, 5), rng.int(-100, 100), rng.gaussian(), rng.gaussian(3, 0)];
+      expect(values.every(Number.isFinite)).toBe(true);
+    }
+    expect(Number.isInteger(createRng(10).nextUint32())).toBe(true);
+  });
+});
+
+describe('getState and restoreRng', () => {
+  it('continues exactly where the saved generator stopped', () => {
+    const original = createRng(11);
+    for (let i = 0; i < 37; i += 1) original.next();
+    const saved = original.getState();
+    const continued = restoreRng(saved);
+    expect(Array.from({ length: 100 }, () => continued.nextUint32())).toEqual(
+      Array.from({ length: 100 }, () => original.nextUint32()),
+    );
+  });
+
+  it('survives a JSON round trip, as a checkpoint file would', () => {
+    const original = createRng(12);
+    original.gaussian();
+    const saved = JSON.parse(JSON.stringify(original.getState())) as RngState;
+    expect(saved.algorithm).toBe(RNG_ALGORITHM);
+    const continued = restoreRng(saved);
+    expect([continued.next(), continued.int(0, 1000)]).toEqual([original.next(), original.int(0, 1000)]);
+  });
+
+  it('returns a copy, so later draws do not change a saved state', () => {
+    const rng = createRng(13);
+    const saved = rng.getState();
+    const before = JSON.stringify(saved);
+    rng.nextUint32();
+    expect(JSON.stringify(saved)).toBe(before);
+    expect(rng.getState()).not.toEqual(saved);
+  });
+
+  it('keeps the restored generator independent of the original', () => {
+    const original = createRng(14);
+    const copy = restoreRng(original.getState());
+    original.nextUint32();
+    original.nextUint32();
+    expect(copy.nextUint32()).toBe(draw(14, 1)[0]);
+  });
+
+  it.each([
+    ['a different algorithm', { algorithm: 'mulberry32-v1', words: [1, 2, 3, 4] }],
+    ['too few words', { algorithm: RNG_ALGORITHM, words: [1, 2, 3] }],
+    ['a negative word', { algorithm: RNG_ALGORITHM, words: [1, 2, 3, -4] }],
+    ['a word above 32 bits', { algorithm: RNG_ALGORITHM, words: [1, 2, 0x1_0000_0000, 4] }],
+    ['a fractional word', { algorithm: RNG_ALGORITHM, words: [1, 2.5, 3, 4] }],
+    ['a string word', { algorithm: RNG_ALGORITHM, words: [1, '2', 3, 4] }],
+    ['missing words', { algorithm: RNG_ALGORITHM }],
+    ['null', null],
+  ])('rejects a state with %s', (_label, state) => {
+    expect(() => restoreRng(state as unknown as RngState)).toThrow(RangeError);
   });
 });
 
@@ -148,6 +230,21 @@ describe('gaussian', () => {
     // Standard error of the mean is 0.01 and of the variance about 0.014 at 10k samples.
     expect(Math.abs(mean)).toBeLessThan(0.04);
     expect(Math.abs(variance - 1)).toBeLessThan(0.06);
+  });
+
+  it.each([
+    [Number.NaN, 1],
+    [0, Number.POSITIVE_INFINITY],
+    [0, -1],
+  ])('rejects gaussian(%s, %s)', (mean, sd) => {
+    expect(() => createRng(0).gaussian(mean, sd)).toThrow(RangeError);
+  });
+
+  it('reports overflow instead of returning Infinity for extreme inputs', () => {
+    expect(() => {
+      const rng = createRng(0);
+      for (let i = 0; i < 100; i += 1) rng.gaussian(Number.MAX_VALUE, Number.MAX_VALUE);
+    }).toThrow(RangeError);
   });
 
   it('applies the requested mean and standard deviation', () => {

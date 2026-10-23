@@ -4,7 +4,7 @@
 
 ## Goals that shape the design
 
-- **Reproducible**: the same seed and configuration produce the same run in the same JavaScript engine. All randomness comes from `utils/rng.ts` (sfc32 with splitmix32 seeding, recorded as `RNG_ALGORITHM`); `Math.random` is banned by lint in headless code. The integer outputs are exact everywhere; `gaussian()` uses `Math.log` and `Math.cos`, whose last bits may differ between engines.
+- **Reproducible**: the same seed and configuration produce the same run in the same JavaScript engine. All randomness comes from `utils/rng.ts` (sfc32 with splitmix32 seeding, recorded as `RNG_ALGORITHM`); `Math.random` is banned by lint in headless code. See "Randomness" below.
 - **Headless-capable**: simulation, sensors, inference and evolution run without a DOM, so they can be unit-tested in Node and trained faster than real time.
 - **Observable**: every number the AI sees and every decision it makes can be shown on screen.
 - **Small and beginner-readable**: plain TypeScript modules with pure functions where practical, and no framework until one is needed.
@@ -82,6 +82,31 @@ Rules (enforced by review and by `no-restricted-imports` rules in `eslint.config
 - Rendered mode (built in P1-02): `ui/frameLoop.ts` runs on `requestAnimationFrame`. `sim/fixedStep.ts` turns each frame's real elapsed time into a whole number of ticks, carrying part-ticks to the next frame. At most `maxStepsPerFrame` (5) ticks run per frame; any further backlog is dropped, so a slow device slows the simulation down instead of spiralling. The loop renders once per frame after the ticks. No interpolation yet; add it if motion looks uneven once cars move.
 - On `visibilitychange` to hidden, the loop cancels its frame and drops all pending time. The first frame after the page is shown again only records the time, so returning from another tab or app (including iOS Safari suspension) never causes a catch-up jump.
 - Headless/accelerated mode (planned, P3-03): run N ticks per batch (for example inside `setTimeout` slices or a Web Worker) without drawing, then hand a snapshot to the renderer every few hundred milliseconds. It uses the same `stepWorld` and `DT`.
+
+## Randomness
+
+Built in P1-03 (`src/utils/rng.ts`).
+
+- **Algorithm:** sfc32 (128-bit state), seeded by expanding a 32-bit seed with splitmix32 and discarding the first 12 outputs. It is recorded as `RNG_ALGORITHM = 'sfc32-splitmix32-v1'`. Chosen over mulberry32 for its larger state and period.
+- **Seeds:** an integer from 0 to 4,294,967,295. Anything else (negative, fractional, too large, `NaN`, not a number) throws `RangeError`. Nothing is silently truncated.
+- **Outputs:**
+  - `nextUint32()`: an integer in [0, 2^32).
+  - `next()`: a float in [0, 1).
+  - `range(min, max)`: a float in [min, max).
+  - `int(min, max)`: an unbiased integer in [min, max).
+  - `gaussian(mean, sd)`: Box–Muller.
+  - `pick(items)`.
+  - All results are finite. Invalid arguments throw `RangeError`.
+- **Rules for simulation, AI, evolution and training code:**
+  - Create generators from the recorded experiment seed. Never keep a generator in a module-level variable, and never use `Math.random` (lint enforces this in headless folders).
+  - Pass the generator in as an argument, so tests can supply their own and runs stay reproducible.
+  - Give each independent purpose its own generator, for example mutation, crossover and start positions. Seed each from a parent generator with `nextUint32()`, so extra draws in one place do not shift another.
+  - Record the seed and `RNG_ALGORITHM` with every experiment (P2-07). Changing the algorithm means bumping `RNG_ALGORITHM`.
+- **Checkpoints:**
+  - `getState()` returns a plain-JSON copy: `{ algorithm, words: [a, b, c, counter] }`.
+  - `restoreRng(state)` continues exactly where the saved generator stopped. It validates the state, because checkpoint files are untrusted input.
+  - Saving checkpoints is P3-07's job. P1-03 only provides the state.
+- **Engines:** integer outputs are exact in every JavaScript engine. `gaussian()` uses `Math.log` and `Math.cos`, whose last bits may differ between engines, so results are reproducible within one engine, matching the goal above.
 
 ## Vehicle model
 

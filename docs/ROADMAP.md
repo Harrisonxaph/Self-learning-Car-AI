@@ -165,7 +165,7 @@ Dependencies are taken from the table above.
   - No `Math.random()` in sim, sensors, ai, evolution or training (lint rule).
 - **Test requirements:**
   - Unit: determinism, ranges, Gaussian mean and variance within tolerance over 10k samples.
-- **Choice:** sfc32 (128-bit state) seeded by splitmix32 with 12 warm-up outputs, recorded as `RNG_ALGORITHM = 'sfc32-splitmix32-v1'`. Chosen over mulberry32 for its larger state and period.
+- **Choice:** sfc32 (128-bit state) seeded by splitmix32 with 12 warm-up outputs, recorded as `RNG_ALGORITHM = 'sfc32-splitmix32-v1'`. Chosen over mulberry32 for its larger state and period. Seeds are integers from 0 to 4294967295; invalid seeds throw. `getState()` and `restoreRng()` provide checkpoint state; persisting it belongs to P3-07. Usage rules are in ARCHITECTURE.md, "Randomness".
 - **Outstanding before Complete:** Codex technical approval of the PR head and owner merge approval. P1-03 has no user-visible behaviour, so no device check applies.
 
 ### P1-04 — Track model and responsive Canvas 2D racetrack

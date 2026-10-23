@@ -65,7 +65,7 @@ Tests mirror `src/`. No tests next to source files.
 | Area | Required tests |
 |------|----------------|
 | Loop | The same number of ticks gives the same state at 30, 60 and 120 Hz and with uneven frame times. At most 5 ticks per frame. A hidden page runs no ticks, and showing it again causes no catch-up jump (unit tests with fake frames; e2e by emulating `visibilitychange`). |
-| RNG | Same seed gives the same sequence. Different seeds give different sequences. Known first values are pinned against an independent reference implementation. Ranges, integer picks and Gaussian mean and variance are checked over 10k samples. `Math.random` is rejected by lint in every headless folder. |
+| RNG | Same seed gives the same sequence. Different seeds give different sequences. Known first values are pinned against an independent reference implementation. Ranges, integer picks and Gaussian mean and variance are checked over 10k samples. All outputs are finite. Separate generators never affect each other. Seed boundaries (0 and 4294967295) and invalid seeds are covered. A saved state, including after a JSON round trip, continues the same sequence, and invalid states are rejected. `Math.random` is rejected by lint in every headless folder. |
 | Physics | Speed rises with throttle and falls with brake and drag. Brake never makes speed negative. Yaw is zero at zero speed; high-speed wheel-angle limits are respected. Results are independent of render frame rate (the same N ticks give the same state). |
 | Determinism | Two runs with the same seed and config give bit-identical car states after N ticks and identical generation-K genomes. |
 | Collision | Hand-made cases: touching, crossing a corner, no tunnelling at maximum speed. |

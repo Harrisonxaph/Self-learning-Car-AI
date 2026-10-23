@@ -5,11 +5,19 @@
 // chosen over mulberry32 for its larger state and period. The 32-bit seed is expanded into the state with
 // splitmix32, and the first 12 outputs are discarded so similar seeds start far apart.
 // Changing any of this changes every recorded run, so bump RNG_ALGORITHM if it ever changes.
+//
+// How to use it (see docs/ARCHITECTURE.md, "Randomness"):
+// - Create generators from the recorded experiment seed; never keep one in a module-level variable.
+// - Pass the generator into the code that needs it, so tests can supply their own.
+// - Give each independent purpose its own generator (for example one for mutation, one for start positions),
+//   seeded from a parent generator with nextUint32(), so adding draws in one place does not shift another.
+// - Save getState() at checkpoints and continue with restoreRng(); do not re-seed mid-run.
 
 export const RNG_ALGORITHM = 'sfc32-splitmix32-v1';
 
 const TWO_POW_32 = 0x1_0000_0000;
 const WARM_UP_OUTPUTS = 12;
+const MAX_UINT32 = 0xffffffff;
 
 export interface Rng {
   /** A uniform 32-bit unsigned integer. */
@@ -24,6 +32,15 @@ export interface Rng {
   gaussian(mean?: number, standardDeviation?: number): number;
   /** A uniformly chosen element of a non-empty array. */
   pick<T>(items: readonly T[]): T;
+  /** A copy of the internal state, plain JSON, for training checkpoints. */
+  getState(): RngState;
+}
+
+/** Everything needed to continue a generator exactly where it stopped. */
+export interface RngState {
+  readonly algorithm: typeof RNG_ALGORITHM;
+  /** sfc32's three state words and its counter, as unsigned 32-bit integers. */
+  readonly words: readonly [number, number, number, number];
 }
 
 /** Expands a 32-bit seed into well-mixed 32-bit words. */
@@ -38,16 +55,38 @@ function splitmix32(seed: number): () => number {
   };
 }
 
+const isUint32 = (value: unknown): value is number =>
+  typeof value === 'number' && Number.isInteger(value) && value >= 0 && value <= MAX_UINT32;
+
 /** Creates a generator from a seed: an integer from 0 to 4,294,967,295. */
 export function createRng(seed: number): Rng {
-  if (!Number.isInteger(seed) || seed < 0 || seed > 0xffffffff) {
+  if (!isUint32(seed)) {
     throw new RangeError(`Seed must be an integer from 0 to 4294967295, got ${seed}.`);
   }
   const mix = splitmix32(seed);
-  let a = mix() | 0;
-  let b = mix() | 0;
-  let c = mix() | 0;
-  let counter = 1;
+  const rng = fromWords(mix(), mix(), mix(), 1);
+  for (let i = 0; i < WARM_UP_OUTPUTS; i += 1) rng.nextUint32();
+  return rng;
+}
+
+/**
+ * Continues a generator from a state saved with getState(). The state is checked, because it may come from
+ * an imported checkpoint file.
+ */
+export function restoreRng(state: RngState): Rng {
+  const words: unknown = state?.words;
+  if (state?.algorithm !== RNG_ALGORITHM || !Array.isArray(words) || words.length !== 4 || !words.every(isUint32)) {
+    throw new RangeError(`Not a valid ${RNG_ALGORITHM} generator state.`);
+  }
+  const [a, b, c, counter] = words as [number, number, number, number];
+  return fromWords(a, b, c, counter);
+}
+
+function fromWords(initialA: number, initialB: number, initialC: number, initialCounter: number): Rng {
+  let a = initialA | 0;
+  let b = initialB | 0;
+  let c = initialC | 0;
+  let counter = initialCounter | 0;
 
   const nextUint32 = (): number => {
     const t = (((a + b) | 0) + counter) | 0;
@@ -58,7 +97,6 @@ export function createRng(seed: number): Rng {
     c = (c + t) | 0;
     return t >>> 0;
   };
-  for (let i = 0; i < WARM_UP_OUTPUTS; i += 1) nextUint32();
 
   const next = () => nextUint32() / TWO_POW_32;
 
@@ -93,13 +131,26 @@ export function createRng(seed: number): Rng {
     },
     int,
     gaussian(mean = 0, standardDeviation = 1) {
+      if (!Number.isFinite(mean) || !Number.isFinite(standardDeviation) || standardDeviation < 0) {
+        throw new RangeError(
+          `gaussian(mean, sd) needs a finite mean and a finite sd >= 0, got ${mean} and ${standardDeviation}.`,
+        );
+      }
       // 1 - next() is in (0, 1], so the logarithm is always finite.
       const radius = Math.sqrt(-2 * Math.log(1 - next()));
-      return mean + standardDeviation * radius * Math.cos(2 * Math.PI * next());
+      const value = mean + standardDeviation * radius * Math.cos(2 * Math.PI * next());
+      // Only extreme inputs (near Number.MAX_VALUE) can overflow here.
+      if (!Number.isFinite(value)) {
+        throw new RangeError(`gaussian(${mean}, ${standardDeviation}) overflowed; use smaller values.`);
+      }
+      return value;
     },
     pick(items) {
       if (items.length === 0) throw new RangeError('pick() needs a non-empty array.');
       return items[int(0, items.length)] as (typeof items)[number];
+    },
+    getState() {
+      return { algorithm: RNG_ALGORITHM, words: [a >>> 0, b >>> 0, c >>> 0, counter >>> 0] };
     },
   };
 }
