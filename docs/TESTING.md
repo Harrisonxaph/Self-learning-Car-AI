@@ -13,7 +13,12 @@
 | `npm run build` | Vite production build. |
 | `npm run test:e2e` | Builds the app, serves it with `vite preview` and runs the Playwright tests in Chromium and WebKit, including phone and tablet touch projects. |
 
-CI (P1-10) runs all of them on every pull request and on `main`.
+CI (`.github/workflows/ci.yml`, P1-10) runs all of them with Node from `.nvmrc` on every pull request and on every push to `main`, in two parallel jobs on Ubuntu 24.04:
+
+- **Lint, typecheck, unit tests and build:** `npm ci`, `npm run lint`, `npm run typecheck`, `npm test`, `npm run build`.
+- **Browser tests:** `npm ci`, `npx playwright install --with-deps chromium webkit`, then `npm run test:e2e` (all six Playwright projects, including the phone and tablet touch projects). If it fails, the Playwright report and traces are uploaded as the `playwright-report` artifact for 14 days.
+
+Any failing command fails the workflow. Actions are pinned to full commit SHAs. CI cannot make a check required; the owner can make the CI jobs required for merging in the repository's branch protection settings.
 
 ## Running the tests locally
 

@@ -26,7 +26,7 @@ To try it on a phone or tablet on the same network, run `npm run dev -- --host` 
 | `npm run build` | Production build into `dist/` (a static site) |
 | `npm run test:e2e` | Browser tests (Playwright) against the production build in Chromium and WebKit, including phone and tablet touch emulation |
 
-Before the first browser test run, install the browsers: `npx playwright install --with-deps chromium webkit`. See [docs/TESTING.md](docs/TESTING.md) for details and the manual device checks.
+Before the first browser test run, install the browsers: `npx playwright install --with-deps chromium webkit`. GitHub Actions runs all of these checks on every pull request and on `main` (`.github/workflows/ci.yml`). See [docs/TESTING.md](docs/TESTING.md) for details and the manual device checks.
 
 ## Project layout
 

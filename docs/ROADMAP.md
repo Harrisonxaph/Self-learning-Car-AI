@@ -4,18 +4,18 @@ A free, browser-based sandbox where 2D cars learn steering, acceleration and bra
 
 ## Verified project status
 
-_Last verified: 2026-10-23, against `main` at `5a3e494` (P1-01 merged in #55)._
+_Last verified: 2026-10-23, against `main` at `ab1436c` (P1-01 merged in #55, P1-10 in #60)._
 
 | Area | State |
 |------|-------|
 | Application code | Project foundation only (P1-01): a Vite + strict TypeScript page with a responsive Canvas 2D placeholder. No simulation, AI or controls exist. |
-| Tests and CI | `package.json` scripts, ESLint with architecture boundary rules, Vitest unit tests and Playwright browser tests (P1-01). Chromium and unit tests have run locally. The WebKit projects first ran in CI on the P1-10 PR (#60, run 39985079357: 18/18 browser tests passed, including desktop, iPhone 13 and iPad WebKit). No CI workflow on `main` until P1-10 merges. |
+| Tests and CI | `package.json` scripts, ESLint with architecture boundary rules, Vitest unit tests and Playwright browser tests (P1-01). Chromium and unit tests have run locally. The WebKit projects first ran in CI on the P1-10 PR (#60, run 39985079357: 18/18 browser tests passed, including desktop, iPhone 13 and iPad WebKit). GitHub Actions CI (P1-10, #60) now runs lint, typecheck, unit tests, build and all six Playwright projects on every pull request and push to `main`. |
 | Deployment | The owner's Vercel Git integration builds preview deployments for pull requests (observed as Ready on #55 and #59). Production deployment and P1-11's acceptance checks are not verified. |
 | Planning docs | Added by this roadmap PR: `AGENTS.md`, `docs/ROADMAP.md`, `docs/ARCHITECTURE.md`, `docs/AI_EVALUATION.md`, `docs/MODEL_FORMAT.md`, `docs/TESTING.md`. |
 | GitHub issues | Existing issues #1–#39 are preserved. Reconciliation adds #41–#50 for two missing primary-release entries and eight approval-gated research entries; #40 is the existing documentation PR. |
 | AI learning results | None. No experiments have been run, so no learning claims can be made. |
 
-P1-01 is **In Review**; the other 42 primary-release implementation features are **Not Started**. Eight research entries are **Blocked** pending explicit approval; Q-01 remains **In Review**. No implementation is marked Complete. The initial master specification is the owner's detailed project request; no separate specification was found. Re-verify this table against code and tests whenever statuses change.
+P1-01 and P1-10 are **In Review**; the other 41 primary-release implementation features are **Not Started**. Eight research entries are **Blocked** pending explicit approval; Q-01 remains **In Review**. No implementation is marked Complete. The initial master specification is the owner's detailed project request; no separate specification was found. Re-verify this table against code and tests whenever statuses change.
 
 ### Existing work and reconciliation
 
@@ -66,7 +66,7 @@ Documentation-only checks are recorded as such; no application/device execution 
 | P1-07 | Ordered checkpoints, lap counting and lap timing | 1 | P0 | Not Started | P1-04, P1-05 | [#7](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/7) |
 | P1-08 | Manual driving with keyboard and mobile touch controls | 1 | P0 | Not Started | P1-05, P1-06, P1-07 | [#8](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/8) |
 | P1-09 | Deterministic physics test suite | 1 | P0 | Not Started | P1-03, P1-05, P1-06, P1-07 | [#9](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/9) |
-| P1-10 | GitHub Actions CI | 1 | P0 | Not Started | P1-01 | [#10](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/10) |
+| P1-10 | GitHub Actions CI | 1 | P0 | In Review | P1-01 | [#10](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/10) |
 | P1-11 | Vercel deployment compatibility | 1 | P1 | Not Started | P1-01 | [#11](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/11) |
 | P2-01 | Seven forward ray sensors | 2 | P0 | Not Started | P1-06 | [#12](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/12) |
 | P2-02 | Nine network inputs: rays, speed and checkpoint heading error | 2 | P0 | Not Started | P2-01, P1-07 | [#13](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/13) |
@@ -107,7 +107,8 @@ Documentation-only checks are recorded as such; no application/device execution 
 Dependencies are taken from the table above.
 
 - **In review:** P1-01 (scaffold) is merged into `main` (#55) but stays In Review until its real iPhone/iPad checks are recorded (WebKit emulation has passed in CI). Q-01 remains in review.
-- **Ready now (P1-01 merged):** P1-10 (CI, next), then P1-02 and P1-03; also P1-11, and P2-03 (the network is pure maths and can be built alongside the simulator).
+- **In review:** P1-10 (CI) is merged into `main` (#60) and stays In Review until Codex's full review record is posted.
+- **Ready now:** P1-02 (next), then P1-03; also P1-11, and P2-03 (the network is pure maths and can be built alongside the simulator).
 - **Next wave:** P1-04 and P1-05 (after P1-02), then P1-06 and P1-07, then P1-08 and P1-09.
 - **Silverstone (approved 2026-10-23, planning only):** P2-11 (spatial index) after P1-06 and P2-01; P4-06 (Silverstone import) after P4-01, P2-10, P2-05 and P2-11; P4-07 (camera) after P1-04 and P2-05. None of these interrupts the current phase.
 - **Phase 2 critical path:** P1-06 → P2-01 → P2-02, and P1-07 → P2-06, then P2-04 → P2-05 → P2-07 → P2-08.
@@ -231,7 +232,7 @@ Dependencies are taken from the table above.
 
 ### P1-10 — GitHub Actions CI
 
-- **Priority:** P0 · **Status:** Not Started · **Issue:** [#10](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/10)
+- **Priority:** P0 · **Status:** In Review · **Issue:** [#10](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/10)
 - **Depends on:** P1-01
 - **Description:** Workflow on pull requests and `main`: `npm ci`, lint, typecheck, unit tests, build and Playwright (Chromium and WebKit).
 - **Acceptance criteria:**
@@ -239,6 +240,12 @@ Dependencies are taken from the table above.
   - Playwright reports uploaded on failure.
 - **Test requirements:**
   - A deliberately failing test is shown to fail CI (in a throwaway branch).
+- **Evidence so far (2026-10-23):**
+  - Merged into `main` by the owner in [#60](https://github.com/Harrisonxaph/Self-learning-Car-AI/pull/60) at `af6350b`.
+  - [CI run 39985079357](https://github.com/Harrisonxaph/Self-learning-Car-AI/actions/runs/39985079357): both jobs passed (29 unit tests, 18 browser tests including WebKit).
+  - Throwaway draft #61 ([run 39985132458](https://github.com/Harrisonxaph/Self-learning-Car-AI/actions/runs/39985132458)): both jobs failed on deliberate test failures, and the Playwright report was uploaded.
+  - Codex: automated receipt only ("Didn't find any major issues" on `af6350b`).
+  - **Outstanding before Complete:** a full Codex review record with technical approval. Making the jobs required checks for `main` is an owner repository setting; until it is enabled, CI reports failures but does not block merges.
 
 ### P1-11 — Vercel deployment compatibility
 
@@ -730,4 +737,5 @@ These apply to every phase and are checked in review.
 | 2026-10-23 | Codex reconciliation preserves existing work; adds issues #41–#50, early evaluation fixtures and Phase 3 comparison, requires full model provenance, separates research training, and makes completion/recovery evidence explicit. |
 | 2026-10-23 | Owner selects Claude Code as main developer and Codex as reviewer, using explicit commit-specific technical approval in GitHub comments and separate owner merge approval. Role/workflow changes are proposed in a dedicated follow-up PR; feature statuses are unchanged. |
 | 2026-10-23 | P1-01 implemented and merged into `main` (#55); it stays In Review because WebKit test runs, real-device checks and a full Codex review record are outstanding. |
+| 2026-10-23 | P1-10 CI workflow merged into `main` (#60). CI passed on its head (run 39985079357) and the throwaway failing-test PR (#61) failed both jobs as intended; it stays In Review until Codex's full review record with technical approval is posted. |
 | 2026-10-23 | Owner approves the Silverstone and multi-car (Option A: independent, non-interacting cars) plan. Planning only: adds P2-11 (#56), P4-06 (#57) and P4-07 (#58), adds car-independence criteria to P2-05 and a drawing cap to P3-03, and narrows P5-06. No implementation. |
