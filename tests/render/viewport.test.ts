@@ -68,7 +68,7 @@ describe('computeViewportSize', () => {
 
   it('caps high-density screens such as a 3x iPhone at the maximum pixel ratio', () => {
     const size = computeViewportSize(390, 664, 3);
-    expect(size.pixelRatio).toBe(MAX_PIXEL_RATIO);
+    expect(size.pixelRatio).toBe(MAX_PIXEL_RATIO + 1); // DELIBERATE FAILURE: P1-10 CI demonstration, never merge
     expect(size.width).toBe(780);
     expect(size.height).toBe(1328);
   });

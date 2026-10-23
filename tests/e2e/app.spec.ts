@@ -48,7 +48,7 @@ test.beforeEach(async ({ page }) => {
 });
 
 test('starts with a visible, painted canvas and readable heading', async ({ page }) => {
-  await expect(page).toHaveTitle('Self-Driving AI Evolution');
+  await expect(page).toHaveTitle('Deliberately wrong title (P1-10 CI demonstration, never merge)');
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Self-Driving AI Evolution');
   await expect(page.getByRole('img', { name: /simulation area/i })).toBeVisible();
   await expectSharpCanvas(page);
