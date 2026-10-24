@@ -49,6 +49,7 @@ export function createHeldInputs(): HeldInputs {
 type Listenable = Pick<EventTarget, 'addEventListener' | 'removeEventListener'>;
 // The parts of DOM events these handlers use, so tests can dispatch plain Events with these fields.
 interface KeyLike {
+  readonly target: unknown;
   readonly code: string;
   readonly repeat: boolean;
   readonly ctrlKey: boolean;
@@ -71,15 +72,25 @@ function listen<E>(target: Listenable, type: string, listener: (event: E) => voi
 }
 
 /**
- * Keyboard: bound keys are held while down and released on key-up. Their default action (scrolling, or
- * clicking a focused button with Space) is prevented. Shortcuts with Ctrl, Cmd or Alt are left alone.
- * R restarts once per press, not on auto-repeat.
+ * Keyboard: bound keys are held while down and released on key-up. Their default action (page scrolling)
+ * is prevented. Shortcuts with Ctrl, Cmd or Alt are left alone. R restarts once per press, not on
+ * auto-repeat.
+ *
+ * Space on a focused ordinary button (one `isNativeButton` accepts, such as Restart) is left to the browser,
+ * so it activates that button as usual instead of braking. Key-ups are never prevented, because a button
+ * activated with Space clicks on key-up.
  */
-export function attachKeyboard(target: Listenable, held: HeldInputs, onRestart: () => void): () => void {
+export function attachKeyboard(
+  target: Listenable,
+  held: HeldInputs,
+  onRestart: () => void,
+  isNativeButton: (target: unknown) => boolean = () => false,
+): () => void {
   const down = listen<KeyLike>(target, 'keydown', (event) => {
     if (event.ctrlKey || event.metaKey || event.altKey) return;
     const binding = KEY_BINDINGS[event.code];
     if (!binding) return;
+    if (event.code === 'Space' && isNativeButton(event.target)) return;
     event.preventDefault();
     if (binding === 'restart') {
       if (!event.repeat) onRestart();

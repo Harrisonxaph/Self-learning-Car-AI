@@ -101,6 +101,34 @@ describe('keyboard', () => {
     expect(held.read()).toEqual(NO_INPUT);
   });
 
+  it('leaves Space on a focused ordinary button to the browser, and still brakes with Space elsewhere', () => {
+    const target = new EventTarget();
+    const restartButton = new EventTarget();
+    const held = createHeldInputs();
+    attachKeyboard(target, held, () => {}, (t) => t === restartButton);
+    // Key events bubble from the focused element; here they are dispatched with it as the target.
+    const key = (type: string, code: string, on: EventTarget) => {
+      const e = event(type, { code });
+      Object.defineProperty(e, 'target', { value: on });
+      target.dispatchEvent(e);
+      return e;
+    };
+    const onButton = key('keydown', 'Space', restartButton);
+    expect(onButton.defaultPrevented).toBe(false);
+    expect(held.read()).toEqual(NO_INPUT);
+    expect(key('keyup', 'Space', restartButton).defaultPrevented).toBe(false);
+    // Other bound keys still drive while the button is focused.
+    expect(key('keydown', 'ArrowUp', restartButton).defaultPrevented).toBe(true);
+    expect(held.read().accelerate).toBe(true);
+    key('keyup', 'ArrowUp', restartButton);
+    // Space anywhere else brakes, with scrolling prevented.
+    expect(key('keydown', 'Space', target).defaultPrevented).toBe(true);
+    expect(held.read().brake).toBe(true);
+    // A key-up on the button still releases a brake that began elsewhere (focus moved while held).
+    key('keyup', 'Space', restartButton);
+    expect(held.read()).toEqual(NO_INPUT);
+  });
+
   it('stops listening when detached', () => {
     const { held, key, detach } = keyboard();
     detach();

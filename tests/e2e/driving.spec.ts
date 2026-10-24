@@ -138,6 +138,47 @@ test.describe('keyboard', () => {
     await expect(page.locator('#hud-current')).toHaveText('—');
   });
 
+  test('Space and Enter on the focused Restart button restart; Space elsewhere brakes', async ({ page }) => {
+    const restartState = { ...START, speed: 0, crashed: false, laps: 0, gatesPassed: 0, nextGate: 0 };
+    const driveOff = async () => {
+      await page.keyboard.down('ArrowUp');
+      await expect.poll(async () => (await car(page)).speed).toBeGreaterThan(1);
+      await page.keyboard.up('ArrowUp');
+    };
+    for (const key of ['Space', 'Enter']) {
+      await driveOff();
+      await page.locator('#restart').focus();
+      await page.keyboard.press(key);
+      await expect.poll(() => car(page)).toEqual(restartState);
+      await expect(page.locator('#restart')).toBeFocused();
+      // Nothing is left braking: Space on the button activated it and held no input.
+      await expect(button(page, 'brake')).not.toHaveClass(/held/);
+    }
+    // With focus off the button, Space brakes to a stop where the car is, rather than restarting.
+    await page.locator('#restart').blur();
+    await page.keyboard.down('ArrowUp');
+    await expect.poll(async () => (await car(page)).speed).toBeGreaterThan(5);
+    await page.keyboard.up('ArrowUp');
+    await page.keyboard.down('Space');
+    await expect(button(page, 'brake')).toHaveClass(/held/);
+    await expect.poll(async () => (await car(page)).speed, { timeout: 5000 }).toBe(0);
+    await page.keyboard.up('Space');
+    expect((await car(page)).x).toBeGreaterThan(START.x + 1);
+    await expect(button(page, 'brake')).not.toHaveClass(/held/);
+  });
+
+  test('after Restart is clicked or tapped, Space brakes rather than restarting again', async ({ page }) => {
+    await page.locator('#restart').click();
+    await expect(page.locator('#restart')).not.toBeFocused();
+    await page.keyboard.down('ArrowUp');
+    await expect.poll(async () => (await car(page)).speed).toBeGreaterThan(5);
+    await page.keyboard.up('ArrowUp');
+    await page.keyboard.down('Space');
+    await expect.poll(async () => (await car(page)).speed, { timeout: 5000 }).toBe(0);
+    await page.keyboard.up('Space');
+    expect((await car(page)).x).toBeGreaterThan(START.x + 1);
+  });
+
   test('releases held keys when the window loses focus', async ({ page }) => {
     await page.keyboard.down('KeyW');
     await expect.poll(async () => (await car(page)).speed).toBeGreaterThan(5);

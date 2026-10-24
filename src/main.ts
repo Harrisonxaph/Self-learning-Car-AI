@@ -58,10 +58,17 @@ let restartRequested = false;
 const requestRestart = () => {
   restartRequested = true;
 };
-attachKeyboard(window, held, requestRestart);
+const restartButton = element<HTMLButtonElement>('#restart');
+// Space on the focused Restart button activates it, as on any button, instead of braking.
+attachKeyboard(window, held, requestRestart, (target) => target === restartButton);
 attachSafetyRelease(window, document, held);
 for (const button of holdButtons) attachHoldButton(button, button.dataset.action as HoldAction, held);
-element<HTMLButtonElement>('#restart').addEventListener('click', requestRestart);
+restartButton.addEventListener('click', (event) => {
+  requestRestart();
+  // A tap or click (detail > 0) leaves no focus behind, so Space brakes again straight away. Keyboard
+  // activation (detail 0) keeps focus on the button, as keyboard users expect.
+  if (event.detail > 0) restartButton.blur();
+});
 const driver = createHumanDriver(held.read);
 
 let world: World = createWorld(track, DEFAULT_VEHICLE_PHYSICS);
