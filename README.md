@@ -3,7 +3,7 @@ Self learning 2D car AI. Self drive, self brake, change due to environment
 
 **Self-Driving AI Evolution** is a free, browser-based sandbox (Vite, TypeScript and Canvas 2D) where cars learn to steer, accelerate and brake through neural networks evolved by a genetic algorithm. It is planned to run on iPhone, iPad and desktop browsers.
 
-> Status: project foundation, simulation loop, seeded random generator, a built-in racetrack, headless car physics and collision detection. The page draws the track to fit the screen and runs a simulation clock that pauses while the page is hidden. Cars are not yet placed on the track; driving controls, AI and training are not built yet. `npm run demo:vehicle` prints a scripted physics run and `npm run demo:collision` scripted crashes. See the roadmap for verified progress.
+> Status: project foundation, simulation loop, seeded random generator, a built-in racetrack, headless car physics, collision detection and lap timing. The page draws the track to fit the screen and runs a simulation clock that pauses while the page is hidden. Cars are not yet placed on the track; driving controls, AI and training are not built yet. `npm run demo:vehicle` prints a scripted physics run `npm run demo:collision` scripted crashes and `npm run demo:laps` timed laps. See the roadmap for verified progress.
 
 ## Getting started
 
@@ -33,7 +33,7 @@ Before the first browser test run, install the browsers: `npx playwright install
 ```
 index.html            the page
 src/main.ts           entry point
-src/sim/              simulation (no DOM): settings, world state, fixed-step clock, track model, vehicle physics, collision
+src/sim/              simulation (no DOM): settings, world state, fixed-step clock, track model, vehicle physics, collision, checkpoints and laps
 src/render/           canvas sizing, track fit and the cached track layer
 src/data/tracks/      built-in track data (JSON)
 src/ui/               browser frame loop
