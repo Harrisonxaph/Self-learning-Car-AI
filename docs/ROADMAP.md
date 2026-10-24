@@ -8,14 +8,14 @@ _Last verified: 2026-10-23, against `main` at `ab1436c` (P1-01 merged in #55, P1
 
 | Area | State |
 |------|-------|
-| Application code | Phase 1 (P1-01 to P1-11): a Vite + strict TypeScript static page with a responsive Canvas 2D track, a fixed-timestep simulation (seeded generator, vehicle physics, collision, checkpoints and laps), and manual driving by keyboard and touch. No sensors, AI, evolution or training exist yet. |
-| Tests and CI | `package.json` scripts, ESLint with architecture boundary rules, Vitest unit tests (including the P1-09 golden determinism suite) and Playwright browser tests in six Chromium/WebKit desktop, phone and tablet projects, against `vite preview` and a plain static file server. GitHub Actions CI (P1-10, #60) runs all of them on every pull request and push to `main`. Whether failing CI blocks merges depends on the owner's branch-protection setting, which has not been verified. |
+| Application code | Phase 1 features (P1-01 to P1-11): a Vite + strict TypeScript static page with a responsive Canvas 2D track, a fixed-timestep simulation (seeded generator, vehicle physics, collision, checkpoints and laps), and manual driving by keyboard and touch. No sensors, AI, evolution or training exist yet. |
+| Tests and CI | `package.json` scripts, ESLint with architecture boundary rules, Vitest unit tests (including the P1-09 golden determinism suite) and Playwright browser tests in six Chromium/WebKit desktop, phone and tablet projects, against `vite preview` and a plain static file server. GitHub Actions CI (P1-10, #60) runs all of them on every pull request and push to `main`. Whether failing CI blocks merges depends on the owner's branch-protection setting, which has not been verified, so P1-10 stays In Review. |
 | Deployment | The owner's Vercel Git integration builds a preview deployment for every pull request and a production deployment from `main`. The production deployment of `38ff6a6` (#72's merge) was observed as Ready through the Vercel API on 2026-10-24. The owner has loaded previews on a real iPhone 15 and iPad Pro in Safari (P1-02, P1-04, P1-08 records). P1-11 is Complete (#74). |
 | Planning docs | Added by this roadmap PR: `AGENTS.md`, `docs/ROADMAP.md`, `docs/ARCHITECTURE.md`, `docs/AI_EVALUATION.md`, `docs/MODEL_FORMAT.md`, `docs/TESTING.md`. |
 | GitHub issues | Existing issues #1–#39 are preserved. Reconciliation adds #41–#50 for two missing primary-release entries and eight approval-gated research entries; #40 is the existing documentation PR. |
 | AI learning results | None. No experiments have been run, so no learning claims can be made. |
 
-All eleven Phase 1 features (P1-01 to P1-11) are **Complete**; the other 32 primary-release implementation features are **Not Started**. Eight research entries are **Blocked** pending explicit approval; Q-01 remains **In Review**. P1-01 to P1-11 are the only implementation features marked Complete. Phase 1's acceptance (drive, brake, crash, restart and complete laps on iPhone and iPad) is recorded under P1-08. The initial master specification is the owner's detailed project request; no separate specification was found. Re-verify this table against code and tests whenever statuses change.
+P1-01 to P1-09 and P1-11 are **Complete**. P1-10 (CI) is **In Review** until merge-blocking is verified; the other 32 primary-release implementation features are **Not Started**. Eight research entries are **Blocked** pending explicit approval; Q-01 remains **In Review**. P1-01 to P1-09 and P1-11 are the only implementation features marked Complete. Phase 1's acceptance (drive, brake, crash, restart and complete laps on iPhone and iPad) is recorded under P1-08, but Phase 1 is not complete while P1-10 is In Review. The initial master specification is the owner's detailed project request; no separate specification was found. Re-verify this table against code and tests whenever statuses change.
 
 ### Existing work and reconciliation
 
@@ -66,7 +66,7 @@ Documentation-only checks are recorded as such; no application/device execution 
 | P1-07 | Ordered checkpoints, lap counting and lap timing | 1 | P0 | Complete | P1-04, P1-05 | [#7](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/7) |
 | P1-08 | Manual driving with keyboard and mobile touch controls | 1 | P0 | Complete | P1-05, P1-06, P1-07 | [#8](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/8) |
 | P1-09 | Deterministic physics test suite | 1 | P0 | Complete | P1-03, P1-05, P1-06, P1-07 | [#9](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/9) |
-| P1-10 | GitHub Actions CI | 1 | P0 | Complete | P1-01 | [#10](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/10) |
+| P1-10 | GitHub Actions CI | 1 | P0 | In Review | P1-01 | [#10](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/10) |
 | P1-11 | Vercel deployment compatibility | 1 | P1 | Complete | P1-01 | [#11](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/11) |
 | P2-01 | Seven forward ray sensors | 2 | P0 | Not Started | P1-06 | [#12](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/12) |
 | P2-02 | Nine network inputs: rays, speed and checkpoint heading error | 2 | P0 | Not Started | P2-01, P1-07 | [#13](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/13) |
@@ -106,8 +106,8 @@ Documentation-only checks are recorded as such; no application/device execution 
 
 Dependencies are taken from the table above.
 
-- **In review:** Q-01 (Definition of Done and review workflow).
-- **Complete:** P1-02 (fixed-timestep loop, #62), P1-03 (seeded generator, #64), P1-04 (track model and static track layer, #65), P1-05 (vehicle physics, #66), P1-06 (collision detection, #67), P1-07 (checkpoints and laps, #69), P1-08 (manual driving, #70), P1-09 (deterministic simulation suite, #72), and, with retrospective Codex reviews, P1-01 (scaffold, #55) and P1-10 (CI, #60), and P1-11 (static deployment, #74).
+- **In review:** P1-10 (CI), merged in #60 with a retrospective Codex technical approval. It stays In Review until CI is shown to block merging on failure (branch protection requiring the CI jobs for `main`), or the owner explicitly approves changing that criterion. Q-01 (Definition of Done and review workflow) also remains in review.
+- **Complete:** P1-02 (fixed-timestep loop, #62), P1-03 (seeded generator, #64), P1-04 (track model and static track layer, #65), P1-05 (vehicle physics, #66), P1-06 (collision detection, #67), P1-07 (checkpoints and laps, #69), P1-08 (manual driving, #70), P1-09 (deterministic simulation suite, #72), P1-01 (scaffold, #55, with a retrospective Codex review) and P1-11 (static deployment, #74).
 - **Ready now (all dependencies Complete or merged):** P2-01 (ray sensors), P2-03 (the network is pure maths), P2-06 (fitness), P2-10 (track splits) and P4-01 (track validation). Ready means the dependencies are met, not that implementation is authorised.
 - **Silverstone (approved 2026-10-23, planning only):** P4-06 (Silverstone import) after P4-01, P2-10, P2-05, P2-07 and P3-05; P2-11 (spatial index, after P1-06 and P2-01) only if P4-06's measured baseline misses the budget or the owner approves an architectural reason; P4-07 (camera) after P1-04 and P2-05, as a separate follow-up. Each still needs explicit owner implementation approval when its dependencies are complete; this planning approval does not authorise implementation. None of these interrupts the current phase.
 - **Phase 2 critical path:** P1-06 → P2-01 → P2-02, and P1-07 → P2-06, then P2-04 → P2-05 → P2-07 → P2-08.
@@ -288,7 +288,7 @@ Dependencies are taken from the table above.
 
 ### P1-10 — GitHub Actions CI
 
-- **Priority:** P0 · **Status:** Complete · **Issue:** [#10](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/10)
+- **Priority:** P0 · **Status:** In Review · **Issue:** [#10](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/10)
 - **Depends on:** P1-01
 - **Description:** Workflow on pull requests and `main`: `npm ci`, lint, typecheck, unit tests, build and Playwright (Chromium and WebKit).
 - **Acceptance criteria:**
@@ -296,13 +296,14 @@ Dependencies are taken from the table above.
   - Playwright reports uploaded on failure.
 - **Test requirements:**
   - A deliberately failing test is shown to fail CI (in a throwaway branch).
-- **Completion record (#60, merged by the owner at `ab1436c`; reviewed head `af6350b`):**
+- **Evidence and review (#60, merged by the owner at `ab1436c`; reviewed head `af6350b`):**
   - CI on the head ([run 39985079357](https://github.com/Harrisonxaph/Self-learning-Car-AI/actions/runs/39985079357)): both jobs passed (29 unit tests; 18 browser tests including WebKit). `main` at the merge `ab1436c` passed ([run 39986957905](https://github.com/Harrisonxaph/Self-learning-Car-AI/actions/runs/39986957905)).
   - Failing-test demonstration: throwaway draft #61 (`9153ead`, closed unmerged), [run 39985132458](https://github.com/Harrisonxaph/Self-learning-Car-AI/actions/runs/39985132458). The unit-test step failed and the later build was skipped; the browser-test step failed; the Playwright report was uploaded (artifact 12515840672).
   - Devices: not applicable to the CI workflow itself.
   - Independent review: Codex's automated receipt on `af6350b` at the time, then a retrospective [Codex technical approval of `af6350b`](https://github.com/Harrisonxaph/Self-learning-Car-AI/pull/60#pullrequestreview-5638978813), posted on 2026-10-24 and not backdated. Codex inspected the workflow, both runs, the failure-propagation steps and the uploaded artifact.
   - Owner merge approval: #60 merged by the owner.
   - **Limit:** CI fails on any failing step, and that is demonstrated. Whether a failing check *blocks merging* depends on branch protection requiring the CI jobs for `main`. That is an owner repository setting, which neither Claude nor Codex can see or change through the connector, so it is not verified here.
+- **Outstanding before Complete:** the acceptance criterion "blocks on failure". The deliberate-failure run shows failing jobs, not that merging is prevented. The owner either confirms that branch protection requires both CI jobs for `main` (or records an equivalent ruleset), or explicitly approves changing the criterion. Until then P1-10 stays In Review ([Codex finding](https://github.com/Harrisonxaph/Self-learning-Car-AI/pull/75#discussion_r4367820775)).
 
 ### P1-11 — Vercel deployment compatibility
 
@@ -847,4 +848,4 @@ These apply to every phase and are checked in review.
 | 2026-10-24 | P1-09 Complete: #72 merged by the owner at `38ff6a6` after Codex technical approval of `fc2eda8` and green CI (run 40103303780, including WebKit; `main` run 40109833771 also green). Tests and docs only; no device check applies. |
 | 2026-10-24 | P1-11 static-host compatibility (plain static file server tests at the root and a sub-path, README deployment section) implemented on `feat/p1-11-static-deployment` and moved to In Review; not Complete until Codex review and owner approval, including the owner's decision on the iPhone preview evidence, are recorded. |
 | 2026-10-24 | P1-11 Complete: #74 merged by the owner at `52b835c` after Codex technical approval of `0d5a5b7` and of the reconciled head `0406567`, and green CI (runs 40110560517 and 40112890832, including WebKit). Device criterion met by existing owner-reported iPhone records of Vercel previews, accepted by Codex. |
-| 2026-10-24 | P1-01 and P1-10 Complete: retrospective Codex technical approvals of `9ba08e8` (#55, merged at `5a3e494`) and `af6350b` (#60, merged at `ab1436c`) supply the missing review records; no new implementation was needed. Earlier rows named the reviewed heads as merge points; the merge commits are `5a3e494` and `ab1436c`. P1-10's merge-blocking depends on the owner's branch-protection setting, which is not verified. All eleven Phase 1 features are now Complete. |
+| 2026-10-24 | P1-01 Complete: retrospective Codex technical approval of `9ba08e8` (#55, merged at `5a3e494`) supplies the missing review record; no new implementation was needed. P1-10 also has a retrospective Codex technical approval of `af6350b` (#60, merged at `ab1436c`) but stays In Review: its "blocks on failure" criterion needs the owner's branch protection (or an explicit criterion change), which is not verified. Earlier rows named the reviewed heads as merge points; the merge commits are `5a3e494` and `ab1436c`. |
