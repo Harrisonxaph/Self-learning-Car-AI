@@ -730,7 +730,22 @@ Dependencies are taken from the table above.
 - **Acceptance criteria:**
   - PR template in `.github/`; every feature PR lists roadmap ID, actual command results, manual checks done/outstanding, current head SHA, Codex review link/outcome and the owner's separate merge-approval reference. Later commits receive re-review; no agent merges automatically.
 - **Test requirements:**
-  - Documentation consistency checks and independent review; no simulator/mobile checks apply to this documentation-only PR. Owner approval is outstanding.
+  - Documentation consistency checks and independent review; no simulator/mobile checks apply to this documentation-only PR.
+- **Evidence so far:**
+  - **How the workflow and template reached `main`:**
+    - The owner merged the stacked PRs #51, #52 and #53 into their branches, not into `main`, and then merged #40 into `main` without #53's changes.
+    - The owner then merged [#54](https://github.com/Harrisonxaph/Self-learning-Car-AI/pull/54) into `main` at `dbb0782`. #54's tree matches [#53](https://github.com/Harrisonxaph/Self-learning-Car-AI/pull/53)'s head `0e501a2`.
+    - These owner merges are owner merge evidence for those PRs, not an explicit approval of Q-01 as complete.
+  - **Independent review of the workflow:** the only one on record is a Claude Code review of #53 at `0e501a2`, with outcome Changes required.
+    - Its blocking finding (stale base and integration order) was resolved in effect by #54, which targets `main`.
+    - Its should-fix finding is still open. On the shared account, owner approval written "in a GitHub comment" (AGENTS.md, review step 5) cannot be told apart from an agent's comment.
+  - Codex authored #52–#54, so its comments there are not independent review of the workflow.
+- **Outstanding before Complete:**
+  - (1) An independent, non-Codex technical review of the workflow as merged (`AGENTS.md` and `.github/pull_request_template.md` on `main`). It must disposition the open should-fix, either by a documentation fix reviewed under this workflow or by a recorded owner decision to keep the current wording.
+  - (2) The owner's explicit approval of Q-01 as complete.
+  - (3) A completion record linking both.
+
+  No agent may record or imply owner approval.
 
 ## Phase 6 — Optional advanced research (9/10, not approved)
 
