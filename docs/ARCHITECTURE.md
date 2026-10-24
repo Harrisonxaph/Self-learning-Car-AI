@@ -23,7 +23,7 @@ src/
     world.ts              steps every car once per tick
     fixedStep.ts          turns real elapsed time into whole fixed ticks
   sensors/
-    rays.ts               7 ray casts → normalised distances
+    rays.ts               7 ray casts from the body centre → normalised distances (P2-01)
   ai/                     inference only, no evolution imports
     network.ts            feedforward net (9-12-3), forward pass
     inputs.ts             builds the 9-value input vector
@@ -49,12 +49,14 @@ src/
     trackView.ts          world-to-screen fit (uniform scale, centred, margin)
     trackLayer.ts         cached static track layer
     raceView.ts           next gate, car footprint, nose and locator ring (P1-08)
+    sensorView.ts         ray sensor debug layer, shown with ?debug=rays (P2-01)
     renderer.ts
     layers/               track, cars, sensors, overlays
   ui/                     DOM controls, dashboard, editor
     frameLoop.ts          animation frames: run ticks, draw, pause when hidden
     controls/input.ts     keyboard and touch input, safe release (P1-08)
     hud.ts                lap display and event messages (P1-08)
+    debugFlags.ts         debug views switched on from the address, e.g. ?debug=rays (P2-01)
     dashboard/            stats, fitness graph
     editor/               track editor
   utils/
@@ -153,13 +155,36 @@ All constants live in `sim/config.ts` and are recorded with every experiment and
 
 ## Sensors and network inputs
 
-Seven rays fanned across the car's front (for example −90°, −60°, −30°, 0°, 30°, 60°, 90° relative to heading), each with maximum length `RAY_LENGTH`. Inputs (all scaled to roughly [0, 1] or [−1, 1]):
+Seven rays fanned across the car's front (−90°, −60°, −30°, 0°, 30°, 60°, 90° relative to heading by default), each with maximum length `RAY_LENGTH`. Inputs (all scaled to roughly [0, 1] or [−1, 1]):
 
 | # | Input | Range |
 |---|-------|-------|
 | 0–6 | ray hit distance ÷ `RAY_LENGTH` (1 = nothing hit) | 0 to 1 |
 | 7 | forward speed ÷ `MAX_SPEED` | 0 to 1 |
 | 8 | signed angle from car heading to the next checkpoint's centre ÷ π | −1 to 1 |
+
+**Ray sensor contract** (built in P2-01, `src/sensors/rays.ts`; part of `seven-rays-speed-heading-v1`):
+
+- **Configuration:** `SensorConfig` is `{ origin: "body-centre", anglesDegrees, maxDistance }`. `maxDistance` is `RAY_LENGTH`. The default, `DEFAULT_SENSOR_CONFIG`, is the MODEL_FORMAT sensors block: the seven angles above and 50 m. `resolveSensorConfig` returns a frozen copy, or throws a `RangeError` naming the field when:
+  - there are not exactly 7 angles;
+  - an angle is non-finite, outside [−90, 90] or not strictly increasing;
+  - `maxDistance` is not finite or not above 0;
+  - the origin is unknown.
+
+  `castRays` checks its config the same way.
+- **Origin:** the body centre. That is the rear-axle reference plus `wheelbase / 2` along the heading, the centre of the collision footprint: 1.25 m ahead with the default physics. Saved models record it as `sensors.origin`, so changing it changes the input contract.
+- **Angles:** degrees from the heading, positive towards +y, the car's right, as for steering. A ray's world angle is heading + angle.
+- **Result:** for each ray, the distance to the nearest boundary point in [0, `maxDistance`], or `maxDistance` if none is in range; then normalised (distance ÷ `maxDistance`, 1 = clear), a hit flag and the end point. Results are never NaN or negative. `castRay` takes an angle rather than a vector, so the direction is always a unit vector; a non-finite origin or angle, or an invalid range, throws a `RangeError`. A non-finite pose or a wheelbase that is not above 0 also throws.
+- **Edge rules:**
+  - Touching counts, as in collision: an origin on a boundary reads 0 in every direction.
+  - A hit exactly at `maxDistance` is a hit; farther is clear.
+  - Hits behind the origin are ignored, and the nearest hit over both boundaries wins.
+  - A ray through a shared vertex is found once and never slips between the two segments.
+  - A parallel segment is hit only if collinear. The nearest overlapping point ahead counts (0 if the overlap contains the origin), and an overlap wholly behind is ignored.
+  - Points within `LINE_TOLERANCE` (1e-12 m) of the ray's line count as on it, so a ±90° ray along a wall is not lost to rounding in cos(π/2).
+  - An origin off the road still reports its nearest hit.
+- **Debug layer:** `?debug=rays` draws, for the human car, a line from the origin to each ray's end, with a marker at each hit (`src/render/sensorView.ts`). It also publishes the rays as `data-rays` on the canvas for the browser tests. It is off by default. Sensors only read the world, so the simulation and the golden determinism file are unchanged.
+- **Cost:** every boundary segment is tested for every ray. A spatial index is P2-11.
 
 ## Network
 
