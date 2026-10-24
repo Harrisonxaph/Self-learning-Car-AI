@@ -4,7 +4,7 @@ A free, browser-based sandbox where 2D cars learn steering, acceleration and bra
 
 ## Verified project status
 
-_Last verified: 2026-10-23, against `main` at `ab1436c` (P1-01 merged in #55, P1-10 in #60)._
+_Last verified: 2026-10-24, against `main` at `e882825` (#75 merged: P1-01 and P1-11 completion records; P1-10 In Review)._
 
 | Area | State |
 |------|-------|
