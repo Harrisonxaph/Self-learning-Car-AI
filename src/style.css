@@ -13,6 +13,9 @@ html,
 body {
   margin: 0;
   height: 100%;
+  /* The page never scrolls or bounces: everything fits the visible area. */
+  overflow: hidden;
+  overscroll-behavior: none;
 }
 
 .app {
@@ -25,27 +28,161 @@ body {
 }
 
 .app-header {
-  padding: 0.5rem 1rem;
+  padding: 0.4rem 0.75rem 0.25rem;
 }
 
 .app-header h1 {
   margin: 0;
-  font-size: 1.25rem;
+  font-size: 1.1rem;
 }
 
-.app-header p {
+.hud {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.15rem 0.9rem;
   margin: 0.25rem 0 0;
-  font-size: 1rem;
+  font-size: 0.95rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.hud div {
+  display: flex;
+  gap: 0.3rem;
+}
+
+.hud dt {
+  color: #9fb0c0;
+}
+
+.hud dd {
+  margin: 0;
+}
+
+.hud-message {
+  min-height: 1.3em;
+  margin: 0.2rem 0 0;
+  font-weight: 600;
+}
+
+.hud-message[data-kind='crash'] {
+  color: #ff8a8a;
+}
+
+.hud-message[data-kind='lap'],
+.hud-message[data-kind='start'] {
+  color: #7fe0bd;
 }
 
 .stage {
   flex: 1;
   min-height: 0;
-  padding: 0 0.5rem 0.5rem;
+  padding: 0 0.5rem;
+  /* Touches on the track never scroll or zoom the page. */
+  touch-action: none;
 }
 
 #sim-canvas {
   display: block;
   width: 100%;
   height: 100%;
+}
+
+.controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.4rem 0.75rem 0.5rem;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.pad {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.controls button {
+  /* At least 44 × 44 CSS pixels (AGENTS.md); larger for thumbs. */
+  min-width: 3.5rem;
+  min-height: 3.5rem;
+  padding: 0 0.75rem;
+  border: 2px solid #4a5a6a;
+  border-radius: 0.75rem;
+  background: #243240;
+  color: inherit;
+  font: inherit;
+  font-size: 1.05rem;
+  font-weight: 600;
+  touch-action: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.controls button.held {
+  background: #3f6f9f;
+  border-color: #8fc3ff;
+}
+
+.controls button:focus-visible {
+  outline: 3px solid #ffd250;
+  outline-offset: 2px;
+}
+
+.controls .restart {
+  min-width: 5rem;
+}
+
+.keys-help {
+  margin: 0 0.75rem 0.4rem;
+  font-size: 0.85rem;
+  color: #9fb0c0;
+}
+
+/* The narrowest phones (down to 320 CSS pixels): tighter spacing and shorter labels' padding so all five
+   controls fit on one row, each still at least 48 × 56 CSS pixels. */
+@media (max-width: 400px) {
+  .controls {
+    gap: 0.3rem;
+    padding-left: 0.4rem;
+    padding-right: 0.4rem;
+  }
+
+  .pad {
+    gap: 0.3rem;
+  }
+
+  .controls button {
+    min-width: 3rem;
+    padding: 0 0.4rem;
+    font-size: 0.95rem;
+  }
+
+  .controls .restart {
+    min-width: 3rem;
+  }
+}
+
+/* Phones and tablets: no keyboard hint. */
+@media (pointer: coarse) {
+  .keys-help {
+    display: none;
+  }
+}
+
+/* Short landscape screens (phones on their side): a tighter header so the track keeps its height. */
+@media (orientation: landscape) and (max-height: 500px) {
+  .app-header h1 {
+    display: none;
+  }
+
+  .hud {
+    font-size: 0.85rem;
+  }
+
+  .controls {
+    padding-top: 0.25rem;
+    padding-bottom: 0.25rem;
+  }
 }

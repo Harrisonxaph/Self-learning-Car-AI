@@ -10,14 +10,34 @@
     <main class="app">
       <header class="app-header">
         <h1>Self-Driving AI Evolution</h1>
-        <p>
-          Simulation time: <output id="sim-time" data-tick="0">0.0 s</output>. Cars and driving arrive in the next Phase 1
-          tasks.
+        <dl class="hud">
+          <div><dt>Lap</dt><dd><output id="hud-laps">0</output></dd></div>
+          <div><dt>Current</dt><dd><output id="hud-current">—</output></dd></div>
+          <div><dt>Last</dt><dd><output id="hud-last">—</output></dd></div>
+          <div><dt>Best</dt><dd><output id="hud-best">—</output></dd></div>
+          <div><dt>Next gate</dt><dd><output id="hud-gate">1 / 20</output></dd></div>
+          <div><dt>Speed</dt><dd><output id="hud-speed">0</output> km/h</dd></div>
+          <div><dt>Time</dt><dd><output id="sim-time" data-tick="0">0.0 s</output></dd></div>
+        </dl>
+        <p id="hud-message" class="hud-message" role="status" aria-live="polite">
+          Drive over the start line to begin a lap.
         </p>
       </header>
       <div class="stage">
-        <canvas id="sim-canvas" role="img" aria-label="Racetrack (no cars yet)"></canvas>
+        <canvas id="sim-canvas" role="img" aria-label="Racetrack with your car"></canvas>
       </div>
+      <div class="controls" aria-label="Driving controls">
+        <div class="pad">
+          <button type="button" class="hold" data-action="left" aria-label="Steer left">◀</button>
+          <button type="button" class="hold" data-action="right" aria-label="Steer right">▶</button>
+        </div>
+        <button type="button" id="restart" class="restart">Restart</button>
+        <div class="pad">
+          <button type="button" class="hold" data-action="brake" aria-label="Brake">Brake</button>
+          <button type="button" class="hold" data-action="accelerate" aria-label="Accelerate">Gas</button>
+        </div>
+      </div>
+      <p class="keys-help">Keys: arrows or WASD to drive, Space or ↓ to brake, R to restart.</p>
     </main>
     <script type="module" src="/src/main.ts"></script>
   </body>
