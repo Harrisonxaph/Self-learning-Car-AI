@@ -16,7 +16,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:e2e": "playwright test",
-    "demo:vehicle": "vitest run tests/sim/vehicleDemo.test.ts --silent=false --reporter=verbose"
+    "demo:vehicle": "vitest run tests/sim/vehicleDemo.test.ts --silent=false --reporter=verbose",
+    "demo:collision": "vitest run tests/sim/collisionDemo.test.ts --silent=false --reporter=verbose"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
