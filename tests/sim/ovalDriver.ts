@@ -43,4 +43,3 @@ export function pursuit(car: Car, targetSpeed: number): Controls {
   const throttle = speed < targetSpeed ? 1 : 0;
   return { steering, throttle, brake: speed > targetSpeed + 1 ? 0.5 : 0 };
 }
-
