@@ -1,6 +1,6 @@
 # Testing
 
-> Status: the commands below exist from P1-01 onwards. Only the project foundation (canvas sizing, page start-up and the architecture lint rules) the fixed-timestep loop, the seeded random generator and the track model and static track layer, and the vehicle physics are tested so far; the rest of the table under "What must be tested" applies as each feature lands. Report only results you actually ran.
+> Status: the commands below exist from P1-01 onwards. Only the project foundation (canvas sizing, page start-up and the architecture lint rules), the fixed-timestep loop, the seeded random generator, the track model and static track layer, the vehicle physics and collision detection are tested so far; the rest of the table under "What must be tested" applies as each feature lands. Report only results you actually ran.
 
 ## Commands
 
