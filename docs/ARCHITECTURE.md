@@ -1,6 +1,6 @@
 # Architecture
 
-> Status: **mostly planned**. Built so far: the project foundation from P1-01 (`src/main.ts`, `src/render/viewport.ts` for canvas sizing) and the fixed-timestep loop from P1-02 (`src/sim/config.ts`, `src/sim/world.ts`, `src/sim/fixedStep.ts`, `src/ui/frameLoop.ts`) the seeded generator from P1-03 (`src/utils/rng.ts`) the track model and static track layer from P1-04 (`src/sim/track.ts`, `src/data/tracks/stadium-oval.json`, `src/render/trackView.ts`, `src/render/trackLayer.ts`) the vehicle model from P1-05 (`src/sim/vehicle.ts`, physics constants in `src/sim/config.ts`) and collision from P1-06 (`src/sim/collision.ts`). Cars are not yet placed in the world or drawn. Everything else below is the target design for later tasks. Update this document when the code shows a better design.
+> Status: **mostly planned**. Built so far: the project foundation from P1-01 (`src/main.ts`, `src/render/viewport.ts` for canvas sizing) and the fixed-timestep loop from P1-02 (`src/sim/config.ts`, `src/sim/world.ts`, `src/sim/fixedStep.ts`, `src/ui/frameLoop.ts`) the seeded generator from P1-03 (`src/utils/rng.ts`) the track model and static track layer from P1-04 (`src/sim/track.ts`, `src/data/tracks/stadium-oval.json`, `src/render/trackView.ts`, `src/render/trackLayer.ts`) the vehicle model from P1-05 (`src/sim/vehicle.ts`, physics constants in `src/sim/config.ts`) collision from P1-06 (`src/sim/collision.ts`) and checkpoints and laps from P1-07 (`src/sim/checkpoints.ts`). Cars are not yet placed in the world or drawn. Everything else below is the target design for later tasks. Update this document when the code shows a better design.
 
 ## Goals that shape the design
 
@@ -19,7 +19,7 @@ src/
     vehicle.ts            car state and physics step
     track.ts              track geometry types, loading and bounds
     collision.ts          car footprint, swept boundary checks, crash response
-    checkpoints.ts        ordered gates, lap counting, lap timing
+    checkpoints.ts        ordered gates, lap counting, tick-based lap timing
     world.ts              steps every car once per tick
     fixedStep.ts          turns real elapsed time into whole fixed ticks
   sensors/
@@ -141,7 +141,13 @@ All constants live in `sim/config.ts` and are recorded with every experiment and
     - Turning moves: points of the body follow arcs, which bulge outside the hull by at most `turnMargin` = reach × turn² / 8 (reach = 3.40 m, the body's farthest point from the rear axle). A boundary within that margin of a turning slice's hull also counts as a hit, so turning contacts are never missed. A straight-only hull test did miss one: Codex found a full-lock, top-speed tick on the stadium oval that clipped the inner wall by about 1 µm mid-step, now a regression test.
   - **Limitations:** the turning margin makes the check conservative: a turning car may be flagged up to about 0.2 mm before a true contact at the default tick (at most 0.0225 rad per tick), and up to about 1.1 mm for a full 0.05 rad slice. Contacts are exact floating-point comparisons, so "touching" means touching to within rounding. Boundaries are assumed simple and non-crossing (validated in P4-01). Every segment is looked at every tick (52 on the built-in track), with a bounding-box rejection before the detailed test; about 4 µs per car-step in an informal local measurement. A spatial index (P2-11) waits for a measured need.
   - **Response:** `stepCar` returns the car at its pose before the step (the last pose known to be clear, at most one step's travel short of the wall: 0.40 m at top speed and 1/60 s), speed 0, `crashed: true`. A crashed car ignores controls; manual restart is P1-08. `createCar` flags a car already crashed if its start pose is not on the road.
-- Checkpoints: only the **next** gate in order counts, crossed in the forward direction. Crossing gate 0 after all others completes a lap. This blocks reward from crossing the same gate back and forth.
+- Checkpoints: built in P1-07 (`sim/checkpoints.ts`), pure and headless. Only the **next** gate in order counts, crossed forwards; crossing gate 0 after all others completes a lap. This blocks reward from crossing the same gate back and forth.
+  - **Reference point:** the rear axle, the vehicle state's `position`. Between ticks it moves in a straight line (the same motion the collision sweep uses), so a crossing on that segment is exact at any speed; the nose reaches a gate 3.25 m earlier.
+  - **Forward:** a gate's a → b direction (inner boundary to outer) turned a quarter turn anticlockwise as seen on screen, (dy, −dx). Driving forwards keeps the infield on the left; on the built-in track that is the start direction.
+  - **Crossing:** the move goes from behind the gate's line or exactly on it to strictly ahead of it, touching the gate segment (end points count). So a car that starts or rests on a gate earns one credit when it leaves it forwards; stopping on a line, moving backwards, moving along a line or passing beyond a gate's end earns nothing. A step can cross several gates (a very fast car or a long timestep): they count in order along the move, each only if it is next at that point.
+  - **Laps and timing:** gate 0's first forward crossing starts timing (the start pose is just behind it); each later gate 0 crossing after gates 1 … n−1 in order completes a lap and starts the next. `LapProgress` records the tick count, next gate, gates passed, the current lap's start tick and completed laps as whole ticks; seconds = ticks × DT (`lapSeconds`), so timing never depends on the frame rate. A crossing is stamped with the tick that ends the step; the same rule at both ends of a lap cancels out.
+  - **Per car and pure:** each car has its own `LapProgress`; `advanceProgress` returns a new object and never changes its input.
+  - **With collision:** `stepRacer` steps the car (`stepCar`) and then its progress using only the move the collision check accepted. A step rejected by a crash leaves the car where it was, so it credits no gate, even one the rejected move would have crossed; a crashed car earns nothing more while its ticks go on.
 
 ## Sensors and network inputs
 
