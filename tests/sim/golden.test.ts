@@ -1,11 +1,13 @@
 // Golden tests for the whole simulation (P1-09): physics, collision, checkpoints, laps and restart, driven by
 // seeded control sequences and compared with stored expectations in tests/sim/golden/world.json.
 //
-// The golden file is only rewritten deliberately, with `npm run test:golden:update` (Vitest's --update), after
-// a simulation change that is meant to change results. See docs/TESTING.md, "Golden files".
+// The golden file is only rewritten deliberately, with `npm run test:golden:update` (Vitest in mode
+// `golden-update`), after a simulation change that is meant to change results. Every other run only reads it:
+// a missing file fails, and so does an update attempted in CI. See docs/TESTING.md, "Golden files".
 //
 // Expected outcomes are not just "whatever the code produced": each scenario is first checked against rules
 // that follow from the documented behaviour, independently of the stored numbers.
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { RNG_ALGORITHM } from '../../src/utils/rng';
 import type { Controls } from '../../src/sim/vehicle';
@@ -128,9 +130,21 @@ function goldenText(): string {
   return lines.join('\n');
 }
 
+const GOLDEN_FILE = new URL('./golden/world.json', import.meta.url);
+/** True only for `npm run test:golden:update`, which runs Vitest with `--mode golden-update`. */
+const UPDATING = import.meta.env.MODE === 'golden-update';
+
 describe('golden file', () => {
-  it('matches tests/sim/golden/world.json exactly (full car state, lap events and every window of ticks)', async () => {
-    await expect(goldenText()).toMatchFileSnapshot('./golden/world.json');
+  it('matches tests/sim/golden/world.json exactly (full car state, lap events and every window of ticks)', () => {
+    if (UPDATING) {
+      // Regenerating in CI would accept whatever the code produces there; only a person does it, locally.
+      if (process.env.CI) throw new Error('The golden file is never regenerated in CI. Run npm run test:golden:update locally.');
+      writeFileSync(GOLDEN_FILE, goldenText());
+      return;
+    }
+    // Any other run only reads the file. A missing file is an error, never silently recreated.
+    if (!existsSync(GOLDEN_FILE)) throw new Error('tests/sim/golden/world.json is missing. Restore it, or regenerate it deliberately with npm run test:golden:update.');
+    expect(goldenText()).toBe(readFileSync(GOLDEN_FILE, 'utf8'));
   });
 });
 

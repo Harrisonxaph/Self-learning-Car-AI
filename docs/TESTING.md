@@ -93,9 +93,9 @@ Tests mirror `src/`. No tests next to source files.
 It also records the generator algorithm, track, sim config and physics constants it was made with. A change anywhere in physics, collision, checkpoints, restart or the scenarios shows up as a failed comparison whose diff points at the first window that changed.
 
 Rules:
-- **Regenerate only deliberately:** after a change that is meant to change simulation results, run `npm run test:golden:update` (Vitest's `--update`). Review the diff, and say in the pull request why the results changed and which windows moved first.
+- **Regenerate only deliberately:** after a change that is meant to change simulation results, run `npm run test:golden:update` (Vitest in mode `golden-update`, the only mode that writes the file). Review the diff, and say in the pull request why the results changed and which windows moved first.
 - **Never regenerate to make a failing test pass** without that explanation.
-- A plain `npm test` never rewrites an existing golden file. In CI a missing or different file fails.
+- Every other run only reads the file: `npm test`, Vitest's `--update`/`-u` and CI. A missing or different file fails rather than being created or rewritten. `npm run test:golden:update` refuses to run when `CI` is set.
 - The numbers were produced in Node (V8). They are bit-identical between runs in the same engine. Other engines may differ in the last bits of `Math.sin`, `Math.cos`, `Math.tan` and `Math.atan2`, so the golden comparison runs only in Node, not in the browser tests.
 
 ## Mobile and device checks
