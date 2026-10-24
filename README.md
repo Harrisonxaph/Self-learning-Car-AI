@@ -24,9 +24,26 @@ To try it on a phone or tablet on the same network, run `npm run dev -- --host` 
 | `npm run typecheck` | TypeScript in strict mode |
 | `npm test` | Unit tests (Vitest, in Node) |
 | `npm run build` | Production build into `dist/` (a static site) |
-| `npm run test:e2e` | Browser tests (Playwright) against the production build in Chromium and WebKit, including phone and tablet touch emulation |
+| `npm run test:e2e` | Browser tests (Playwright) against the production build, served by `vite preview` and by a plain static file server, in Chromium and WebKit, including phone and tablet touch emulation |
 
 Before the first browser test run, install the browsers: `npx playwright install --with-deps chromium webkit`. GitHub Actions runs all of these checks on every pull request and on `main` (`.github/workflows/ci.yml`). See [docs/TESTING.md](docs/TESTING.md) for details and the manual device checks.
+
+## Deployment
+
+The app is a static site. `npm run build` writes everything into `dist/`: `index.html` plus hashed JavaScript and CSS in `dist/assets/`. There is no server code, no API routes, no rewrites and no `vercel.json`. Asset paths are relative (`base: './'` in `vite.config.ts`), so `dist/` works at a site root or under a sub-path. `tests/e2e/staticHost.spec.ts` checks both with a plain static file server.
+
+**Any static host:** with Node 24, run `npm ci && npm run build`, then upload the contents of `dist/`.
+
+**Vercel:** the free Hobby plan is enough; nothing here needs a paid feature.
+1. Import the GitHub repository as a project.
+2. Use these build settings:
+   - Build Command: `npm run build`
+   - Output Directory: `dist`
+   - Install Command: `npm ci`, which installs exactly what `package-lock.json` pins
+   - Node.js Version: 24.x, matching `.nvmrc` and `engines` in `package.json`
+3. Vercel then builds a preview deployment for every pull request and a production deployment for every push to `main`.
+
+Previews are only visible to people who can see them under the project's deployment protection settings. Check those settings before sharing a link.
 
 ## Project layout
 

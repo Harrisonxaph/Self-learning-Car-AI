@@ -10,12 +10,12 @@ _Last verified: 2026-10-23, against `main` at `ab1436c` (P1-01 merged in #55, P1
 |------|-------|
 | Application code | Project foundation (P1-01): a Vite + strict TypeScript page with a responsive Canvas 2D placeholder. P1-02 (#62, merged) adds the fixed-timestep loop: a tick-counting world, a headless fixed-step clock and a frame loop that pauses while the page is hidden. No vehicle physics, track, AI or controls exist. |
 | Tests and CI | `package.json` scripts, ESLint with architecture boundary rules, Vitest unit tests and Playwright browser tests (P1-01). Chromium and unit tests have run locally. The WebKit projects first ran in CI on the P1-10 PR (#60, run 39985079357: 18/18 browser tests passed, including desktop, iPhone 13 and iPad WebKit). GitHub Actions CI (P1-10, #60) now runs lint, typecheck, unit tests, build and all six Playwright projects on every pull request and push to `main`. |
-| Deployment | The owner's Vercel Git integration builds preview deployments for pull requests (observed as Ready on #55 and #59). Production deployment and P1-11's acceptance checks are not verified. |
+| Deployment | The owner's Vercel Git integration builds a preview deployment for every pull request and a production deployment from `main`. The production deployment of `38ff6a6` (#72's merge) was observed as Ready through the Vercel API on 2026-10-24. The owner has loaded previews on a real iPhone 15 and iPad Pro in Safari (P1-02, P1-04, P1-08 records). P1-11 is In Review (static-host tests and deployment docs). |
 | Planning docs | Added by this roadmap PR: `AGENTS.md`, `docs/ROADMAP.md`, `docs/ARCHITECTURE.md`, `docs/AI_EVALUATION.md`, `docs/MODEL_FORMAT.md`, `docs/TESTING.md`. |
 | GitHub issues | Existing issues #1–#39 are preserved. Reconciliation adds #41–#50 for two missing primary-release entries and eight approval-gated research entries; #40 is the existing documentation PR. |
 | AI learning results | None. No experiments have been run, so no learning claims can be made. |
 
-P1-02, P1-03, P1-04, P1-05, P1-06, P1-07 and P1-08 are **Complete**. P1-01, P1-09 and P1-10 are **In Review**; the other 33 primary-release implementation features are **Not Started**. Eight research entries are **Blocked** pending explicit approval; Q-01 remains **In Review**. P1-02, P1-03, P1-04, P1-05, P1-06, P1-07 and P1-08 are the only implementation features marked Complete. The initial master specification is the owner's detailed project request; no separate specification was found. Re-verify this table against code and tests whenever statuses change.
+P1-02, P1-03, P1-04, P1-05, P1-06, P1-07 and P1-08 are **Complete**. P1-01, P1-09, P1-10 and P1-11 are **In Review**; the other 32 primary-release implementation features are **Not Started**. Eight research entries are **Blocked** pending explicit approval; Q-01 remains **In Review**. P1-02, P1-03, P1-04, P1-05, P1-06, P1-07 and P1-08 are the only implementation features marked Complete. The initial master specification is the owner's detailed project request; no separate specification was found. Re-verify this table against code and tests whenever statuses change.
 
 ### Existing work and reconciliation
 
@@ -67,7 +67,7 @@ Documentation-only checks are recorded as such; no application/device execution 
 | P1-08 | Manual driving with keyboard and mobile touch controls | 1 | P0 | Complete | P1-05, P1-06, P1-07 | [#8](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/8) |
 | P1-09 | Deterministic physics test suite | 1 | P0 | In Review | P1-03, P1-05, P1-06, P1-07 | [#9](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/9) |
 | P1-10 | GitHub Actions CI | 1 | P0 | In Review | P1-01 | [#10](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/10) |
-| P1-11 | Vercel deployment compatibility | 1 | P1 | Not Started | P1-01 | [#11](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/11) |
+| P1-11 | Vercel deployment compatibility | 1 | P1 | In Review | P1-01 | [#11](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/11) |
 | P2-01 | Seven forward ray sensors | 2 | P0 | Not Started | P1-06 | [#12](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/12) |
 | P2-02 | Nine network inputs: rays, speed and checkpoint heading error | 2 | P0 | Not Started | P2-01, P1-07 | [#13](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/13) |
 | P2-03 | Feedforward network 9-12-3 with independent steering, throttle and brake | 2 | P0 | Not Started | P1-01 | [#14](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/14) |
@@ -110,7 +110,8 @@ Dependencies are taken from the table above.
 - **In review:** P1-10 (CI) is merged into `main` (#60) and stays In Review until Codex's full review record is posted.
 - **Complete:** P1-02 (fixed-timestep loop, #62), P1-03 (seeded generator, #64), P1-04 (track model and static track layer, #65), P1-05 (vehicle physics, #66), P1-06 (collision detection, #67), P1-07 (checkpoints and laps, #69) and P1-08 (manual driving, #70).
 - **In review:** P1-09 (deterministic physics test suite), pending Codex review and owner approval.
-- **Ready now (all dependencies Complete or merged):** P1-11, P2-01 (ray sensors), P2-03 (the network is pure maths), P2-06 (fitness), P2-10 (track splits) and P4-01 (track validation). Ready means the dependencies are met, not that implementation is authorised.
+- **In review:** P1-11 (Vercel deployment compatibility), pending Codex review and owner approval.
+- **Ready now (all dependencies Complete or merged):** P2-01 (ray sensors), P2-03 (the network is pure maths), P2-06 (fitness), P2-10 (track splits) and P4-01 (track validation). Ready means the dependencies are met, not that implementation is authorised.
 - **Silverstone (approved 2026-10-23, planning only):** P4-06 (Silverstone import) after P4-01, P2-10, P2-05, P2-07 and P3-05; P2-11 (spatial index, after P1-06 and P2-01) only if P4-06's measured baseline misses the budget or the owner approves an architectural reason; P4-07 (camera) after P1-04 and P2-05, as a separate follow-up. Each still needs explicit owner implementation approval when its dependencies are complete; this planning approval does not authorise implementation. None of these interrupts the current phase.
 - **Phase 2 critical path:** P1-06 → P2-01 → P2-02, and P1-07 → P2-06, then P2-04 → P2-05 → P2-07 → P2-08.
 - **Early evaluation:** P1-04 + P1-07 → P2-10 supplies built-in training/validation/held-out fixtures before P2-07/P2-08; the editor is not a prerequisite.
@@ -302,13 +303,27 @@ Dependencies are taken from the table above.
 
 ### P1-11 — Vercel deployment compatibility
 
-- **Priority:** P1 · **Status:** Not Started · **Issue:** [#11](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/11)
+- **Priority:** P1 · **Status:** In Review · **Issue:** [#11](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/11)
 - **Depends on:** P1-01
 - **Description:** Static build with correct base path and no server code; document deployment in the README. Do not add paid plans.
 - **Acceptance criteria:**
   - `npm run build` output serves correctly from a static host; a Vercel preview loads on iPhone Safari.
 - **Test requirements:**
   - E2E runs against `vite preview` of the production build.
+- **Built:**
+  - `tests/e2e/staticHost.ts` is a plain Node static file server over `dist/`, with no rewrites, fallbacks or server code. It mounts the build at `/` and at `/nested/app/`.
+  - `tests/e2e/staticHost.spec.ts` (every Playwright project) checks both mounts. The page, script and stylesheet load from under the mount with no failed request or console error, the simulation starts and the track is drawn.
+  - With `base: '/'` the sub-path test fails (`/assets/...` requested from the root), so it guards the relative base path.
+  - The README gains a Deployment section: static `dist/`, no server code, any static host, and Vercel build settings (`npm run build`, `dist`, `npm ci`, Node 24.x) on the free plan.
+  - The existing browser tests already run against `vite preview` of the production build (P1-01).
+- **Existing deployment evidence (not new in P1-11):**
+  - Vercel preview deployments were built for every PR from #55 on.
+  - The owner loaded previews in Safari on a real iPhone 15 (iOS 27.0.1) and iPad Pro 11-inch, 3rd generation (iPadOS 26.6.2) for P1-02 ([record](https://github.com/Harrisonxaph/Self-learning-Car-AI/pull/62#issuecomment-6371615878), preview of `c3c7b0c`), P1-04 ([record](https://github.com/Harrisonxaph/Self-learning-Car-AI/pull/65#issuecomment-6373080700), `7c61906`) and P1-08 (#70, owner-reported).
+  - Vercel API, read-only, 2026-10-24: the project uses Node.js 24.x with no framework preset. The production deployment of `main` at `38ff6a6` is Ready. Deployment protection (Vercel Authentication) covers all deployments except custom domains.
+  - The project's build command, output directory and install command were not visible through the API, so they are not verified here.
+- **Outstanding before Complete:**
+  - Codex technical approval of the PR head and owner merge approval.
+  - The owner decides whether the existing iPhone records of Vercel previews satisfy "a Vercel preview loads on iPhone Safari", or wants a fresh check of this PR's preview. This PR changes no application code, and its production bundle is identical to `main`'s.
 
 ## Phase 2 — AI learning engine
 
@@ -824,3 +839,4 @@ These apply to every phase and are checked in review.
 | 2026-10-24 | P1-08 manual driving (keyboard and touch controls, car drawing, lap display, restart) implemented on `feat/p1-08-manual-driving` and moved to In Review; not Complete until real iPhone/iPad Safari checks, Codex review and owner approval are recorded. |
 | 2026-10-24 | P1-08 Complete: #70 merged by the owner at `b597e37` (same tree as the reviewed head `25380c8`), with Codex technical approval of `25380c8` posted after the merge, green CI on both (runs 40096285817 and 40096445158) and owner-reported real iPhone 15 and iPad Pro Safari confirmation. P1-01 and P1-10 still await Codex's full review records. |
 | 2026-10-24 | P1-09 deterministic simulation suite (seeded world scenarios, golden file, frame-loop, catch-up, pause and restart determinism tests) implemented on `feat/p1-09-deterministic-suite` and moved to In Review; not Complete until Codex review and owner approval are recorded. |
+| 2026-10-24 | P1-11 static-host compatibility (plain static file server tests at the root and a sub-path, README deployment section) implemented on `feat/p1-11-static-deployment` and moved to In Review; not Complete until Codex review and owner approval, including the owner's decision on the iPhone preview evidence, are recorded. |
