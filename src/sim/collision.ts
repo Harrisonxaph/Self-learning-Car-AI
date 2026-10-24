@@ -7,20 +7,22 @@
 // Each step is checked as a sweep, not just at its end, so a fast car cannot jump over a wall between ticks.
 // The sweep takes the convex hull of the footprint's corners before and after the step (or before and after
 // each slice of a sharp turn, see MAX_SWEEP_ROTATION). For a straight move that hull is exactly the area the
-// car passes over, at any speed. While turning, the corners move on arcs instead of straight lines, and the
-// hull can miss a sliver at most |corner| × (1 − cos(MAX_SWEEP_ROTATION / 2)) wide: about 1 mm for the
-// default 4 × 2 m car. With the default timestep a car turns at most about 0.022 rad per tick, so the
-// sliver is at most about 0.2 mm in practice.
+// car passes over, at any speed, and the test is exact. While turning, points of the body move on arcs, which
+// bulge out of the hull by up to reach × turn² / 8 (reach: the body's farthest point from the rear axle;
+// turn: the slice's heading change; this bounds the gap between an arc and its chord). A turning sweep
+// therefore also counts a boundary within that margin of the hull as a hit, so it never misses a contact;
+// the price is that a turning car may be flagged up to that margin early: at most about 0.2 mm with the
+// default timestep (at most 0.0225 rad per tick) and about 1.1 mm for a full 0.05 rad slice.
 //
-// Every boundary segment is tested each tick. The built-in track has 52, so this is cheap; a spatial index
-// (P2-11) waits until a measured track needs one.
+// Every boundary segment is tested each tick, after a quick bounding-box rejection. The built-in track has
+// 52, so this is cheap; a spatial index (P2-11) waits until a measured track needs one.
 import type { VehiclePhysics } from './config';
 import type { Pose, Track, Vec2 } from './track';
 import { createVehicle, stepVehicle, wrapAngle, type Controls, type VehicleState } from './vehicle';
 
 /**
  * The largest heading change checked as one sweep, rad. A step that turns more is split into equal slices,
- * so the arc-versus-chord gap above stays bounded whatever the timestep. Default steps never need splitting.
+ * so the turning margin above stays small whatever the timestep. Default steps never need splitting.
  */
 export const MAX_SWEEP_ROTATION = 0.05;
 
@@ -66,6 +68,7 @@ export function footprintHitsTrack(footprint: readonly Vec2[], track: Track): bo
 export function sweepHitsTrack(before: Pose, after: Pose, track: Track, physics: VehiclePhysics): boolean {
   const turn = wrapAngle(after.heading - before.heading);
   const slices = Math.max(1, Math.ceil(Math.abs(turn) / MAX_SWEEP_ROTATION));
+  const margin = turnMargin(turn / slices, physics);
   let from = vehicleFootprint(before, physics);
   for (let i = 1; i <= slices; i += 1) {
     const t = i / slices;
@@ -80,10 +83,26 @@ export function sweepHitsTrack(before: Pose, after: Pose, track: Track, physics:
             heading: before.heading + turn * t,
           };
     const to = vehicleFootprint(pose, physics);
-    if (shapeTouchesBoundary([...from, ...to], track)) return true;
+    if (shapeTouchesBoundary([...from, ...to], track, margin)) return true;
     from = to;
   }
   return !pointOnRoad(from[0]!, track);
+}
+
+/** The distance from the rear axle to the farthest point of the body, m. */
+export function footprintReach(physics: VehiclePhysics): number {
+  const overhang = (physics.vehicleLength - physics.wheelbase) / 2;
+  return Math.hypot(Math.max(Math.abs(overhang), Math.abs(physics.wheelbase + overhang)), physics.vehicleWidth / 2);
+}
+
+/**
+ * How far a body turning evenly by `turn` rad while moving in a straight line can bulge outside the convex
+ * hull of its start and end footprints: reach × turn² / 8, the bound on how far a point's arc strays from the
+ * straight chord (linear-interpolation error ≤ length² / 8 × curvature). 0 when not turning, so straight
+ * moves are tested exactly.
+ */
+export function turnMargin(turn: number, physics: VehiclePhysics): number {
+  return (footprintReach(physics) * turn * turn) / 8;
 }
 
 /** A stationary car at `pose`, already crashed if it starts touching a boundary or off the road. */
@@ -168,24 +187,68 @@ function inPolygon(polygon: readonly Vec2[], p: Vec2): boolean {
   return inside;
 }
 
+/** The distance from p to the closed segment a–b. */
+function pointSegmentDistance(p: Vec2, a: Vec2, b: Vec2): number {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const lengthSquared = dx * dx + dy * dy;
+  const t = lengthSquared === 0 ? 0 : Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / lengthSquared));
+  return Math.hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy));
+}
+
+/** Is the closed segment a–b within `margin` of the convex polygon (touching or inside counts as 0)? */
+function segmentNearConvex(a: Vec2, b: Vec2, polygon: readonly Vec2[], margin: number): boolean {
+  if (inConvex(polygon, a)) return true;
+  for (let k = 0; k < polygon.length; k += 1) {
+    const c = polygon[k]!;
+    const d = polygon[(k + 1) % polygon.length]!;
+    if (segmentsTouch(a, b, c, d)) return true;
+    // Two segments that do not touch are closest at an end point of one of them.
+    if (
+      margin > 0 &&
+      Math.min(pointSegmentDistance(a, c, d), pointSegmentDistance(b, c, d), pointSegmentDistance(c, a, b)) <= margin
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
 function pointOnRoad(p: Vec2, track: Track): boolean {
   return inPolygon(track.outer, p) && !inPolygon(track.inner, p);
 }
 
 /**
- * Does any boundary segment touch the convex hull of these points: cross or touch one of its edges, or lie
- * inside it? Checking each segment's first point covers a whole boundary loop inside the hull.
+ * Does any boundary segment come within `margin` of the convex hull of these points: cross or touch one of
+ * its edges, lie inside it, or (for a positive margin) pass within that distance? With every segment tested,
+ * a whole boundary loop inside the hull is caught by its own points.
  */
-function shapeTouchesBoundary(points: readonly Vec2[], track: Track): boolean {
+function shapeTouchesBoundary(points: readonly Vec2[], track: Track, margin = 0): boolean {
   const convex = convexHull(points);
+  // A quick bounding-box test skips segments that are clearly too far away (most of them), before the
+  // detailed test. Not a spatial index: every segment is still looked at.
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  for (const p of convex) {
+    minX = Math.min(minX, p.x);
+    minY = Math.min(minY, p.y);
+    maxX = Math.max(maxX, p.x);
+    maxY = Math.max(maxY, p.y);
+  }
+  minX -= margin;
+  minY -= margin;
+  maxX += margin;
+  maxY += margin;
   for (const loop of [track.outer, track.inner]) {
     for (let i = 0; i < loop.length; i += 1) {
       const a = loop[i]!;
       const b = loop[(i + 1) % loop.length]!;
-      if (inConvex(convex, a)) return true;
-      for (let k = 0; k < convex.length; k += 1) {
-        if (segmentsTouch(a, b, convex[k]!, convex[(k + 1) % convex.length]!)) return true;
+      if (Math.max(a.x, b.x) < minX || Math.min(a.x, b.x) > maxX || Math.max(a.y, b.y) < minY || Math.min(a.y, b.y) > maxY) {
+        continue;
       }
+      if (segmentNearConvex(a, b, convex, margin)) return true;
     }
   }
   return false;

@@ -5,6 +5,8 @@ import {
   convexHull,
   createCar,
   footprintHitsTrack,
+  footprintReach,
+  turnMargin,
   segmentsTouch,
   stepCar,
   sweepHitsTrack,
@@ -38,6 +40,24 @@ const BOX = makeTrack(square(0, 0, 100, 100), square(40, 40, 60, 60));
 /** With heading 0 the default body covers x from rear − 0.75 to rear + 3.25 and y from rear − 1 to rear + 1. */
 const hits = (track: Track, x: number, y: number, heading = 0) =>
   footprintHitsTrack(vehicleFootprint(pose(x, y, heading), PHYSICS), track);
+
+/** How far p lies outside a convex polygon with positive orientation (0 if inside or on it). */
+function distanceOutside(polygon: readonly Vec2[], p: Vec2): number {
+  const inside = polygon.every((a, i) => {
+    const b = polygon[(i + 1) % polygon.length]!;
+    return (b.x - a.x) * (p.y - a.y) - (b.y - a.y) * (p.x - a.x) >= 0;
+  });
+  if (inside) return 0;
+  return Math.min(
+    ...polygon.map((a, i) => {
+      const b = polygon[(i + 1) % polygon.length]!;
+      const dx = b.x - a.x;
+      const dy = b.y - a.y;
+      const t = Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / (dx * dx + dy * dy)));
+      return Math.hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy));
+    }),
+  );
+}
 
 describe('vehicle footprint', () => {
   it('is the 4 × 2 m body centred between the axles, 0.75 m behind and 3.25 m ahead of the rear axle', () => {
@@ -203,6 +223,9 @@ describe('sweeps between ticks', () => {
     expect(hits(pip, 50, 50, Math.PI)).toBe(false);
     expect(hits(pip, 50, 50, Math.PI / 2)).toBe(true);
     expect(sweepHitsTrack(before, after, pip, PHYSICS)).toBe(true);
+    // Slicing also keeps the turning margin small: the same half turn 5 m from a wall (the nose reaches
+    // 1.6 m from it) is clear, where one unsliced hull would need a 4 m margin and report a false crash.
+    expect(sweepHitsTrack(pose(20, 5, 0), pose(20, 5, Math.PI), BOX, PHYSICS)).toBe(false);
   });
 
   it('sweeps the short way round when the heading crosses ±π', () => {
@@ -214,16 +237,55 @@ describe('sweeps between ticks', () => {
     expect(sweepHitsTrack(before, pose(50, 37.5, Math.PI / 2), BOX, PHYSICS)).toBe(true);
   });
 
-  it('turns at most 0.0225 rad per default tick, so a sweep never needs slicing and its arc error stays below 0.21 mm', () => {
+  it('turns at most 0.0225 rad per default tick, so a sweep never needs slicing and its turning margin stays below 0.22 mm', () => {
     let largest = 0;
     for (let v = 0; v <= PHYSICS.maxSpeed; v += 0.01) {
       largest = Math.max(largest, (v * Math.tan(maxSteerAngle(v, PHYSICS)) * DT) / PHYSICS.wheelbase);
     }
     expect(largest).toBeLessThan(0.0225);
     expect(largest).toBeLessThan(MAX_SWEEP_ROTATION);
-    const farthestCorner = Math.hypot(PHYSICS.wheelbase + (PHYSICS.vehicleLength - PHYSICS.wheelbase) / 2, PHYSICS.vehicleWidth / 2);
-    expect(farthestCorner * (1 - Math.cos(largest / 2))).toBeLessThan(0.00021);
-    expect(farthestCorner * (1 - Math.cos(MAX_SWEEP_ROTATION / 2))).toBeLessThan(0.0011);
+    expect(footprintReach(PHYSICS)).toBeCloseTo(Math.hypot(3.25, 1), 12);
+    expect(turnMargin(largest, PHYSICS)).toBeLessThan(0.00022);
+    expect(turnMargin(MAX_SWEEP_ROTATION, PHYSICS)).toBeLessThan(0.0011);
+    expect(turnMargin(0, PHYSICS)).toBe(0);
+  });
+
+  it('catches a turning car that clips a wall only between ticks (Codex review, default tick, built-in track)', () => {
+    // Full lock at top speed beside the bottom straight's inner wall (y = 33). Both tick poses are clear,
+    // but halfway through the step a corner reaches y ≈ 32.9999989: about 1 µm into the wall.
+    const before = { position: { x: -6, y: 34.16468803906176 }, heading: -0.05109599460022829, speed: PHYSICS.maxSpeed };
+    const controls = { steering: 1, throttle: 1, brake: 0 };
+    const after = stepVehicle(before, controls, PHYSICS, DT);
+    const mid = pose(
+      (before.position.x + after.position.x) / 2,
+      (before.position.y + after.position.y) / 2,
+      (before.heading + after.heading) / 2,
+    );
+    expect(footprintHitsTrack(vehicleFootprint(before, PHYSICS), oval)).toBe(false);
+    expect(footprintHitsTrack(vehicleFootprint(after, PHYSICS), oval)).toBe(false);
+    expect(footprintHitsTrack(vehicleFootprint(mid, PHYSICS), oval)).toBe(true);
+    expect(sweepHitsTrack(before, after, oval, PHYSICS)).toBe(true);
+    const car = stepCar({ vehicle: before, crashed: false }, controls, oval, PHYSICS, DT);
+    expect(car).toEqual({ vehicle: { ...before, speed: 0 }, crashed: true });
+  });
+
+  it('keeps every point of a turning body within the margin of its sweep hull', () => {
+    // The margin must cover the arcs' bulge for any turn up to a full slice, from any start heading.
+    const rng = createRng(61);
+    for (let n = 0; n < 200; n += 1) {
+      const turn = rng.range(-MAX_SWEEP_ROTATION, MAX_SWEEP_ROTATION);
+      const before = pose(0, 0, rng.range(-Math.PI, Math.PI));
+      const after = pose(rng.range(-1, 1), rng.range(-1, 1), before.heading + turn);
+      const margin = turnMargin(turn, PHYSICS);
+      const hull = convexHull([...vehicleFootprint(before, PHYSICS), ...vehicleFootprint(after, PHYSICS)]);
+      for (let i = 1; i < 32; i += 1) {
+        const t = i / 32;
+        const mid = pose(after.position.x * t, after.position.y * t, before.heading + turn * t);
+        for (const corner of vehicleFootprint(mid, PHYSICS)) {
+          expect(distanceOutside(hull, corner)).toBeLessThanOrEqual(margin + 1e-12);
+        }
+      }
+    }
   });
 
   it('does not flag a car driving parallel to a wall 1 mm away', () => {
