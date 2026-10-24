@@ -1,6 +1,6 @@
 # Architecture
 
-> Status: **mostly planned**. Built so far: the project foundation from P1-01 (`src/main.ts`, `src/render/viewport.ts` for canvas sizing) and the fixed-timestep loop from P1-02 (`src/sim/config.ts`, `src/sim/world.ts`, `src/sim/fixedStep.ts`, `src/ui/frameLoop.ts`) the seeded generator from P1-03 (`src/utils/rng.ts`) the track model and static track layer from P1-04 (`src/sim/track.ts`, `src/data/tracks/stadium-oval.json`, `src/render/trackView.ts`, `src/render/trackLayer.ts`) and the vehicle model from P1-05 (`src/sim/vehicle.ts`, physics constants in `src/sim/config.ts`). Cars are not yet placed in the world or drawn. Everything else below is the target design for later tasks. Update this document when the code shows a better design.
+> Status: **mostly planned**. Built so far: the project foundation from P1-01 (`src/main.ts`, `src/render/viewport.ts` for canvas sizing) and the fixed-timestep loop from P1-02 (`src/sim/config.ts`, `src/sim/world.ts`, `src/sim/fixedStep.ts`, `src/ui/frameLoop.ts`) the seeded generator from P1-03 (`src/utils/rng.ts`) the track model and static track layer from P1-04 (`src/sim/track.ts`, `src/data/tracks/stadium-oval.json`, `src/render/trackView.ts`, `src/render/trackLayer.ts`) the vehicle model from P1-05 (`src/sim/vehicle.ts`, physics constants in `src/sim/config.ts`) and collision from P1-06 (`src/sim/collision.ts`). Cars are not yet placed in the world or drawn. Everything else below is the target design for later tasks. Update this document when the code shows a better design.
 
 ## Goals that shape the design
 
@@ -18,7 +18,7 @@ src/
     config.ts             fixed timestep, physics constants
     vehicle.ts            car state and physics step
     track.ts              track geometry types, loading and bounds
-    collision.ts          car–boundary intersection
+    collision.ts          car footprint, swept boundary checks, crash response
     checkpoints.ts        ordered gates, lap counting, lap timing
     world.ts              steps every car once per tick
     fixedStep.ts          turns real elapsed time into whole fixed ticks
@@ -133,7 +133,14 @@ All constants live in `sim/config.ts` and are recorded with every experiment and
   - Boundaries are listed without repeating the first point; the last point joins back to the first. Gates go from the inner boundary (`a`) to the outer (`b`); gate 0 is the start/finish line.
   - `loadTrack(data)` checks only the data's shape (strings, finite numbers, at least 3 points and 3 gates, no holes) and returns a deep-frozen `Track`. Geometric validation (non-crossing boundaries, start on the road, gates spanning the road) is P4-01; until then the built-in fixture's geometry is checked by unit tests.
   - Built-in track: `data/tracks/stadium-oval.json`, id `stadium-oval`, version `1`. Two 120 m straights joined by semicircles of 40 m centre-line radius, road 14 m wide, vertices every 15°, 20 gates; bounds 214 m × 94 m. Gates and the start pose are data only until P1-05 and P1-07 use them.
-- Collision: test the car footprint against the drivable region, including containment and boundary contacts; use swept checks or sufficient deterministic substeps to prevent tunnelling at the configured maximum speed. Edge intersections alone miss an entirely off-road footprint. On collision the car stops and is marked crashed; manual mode exposes an explicit restart.
+- Collision: built in P1-06 (`sim/collision.ts`), pure and headless.
+  - **Footprint:** the `vehicleLength` × `vehicleWidth` rectangle (4 × 2 m) centred between the axles, so it overhangs each axle by (length − wheelbase) / 2 = 0.75 m: from 0.75 m behind the rear axle (the state's position) to 3.25 m ahead of it. Corners are listed rear-right, front-right, front-left, rear-left; "right" is the side positive steering turns towards (+y at heading 0).
+  - **On the road** means the whole footprint is strictly inside the outer boundary and outside the inner one. Any shared point with a boundary, including a flush edge, a single corner or a wall corner pushed into the car's side, is a crash. A footprint wholly off the road (in the infield, or past the outer wall) is a crash too, though no edges cross; so is a small inner loop wholly under the car.
+  - **Swept check:** each step tests the convex hull of the footprint before and after the move against every boundary segment, plus the end pose's containment. The motion within a step is taken as a straight line with the heading turning evenly the short way; a step that turns more than `MAX_SWEEP_ROTATION` (0.05 rad) is split into equal slices.
+    - Straight moves: the hull is exactly the area passed over, so the test is exact and no speed or timestep can tunnel through a wall.
+    - Turning moves: points of the body follow arcs, which bulge outside the hull by at most `turnMargin` = reach × turn² / 8 (reach = 3.40 m, the body's farthest point from the rear axle). A boundary within that margin of a turning slice's hull also counts as a hit, so turning contacts are never missed. A straight-only hull test did miss one: Codex found a full-lock, top-speed tick on the stadium oval that clipped the inner wall by about 1 µm mid-step, now a regression test.
+  - **Limitations:** the turning margin makes the check conservative: a turning car may be flagged up to about 0.2 mm before a true contact at the default tick (at most 0.0225 rad per tick), and up to about 1.1 mm for a full 0.05 rad slice. Contacts are exact floating-point comparisons, so "touching" means touching to within rounding. Boundaries are assumed simple and non-crossing (validated in P4-01). Every segment is looked at every tick (52 on the built-in track), with a bounding-box rejection before the detailed test; about 4 µs per car-step in an informal local measurement. A spatial index (P2-11) waits for a measured need.
+  - **Response:** `stepCar` returns the car at its pose before the step (the last pose known to be clear, at most one step's travel short of the wall: 0.40 m at top speed and 1/60 s), speed 0, `crashed: true`. A crashed car ignores controls; manual restart is P1-08. `createCar` flags a car already crashed if its start pose is not on the road.
 - Checkpoints: only the **next** gate in order counts, crossed in the forward direction. Crossing gate 0 after all others completes a lap. This blocks reward from crossing the same gate back and forth.
 
 ## Sensors and network inputs

@@ -1,6 +1,7 @@
 // A reproducible demonstration of the car model: accelerate, turn, coast, then brake, using the same
 // stepVehicle the simulation uses. Run `npm run demo:vehicle` to print the table; the checks below keep the
-// demonstration honest in CI (where `npm test` runs it quietly). There is no track or collision here: cars leaving the road is expected until P1-06.
+// demonstration honest in CI (where `npm test` runs it quietly). There is no track here; collision is shown by
+// `npm run demo:collision`.
 import { expect, it } from 'vitest';
 import { DEFAULT_SIM_CONFIG, DEFAULT_VEHICLE_PHYSICS } from '../../src/sim/config';
 import { createVehicle, stepVehicle, type Controls } from '../../src/sim/vehicle';
