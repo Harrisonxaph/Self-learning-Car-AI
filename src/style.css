@@ -140,6 +140,30 @@ body {
   color: #9fb0c0;
 }
 
+/* The narrowest phones (down to 320 CSS pixels): tighter spacing and shorter labels' padding so all five
+   controls fit on one row, each still at least 48 × 56 CSS pixels. */
+@media (max-width: 400px) {
+  .controls {
+    gap: 0.3rem;
+    padding-left: 0.4rem;
+    padding-right: 0.4rem;
+  }
+
+  .pad {
+    gap: 0.3rem;
+  }
+
+  .controls button {
+    min-width: 3rem;
+    padding: 0 0.4rem;
+    font-size: 0.95rem;
+  }
+
+  .controls .restart {
+    min-width: 3rem;
+  }
+}
+
 /* Phones and tablets: no keyboard hint. */
 @media (pointer: coarse) {
   .keys-help {

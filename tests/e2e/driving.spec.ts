@@ -59,6 +59,45 @@ test('starts at rest on the start pose with the lap display empty', async ({ pag
   }
 });
 
+// The smallest phones in use (320 CSS pixels wide, such as iPhone SE 1st gen) in both orientations, then a
+// common small phone. The page never scrolls, so a control outside the viewport could never be reached.
+for (const size of [
+  { width: 320, height: 568 },
+  { width: 568, height: 320 },
+  { width: 375, height: 667 },
+]) {
+  test(`every control is fully on screen, unclipped and at least 44 × 44 at ${size.width} × ${size.height}`, async ({ page }) => {
+    await page.setViewportSize(size);
+    const layout = await page.evaluate(() => ({
+      scrollWidth: document.documentElement.scrollWidth,
+      scrollHeight: document.documentElement.scrollHeight,
+      boxes: [...document.querySelectorAll('.controls button')].map((node) => {
+        const { left, top, right, bottom, width, height } = node.getBoundingClientRect();
+        return { left, top, right, bottom, width, height, clipped: node.scrollWidth > node.clientWidth };
+      }),
+    }));
+    expect(layout.scrollWidth).toBeLessThanOrEqual(size.width);
+    expect(layout.scrollHeight).toBeLessThanOrEqual(size.height);
+    expect(layout.boxes).toHaveLength(5);
+    for (const box of layout.boxes) {
+      expect(box.left).toBeGreaterThanOrEqual(0);
+      expect(box.top).toBeGreaterThanOrEqual(0);
+      expect(box.right).toBeLessThanOrEqual(size.width);
+      expect(box.bottom).toBeLessThanOrEqual(size.height);
+      expect(box.width).toBeGreaterThanOrEqual(44);
+      expect(box.height).toBeGreaterThanOrEqual(44);
+      expect(box.clipped).toBe(false);
+    }
+    // No two controls overlap, so each touch lands on exactly one of them.
+    for (const [i, a] of layout.boxes.entries()) {
+      for (const b of layout.boxes.slice(i + 1)) {
+        const overlap = a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+        expect(overlap).toBe(false);
+      }
+    }
+  });
+}
+
 test.describe('keyboard', () => {
   test('accelerates, steers while accelerating, and brakes to a stop', async ({ page }) => {
     await page.keyboard.down('KeyW');
