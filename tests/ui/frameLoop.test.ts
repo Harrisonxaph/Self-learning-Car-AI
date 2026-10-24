@@ -4,45 +4,8 @@ import { DEFAULT_SIM_CONFIG, DEFAULT_VEHICLE_PHYSICS } from '../../src/sim/confi
 import { createFixedStepClock } from '../../src/sim/fixedStep';
 import { loadTrack } from '../../src/sim/track';
 import { createWorld, stepWorld, type World } from '../../src/sim/world';
-import { startFrameLoop, type FrameEnvironment } from '../../src/ui/frameLoop';
-
-/** A fake browser: tests fire animation frames and visibility changes by hand. */
-class FakeFrames implements FrameEnvironment {
-  hidden = false;
-  private pending = new Map<number, (timeMs: number) => void>();
-  private nextHandle = 1;
-  private listener: (() => void) | undefined;
-  requestFrame(callback: (timeMs: number) => void) {
-    const handle = this.nextHandle++;
-    this.pending.set(handle, callback);
-    return handle;
-  }
-  cancelFrame(handle: number) {
-    this.pending.delete(handle);
-  }
-  isHidden() {
-    return this.hidden;
-  }
-  onVisibilityChange(onChange: () => void) {
-    this.listener = onChange;
-    return () => {
-      this.listener = undefined;
-    };
-  }
-  get pendingFrames() {
-    return this.pending.size;
-  }
-  /** Runs every pending frame callback at `timeMs`, as the browser does once per frame. */
-  fire(timeMs: number) {
-    const callbacks = [...this.pending.values()];
-    this.pending.clear();
-    for (const callback of callbacks) callback(timeMs);
-  }
-  setHidden(hidden: boolean) {
-    this.hidden = hidden;
-    this.listener?.();
-  }
-}
+import { startFrameLoop } from '../../src/ui/frameLoop';
+import { FakeFrames } from './fakeFrames';
 
 function setup() {
   const env = new FakeFrames();

@@ -15,7 +15,7 @@ _Last verified: 2026-10-23, against `main` at `ab1436c` (P1-01 merged in #55, P1
 | GitHub issues | Existing issues #1–#39 are preserved. Reconciliation adds #41–#50 for two missing primary-release entries and eight approval-gated research entries; #40 is the existing documentation PR. |
 | AI learning results | None. No experiments have been run, so no learning claims can be made. |
 
-P1-02, P1-03, P1-04, P1-05, P1-06, P1-07 and P1-08 are **Complete**. P1-01 and P1-10 are **In Review**; the other 34 primary-release implementation features are **Not Started**. Eight research entries are **Blocked** pending explicit approval; Q-01 remains **In Review**. P1-02, P1-03, P1-04, P1-05, P1-06, P1-07 and P1-08 are the only implementation features marked Complete. The initial master specification is the owner's detailed project request; no separate specification was found. Re-verify this table against code and tests whenever statuses change.
+P1-02, P1-03, P1-04, P1-05, P1-06, P1-07 and P1-08 are **Complete**. P1-01, P1-09 and P1-10 are **In Review**; the other 33 primary-release implementation features are **Not Started**. Eight research entries are **Blocked** pending explicit approval; Q-01 remains **In Review**. P1-02, P1-03, P1-04, P1-05, P1-06, P1-07 and P1-08 are the only implementation features marked Complete. The initial master specification is the owner's detailed project request; no separate specification was found. Re-verify this table against code and tests whenever statuses change.
 
 ### Existing work and reconciliation
 
@@ -65,7 +65,7 @@ Documentation-only checks are recorded as such; no application/device execution 
 | P1-06 | Collision detection with track boundaries | 1 | P0 | Complete | P1-04, P1-05 | [#6](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/6) |
 | P1-07 | Ordered checkpoints, lap counting and lap timing | 1 | P0 | Complete | P1-04, P1-05 | [#7](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/7) |
 | P1-08 | Manual driving with keyboard and mobile touch controls | 1 | P0 | Complete | P1-05, P1-06, P1-07 | [#8](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/8) |
-| P1-09 | Deterministic physics test suite | 1 | P0 | Not Started | P1-03, P1-05, P1-06, P1-07 | [#9](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/9) |
+| P1-09 | Deterministic physics test suite | 1 | P0 | In Review | P1-03, P1-05, P1-06, P1-07 | [#9](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/9) |
 | P1-10 | GitHub Actions CI | 1 | P0 | In Review | P1-01 | [#10](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/10) |
 | P1-11 | Vercel deployment compatibility | 1 | P1 | Not Started | P1-01 | [#11](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/11) |
 | P2-01 | Seven forward ray sensors | 2 | P0 | Not Started | P1-06 | [#12](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/12) |
@@ -109,7 +109,8 @@ Dependencies are taken from the table above.
 - **In review:** P1-01 (scaffold) is merged into `main` (#55) but stays In Review until Codex's full review record is posted. WebKit emulation has passed in CI, and real iPhone/iPad evidence was recorded with P1-02. Q-01 remains in review.
 - **In review:** P1-10 (CI) is merged into `main` (#60) and stays In Review until Codex's full review record is posted.
 - **Complete:** P1-02 (fixed-timestep loop, #62), P1-03 (seeded generator, #64), P1-04 (track model and static track layer, #65), P1-05 (vehicle physics, #66), P1-06 (collision detection, #67), P1-07 (checkpoints and laps, #69) and P1-08 (manual driving, #70).
-- **Ready now (all dependencies Complete or merged):** P1-09 (deterministic physics test suite), which finishes Phase 1; also P1-11, P2-01 (ray sensors), P2-03 (the network is pure maths), P2-06 (fitness), P2-10 (track splits) and P4-01 (track validation). Ready means the dependencies are met, not that implementation is authorised.
+- **In review:** P1-09 (deterministic physics test suite), pending Codex review and owner approval.
+- **Ready now (all dependencies Complete or merged):** P1-11, P2-01 (ray sensors), P2-03 (the network is pure maths), P2-06 (fitness), P2-10 (track splits) and P4-01 (track validation). Ready means the dependencies are met, not that implementation is authorised.
 - **Silverstone (approved 2026-10-23, planning only):** P4-06 (Silverstone import) after P4-01, P2-10, P2-05, P2-07 and P3-05; P2-11 (spatial index, after P1-06 and P2-01) only if P4-06's measured baseline misses the budget or the owner approves an architectural reason; P4-07 (camera) after P1-04 and P2-05, as a separate follow-up. Each still needs explicit owner implementation approval when its dependencies are complete; this planning approval does not authorise implementation. None of these interrupts the current phase.
 - **Phase 2 critical path:** P1-06 → P2-01 → P2-02, and P1-07 → P2-06, then P2-04 → P2-05 → P2-07 → P2-08.
 - **Early evaluation:** P1-04 + P1-07 → P2-10 supplies built-in training/validation/held-out fixtures before P2-07/P2-08; the editor is not a prerequisite.
@@ -266,7 +267,7 @@ Dependencies are taken from the table above.
 
 ### P1-09 — Deterministic physics test suite
 
-- **Priority:** P0 · **Status:** Not Started · **Issue:** [#9](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/9)
+- **Priority:** P0 · **Status:** In Review · **Issue:** [#9](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/9)
 - **Depends on:** P1-03, P1-05, P1-06, P1-07
 - **Description:** Golden tests that run a scripted control sequence and compare the full car state and lap events to stored expectations.
 - **Acceptance criteria:**
@@ -274,6 +275,13 @@ Dependencies are taken from the table above.
   - Golden files documented and only regenerated deliberately.
 - **Test requirements:**
   - The suite itself, in CI.
+- **Built:** tests only; no simulator code changes.
+  - Two seeded scenarios run through the whole world (`tests/sim/scenarios.ts`): *laps* (two clean timed laps with seeded speeds, steering offsets and brake pulses) and *crashes* (seeded open-loop controls, 8 crashes, each followed by a restart).
+  - `tests/sim/golden.test.ts` checks each scenario against rules from the documented behaviour, then compares its full final state, every lap/gate/crash/restart event and a hash of every 60-tick window with `tests/sim/golden/world.json`.
+  - It also covers bit-identical repeat runs, seed sensitivity, two interleaved worlds sharing one track, deep-frozen states, and restart equivalence.
+  - `tests/ui/frameLoopDeterminism.test.ts` runs the same scenarios through the real frame loop, drawing every frame, at six frame schedules, at the catch-up cap (with the dropped time counted) and across a hide/show pause, comparing every tick with the headless run.
+  - The golden file is documented in `docs/TESTING.md` ("Golden files") and only rewritten with `npm run test:golden:update`.
+- **Outstanding before Complete:** Codex technical approval of the PR head and owner merge approval. No device check applies: no application code changes and the page is unchanged.
 
 ### P1-10 — GitHub Actions CI
 
@@ -815,3 +823,4 @@ These apply to every phase and are checked in review.
 | 2026-10-24 | P1-07 Complete: #69 merged by the owner at `0fbc742` after Codex technical approval of `f15398e` (its notes addressed in the docs-only `26fb7cf`) and green CI (run 40088286445, 48/48 browser tests including WebKit). Headless; no device check applies until laps are shown (P1-08). P1-08, P1-09, P2-06, P2-10 and P4-01 are now ready by dependencies. |
 | 2026-10-24 | P1-08 manual driving (keyboard and touch controls, car drawing, lap display, restart) implemented on `feat/p1-08-manual-driving` and moved to In Review; not Complete until real iPhone/iPad Safari checks, Codex review and owner approval are recorded. |
 | 2026-10-24 | P1-08 Complete: #70 merged by the owner at `b597e37` (same tree as the reviewed head `25380c8`), with Codex technical approval of `25380c8` posted after the merge, green CI on both (runs 40096285817 and 40096445158) and owner-reported real iPhone 15 and iPad Pro Safari confirmation. P1-01 and P1-10 still await Codex's full review records. |
+| 2026-10-24 | P1-09 deterministic simulation suite (seeded world scenarios, golden file, frame-loop, catch-up, pause and restart determinism tests) implemented on `feat/p1-09-deterministic-suite` and moved to In Review; not Complete until Codex review and owner approval are recorded. |
