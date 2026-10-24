@@ -87,7 +87,23 @@ The owner chose independent AI review recorded in GitHub comments. Both integrat
 2. Use the configured Codex GitHub integration: open the PR for review, mark a draft ready, or comment `@codex review`. After new commits, request review again and verify the reviewed SHA. An older automated summary or a reaction alone is not approval of a later commit. If the integration is unavailable, a separate Codex session may review and post its findings through the connector.
 3. Codex posts a review comment identifying the agent, reviewed head SHA, scope, checks actually run, unavailable environments, findings and disposition. The outcome is `Changes required` or `Technical approval`. Findings include file/line references where practical; approval requires no unresolved blocking findings. Claude replies to findings and links its fixes, then requests re-review.
 4. Link the current Codex review in the PR description/template. New commits require re-review or explicit Codex confirmation covering the new head. For stacked PRs, name the combined snapshot and integration order; approval of that snapshot does not approve an older incomplete branch by itself.
-5. The owner explicitly approves the final PR/combined snapshot for merging, in a GitHub comment or direct instruction referencing the PR and reviewed version. Technical approval by Codex does not authorize merging. Agents never auto-merge or merge without that owner instruction. All required CI, acceptance and relevant device checks still apply; unavailable required checks keep the feature In Review.
+5. The owner explicitly approves the final PR/combined snapshot for merging, using one of the forms of owner evidence below and referencing the PR and reviewed version. Technical approval by Codex does not authorize merging. Agents never auto-merge or merge without that owner instruction. All required CI, acceptance and relevant device checks still apply; unavailable required checks keep the feature In Review.
+
+#### Owner evidence on a shared account
+
+Every agent comment and review shows the owner's account as its author, so GitHub authorship cannot tell an owner decision from agent text. Owner decisions are therefore recorded only in these forms. They are a procedural convention, not proof of authorship.
+
+- **Merge:** the owner performing the merge is the owner's merge approval for the merged head. Agents do not merge. An agent may merge only if the owner instructs it directly in that agent's session for a named PR and head SHA. The agent must then first post the relayed instruction (next item) on the PR.
+- **Relayed instruction:** a direct instruction from the owner to an agent in that agent's session. The agent posts it verbatim on the PR or issue, beginning `Relayed owner instruction (<agent>, <date>):`, with the quoted words and what they cover (PR/issue, head SHA or decision). It is evidence only of what the owner told that agent, and the owner may correct or withdraw it.
+- **Owner decision comment:** a comment the owner writes themself, whose first line begins `Owner decision:` and names the PR or issue, the head SHA where relevant, and the decision (merge approval, completion approval, implementation authorization, criterion change).
+
+Rules for agents:
+- Agents never begin any text with `Owner decision:`.
+- Agents never state or imply that the owner approved, authorized or decided something, except by linking one of the records above.
+- Every agent comment, review and PR description identifies its agent. For example, Codex review records begin `Reviewer: Codex`, and Claude Code text ends with the Claude Code footer. Agent text never presents itself as written by the owner.
+- If an agent cannot trace a claimed owner decision to one of these records, it treats the decision as not given.
+
+These forms also cover owner decisions that are not merges: completion approval, implementation authorization and changes to acceptance criteria.
 
 Review record format (Codex completes this in a PR comment; Claude links it):
 

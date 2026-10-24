@@ -736,14 +736,15 @@ Dependencies are taken from the table above.
     - The owner merged the stacked PRs #51, #52 and #53 into their branches, not into `main`, and then merged #40 into `main` without #53's changes.
     - The owner then merged [#54](https://github.com/Harrisonxaph/Self-learning-Car-AI/pull/54) into `main` at `dbb0782`. #54's tree matches [#53](https://github.com/Harrisonxaph/Self-learning-Car-AI/pull/53)'s head `0e501a2`.
     - These owner merges are owner merge evidence for those PRs, not an explicit approval of Q-01 as complete.
-  - **Independent review of the workflow:** the only one on record is a Claude Code review of #53 at `0e501a2`, with outcome Changes required.
-    - Its blocking finding (stale base and integration order) was resolved in effect by #54, which targets `main`.
-    - Its should-fix finding is still open. On the shared account, owner approval written "in a GitHub comment" (AGENTS.md, review step 5) cannot be told apart from an agent's comment.
+  - **Independent review of the workflow:**
+    - My Claude Code review of #53 at `0e501a2` (Changes required) had a blocking finding on stale base and integration order. #54 resolved it by bringing #53's reviewed tree onto `main`.
+    - My [Claude Code review of the merged workflow](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/39#issuecomment-6390608815) at `844c33a` (Changes required) re-raised the open should-fix from the #53 review. On the shared account, owner approval written "in a GitHub comment" cannot be told apart from an agent's comment.
+    - The follow-up docs PR fixes it by adding "Owner evidence on a shared account" to AGENTS.md and pointing the PR template there. The review found no other blocking findings.
   - Codex authored #52–#54, so its comments there are not independent review of the workflow.
 - **Outstanding before Complete:**
-  - (1) An independent, non-Codex technical review of the workflow as merged (`AGENTS.md` and `.github/pull_request_template.md` on `main`). It must disposition the open should-fix, either by a documentation fix reviewed under this workflow or by a recorded owner decision to keep the current wording.
-  - (2) The owner's explicit approval of Q-01 as complete.
-  - (3) A completion record linking both.
+  - (1) Codex review of the follow-up docs PR, and the owner merging it.
+  - (2) The owner's explicit approval of Q-01 as complete, given as an `Owner decision:` comment or a relayed owner instruction (AGENTS.md, "Owner evidence on a shared account").
+  - (3) A completion record linking the reviews, the merge and that approval.
 
   No agent may record or imply owner approval.
 

@@ -29,7 +29,7 @@
 - Current full head SHA:
 - Codex review comment link and reviewed SHA:
 - Blocking findings and verified fix links:
-- Owner's explicit merge-approval reference (pending until given):
+- Owner's explicit merge-approval reference (pending until given; the owner's own merge, a relayed owner instruction or an `Owner decision:` comment, per AGENTS.md "Owner evidence on a shared account"):
 - Combined snapshot and integration order (stacked PRs only):
 
 Request review through the configured Codex integration by opening for review, marking ready, or commenting `@codex review`. Request it again after new commits. Codex records `Changes required` or `Technical approval` for the current SHA; the author must not fabricate reviewer sign-off. A same-account GitHub Approve badge is not required. A reaction or an old automated review summary alone is not current-head approval. Review comments are a procedural gate; required CI and relevant device checks still apply. No agent may auto-merge.
