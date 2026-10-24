@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_SIM_CONFIG } from '../../src/sim/config';
+import stadiumOval from '../../src/data/tracks/stadium-oval.json';
+import { DEFAULT_SIM_CONFIG, DEFAULT_VEHICLE_PHYSICS } from '../../src/sim/config';
 import { createFixedStepClock } from '../../src/sim/fixedStep';
+import { loadTrack } from '../../src/sim/track';
 import { createWorld, stepWorld, type World } from '../../src/sim/world';
 import { startFrameLoop, type FrameEnvironment } from '../../src/ui/frameLoop';
 
@@ -44,17 +46,26 @@ class FakeFrames implements FrameEnvironment {
 
 function setup() {
   const env = new FakeFrames();
-  let world: World = createWorld();
+  let world: World = createWorld(loadTrack(stadiumOval), DEFAULT_VEHICLE_PHYSICS);
+  // Full throttle every tick, so the car's state depends on exactly how many ticks ran.
+  const controls = { steering: 0, throttle: 1, brake: 0 };
   let renders = 0;
   const loop = startFrameLoop(env, createFixedStepClock(DEFAULT_SIM_CONFIG), {
     step: () => {
-      world = stepWorld(world);
+      world = stepWorld(world, controls, DEFAULT_SIM_CONFIG);
     },
     render: () => {
       renders += 1;
     },
   });
   return { env, loop, world: () => world, renders: () => renders };
+}
+
+/** The world after `ticks` steps run directly, with no frame loop. */
+function reference(ticks: number): World {
+  let world = createWorld(loadTrack(stadiumOval), DEFAULT_VEHICLE_PHYSICS);
+  for (let i = 0; i < ticks; i += 1) world = stepWorld(world, { steering: 0, throttle: 1, brake: 0 }, DEFAULT_SIM_CONFIG);
+  return world;
 }
 
 /** Fires one frame at `startMs` and then `count` more, `intervalMs` apart. */
@@ -70,7 +81,8 @@ describe('startFrameLoop', () => {
   ])('gives the same simulation state after ten seconds at %s', (_rate, hertz) => {
     const { env, world } = setup();
     runFrames(env, 0, 10 * hertz, 1000 / hertz);
-    expect(world()).toEqual({ tick: 600 });
+    expect(world().tick).toBe(600);
+    expect(world().racer).toEqual(reference(600).racer);
   });
 
   it('gives the same state when frame times are uneven', () => {
@@ -83,7 +95,8 @@ describe('startFrameLoop', () => {
       env.fire(time);
     }
     expect(time).toBe(1600);
-    expect(world()).toEqual({ tick: 96 });
+    expect(world().tick).toBe(96);
+    expect(world().racer).toEqual(reference(96).racer);
   });
 
   it('draws once per frame however many ticks ran', () => {

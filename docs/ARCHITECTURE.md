@@ -1,6 +1,6 @@
 # Architecture
 
-> Status: **mostly planned**. Built so far: the project foundation from P1-01 (`src/main.ts`, `src/render/viewport.ts` for canvas sizing) and the fixed-timestep loop from P1-02 (`src/sim/config.ts`, `src/sim/world.ts`, `src/sim/fixedStep.ts`, `src/ui/frameLoop.ts`) the seeded generator from P1-03 (`src/utils/rng.ts`) the track model and static track layer from P1-04 (`src/sim/track.ts`, `src/data/tracks/stadium-oval.json`, `src/render/trackView.ts`, `src/render/trackLayer.ts`) the vehicle model from P1-05 (`src/sim/vehicle.ts`, physics constants in `src/sim/config.ts`) collision from P1-06 (`src/sim/collision.ts`) and checkpoints and laps from P1-07 (`src/sim/checkpoints.ts`). Cars are not yet placed in the world or drawn. Everything else below is the target design for later tasks. Update this document when the code shows a better design.
+> Status: **mostly planned**. Built so far: the project foundation from P1-01 (`src/main.ts`, `src/render/viewport.ts` for canvas sizing) and the fixed-timestep loop from P1-02 (`src/sim/config.ts`, `src/sim/world.ts`, `src/sim/fixedStep.ts`, `src/ui/frameLoop.ts`) the seeded generator from P1-03 (`src/utils/rng.ts`) the track model and static track layer from P1-04 (`src/sim/track.ts`, `src/data/tracks/stadium-oval.json`, `src/render/trackView.ts`, `src/render/trackLayer.ts`) the vehicle model from P1-05 (`src/sim/vehicle.ts`, physics constants in `src/sim/config.ts`) collision from P1-06 (`src/sim/collision.ts`) checkpoints and laps from P1-07 (`src/sim/checkpoints.ts`), and manual driving from P1-08 (`src/ai/drivers.ts`, `src/ui/controls/input.ts`, `src/ui/hud.ts`, `src/render/raceView.ts`, the world in `src/sim/world.ts`). Everything else below is the target design for later tasks. Update this document when the code shows a better design.
 
 ## Goals that shape the design
 
@@ -28,7 +28,7 @@ src/
     network.ts            feedforward net (9-12-3), forward pass
     inputs.ts             builds the 9-value input vector
     outputs.ts            maps raw outputs → steering, throttle, brake
-    drivers.ts            Driver interface: neural, random, rule-based, human
+    drivers.ts            Driver interface; human driver built (P1-08); neural, random, rule-based later
   evolution/              genomes and genetic operators, no DOM
     genome.ts             flat Float64Array of weights and biases
     selection.ts          tournament selection
@@ -48,11 +48,13 @@ src/
     viewport.ts           canvas sizing with capped pixel ratio
     trackView.ts          world-to-screen fit (uniform scale, centred, margin)
     trackLayer.ts         cached static track layer
+    raceView.ts           next gate, car footprint, nose and locator ring (P1-08)
     renderer.ts
     layers/               track, cars, sensors, overlays
   ui/                     DOM controls, dashboard, editor
     frameLoop.ts          animation frames: run ticks, draw, pause when hidden
-    controls/             touch and keyboard input
+    controls/input.ts     keyboard and touch input, safe release (P1-08)
+    hud.ts                lap display and event messages (P1-08)
     dashboard/            stats, fitness graph
     editor/               track editor
   utils/
@@ -176,6 +178,19 @@ Seven rays fanned across the car's front (for example −90°, −60°, −30°,
 ## Drivers
 
 Every car is controlled through one `Driver` interface (`decide(observation) → controls`). Implementations: `NeuralDriver`, `RandomDriver`, `RuleBasedDriver` and `HumanDriver`. This makes baselines, replay and human-vs-AI races use the same simulation path.
+
+Built in P1-08 (`ai/drivers.ts`): the interface, an `Observation` holding the car (sensors join in Phase 2), and the human driver. `controlsFromInput` maps held buttons to controls: full steering towards the held side (both sides cancel), full throttle, full brake, in any combination; the physics limits the wheel angle at speed.
+
+## Manual driving (P1-08)
+
+- **One simulation path:** every fixed tick, `main.ts` applies a pending restart, asks the driver for controls and calls `stepWorld` (`sim/world.ts`), which steps the car through physics, collision and lap progress (`stepRacer`). Input never changes the world directly, and rendering only reads it.
+- **World:** the track, physics, tick count, the racer (car and lap progress) and the best lap in ticks. `restartWorld` puts the car back on the start pose at rest, uncrashed, with fresh progress (no laps; timing waits for gate 0 again); the tick count and the session's best lap are kept. A restart requested by R or the Restart button is applied at the start of the next tick.
+- **Input (`ui/controls/input.ts`):** keys and on-screen buttons record held "sources" per action, so several sources can hold one action and any actions can be held together.
+  - Keyboard (by `KeyboardEvent.code`): ←/A and →/D steer, ↑/W accelerate, ↓/S and Space brake, R restarts once per press (not on auto-repeat). Bound keys' default actions (scrolling, Space clicking a focused button) are prevented; Ctrl, Cmd and Alt shortcuts are left alone.
+  - Touch and mouse: each pointer on a hold button (Steer left, Steer right, Brake, Gas) holds its action, with pointer capture so it stays held if the finger slides off and is released wherever it lifts. `pointerup`, `pointercancel` and `lostpointercapture` release it; several fingers work at once; the long-press menu is blocked. Restart is an ordinary button (tap, click, or Enter/Space when focused).
+  - Safety release: losing window focus, `pagehide`, or the page becoming hidden releases everything, so nothing stays held after an app switch, lock screen or tab change. Pausing itself is the frame loop's (P1-02), which resumes without a catch-up jump.
+- **Display:** the car is drawn on its collision footprint with a white wedge at the nose and a locator ring (a marker only; the whole track fits the screen, so on a phone the car is a few pixels long). The next gate is highlighted. `ui/hud.ts` computes the lap count, current, last and best lap times (whole ticks × DT), the next gate, speed and an event message: lap timing started, each checkpoint, each lap (marking a new best), a crash (kept until restart) and a restart; messages last 2 s.
+- **Layout:** header with the lap display, the track canvas, and a row of 56 px buttons (at least 44 × 44 CSS px). The page cannot scroll or bounce (`overflow: hidden`, `overscroll-behavior: none`) and the track and controls set `touch-action: none`, so touches never scroll or zoom; short landscape screens get a tighter header. A keyboard hint is shown only for fine pointers.
 
 ## Rendering and UI
 
