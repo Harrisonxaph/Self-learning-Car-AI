@@ -90,11 +90,14 @@ export type TraceEvent =
   | { readonly tick: number; readonly type: 'crash' }
   | { readonly tick: number; readonly type: 'restart' };
 
-/** The state at the end of a window: [tick, x, y, heading, speed, crashed, nextGate, gatesPassed]. */
+/** The state at the end of a window (or of the run): [tick, x, y, heading, speed, crashed, nextGate, gatesPassed]. */
 export type Sample = [number, number, number, number, number, boolean, number, number];
 
 export interface Trace {
-  /** One 32-bit FNV-1a hash per window, over the exact bits of every tick's state in that window. */
+  /**
+   * One 32-bit FNV-1a hash per window, over the exact bits of every tick's state in that window. A run that ends
+   * part-way through a window gets a last, shorter window, so every tick is covered.
+   */
   readonly windowHashes: string[];
   readonly samples: Sample[];
   readonly events: TraceEvent[];
@@ -128,6 +131,13 @@ export function createRecorder() {
   const events: TraceEvent[] = [];
   const bytes = new DataView(new ArrayBuffer(8));
   let hash = 0x811c9dc5;
+  let ticksInWindow = 0;
+  let last: World | null = null;
+  const sample = (world: World): Sample => {
+    const { vehicle, crashed } = world.racer.car;
+    const p = world.racer.progress;
+    return [world.tick, vehicle.position.x, vehicle.position.y, vehicle.heading, vehicle.speed, crashed, p.nextGate, p.gatesPassed];
+  };
   const mix = (value: number) => {
     bytes.setFloat64(0, value);
     for (let i = 0; i < 8; i += 1) hash = Math.imul(hash ^ bytes.getUint8(i), 0x01000193) >>> 0;
@@ -146,14 +156,24 @@ export function createRecorder() {
       if (to.lapTicks.length > from.lapTicks.length) events.push({ tick: after.tick, type: 'lap', lapTicks: to.lapTicks.at(-1)! });
       if (after.racer.car.crashed && !before.racer.car.crashed) events.push({ tick: after.tick, type: 'crash' });
       stateNumbers(after).forEach(mix);
+      ticksInWindow += 1;
+      last = after;
       if (after.tick % WINDOW_TICKS === 0) {
         windowHashes.push(hash.toString(16).padStart(8, '0'));
+        samples.push(sample(after));
         hash = 0x811c9dc5;
-        const { vehicle, crashed } = after.racer.car;
-        samples.push([after.tick, vehicle.position.x, vehicle.position.y, vehicle.heading, vehicle.speed, crashed, to.nextGate, to.gatesPassed]);
+        ticksInWindow = 0;
       }
     },
-    trace: (): Trace => ({ windowHashes, samples, events }),
+    /** The trace so far, including the unfinished window if the run stopped part-way through one. */
+    trace(): Trace {
+      if (ticksInWindow === 0 || last === null) return { windowHashes: [...windowHashes], samples: [...samples], events: [...events] };
+      return {
+        windowHashes: [...windowHashes, hash.toString(16).padStart(8, '0')],
+        samples: [...samples, sample(last)],
+        events: [...events],
+      };
+    },
   };
 }
 

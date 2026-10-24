@@ -12,7 +12,7 @@ import { describe, expect, it } from 'vitest';
 import { RNG_ALGORITHM } from '../../src/utils/rng';
 import type { Controls } from '../../src/sim/vehicle';
 import { createWorld, restartWorld, stepWorld, type World } from '../../src/sim/world';
-import { CONFIG, CRASHES, createScenarioRun, LAPS, PHYSICS, runScenario, SCENARIOS, TRACK, WINDOW_TICKS, type Scenario, type Trace } from './scenarios';
+import { CONFIG, CRASHES, createRecorder, createScenarioRun, LAPS, PHYSICS, runScenario, SCENARIOS, TRACK, WINDOW_TICKS, type Scenario, type Trace } from './scenarios';
 import { LAP_LENGTH, pursuit } from './ovalDriver';
 
 /** Runs a scenario keeping every world and the controls used for it, for the rule checks below. */
@@ -162,6 +162,33 @@ describe('bit-identical runs in Node', () => {
     const diverged = firstDifference(a.trace, other.trace);
     expect(diverged).toBeGreaterThanOrEqual(0);
     expect(diverged).toBeLessThan(5);
+  });
+
+  it('covers every tick, including a last window the run stopped part-way through', () => {
+    // 125 ticks: two full windows and 5 ticks of a third. A 1e-12 m change at tick 123 must show in the trace.
+    const run = createScenarioRun(CRASHES);
+    const worlds: World[] = [run.world()];
+    for (let i = 0; i < 125; i += 1) {
+      run.step();
+      worlds.push(run.world());
+    }
+    const replay = (nudgeTick: number | null) => {
+      const recorder = createRecorder();
+      for (let t = 1; t < worlds.length; t += 1) {
+        let after = worlds[t]!;
+        if (t === nudgeTick) {
+          const { vehicle } = after.racer.car;
+          after = { ...after, racer: { ...after.racer, car: { ...after.racer.car, vehicle: { ...vehicle, position: { ...vehicle.position, x: vehicle.position.x + 1e-12 } } } } };
+        }
+        recorder.stepped(worlds[t - 1]!, after);
+      }
+      return recorder.trace();
+    };
+    const exact = replay(null);
+    expect(exact).toEqual(run.trace());
+    expect(exact.windowHashes).toHaveLength(3);
+    expect(exact.samples.at(-1)![0]).toBe(125);
+    expect(replay(123).windowHashes[2]).not.toBe(exact.windowHashes[2]);
   });
 
   it('separate worlds stepped alternately, sharing one track, match runs made on their own', () => {
