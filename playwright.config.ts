@@ -1,8 +1,10 @@
 import { defineConfig, devices } from '@playwright/test';
+import { STATIC_PORT } from './tests/e2e/staticHost';
 
 const PORT = 4173;
 
-// Browser tests always run against the production build served by `vite preview`.
+// Browser tests always run against the production build: served by `vite preview`, and by a plain static file
+// server for the static-hosting tests.
 export default defineConfig({
   testDir: 'tests/e2e',
   fullyParallel: true,
@@ -13,12 +15,22 @@ export default defineConfig({
     baseURL: `http://127.0.0.1:${PORT}`,
     trace: 'retain-on-failure',
   },
-  webServer: {
-    command: 'npm run build && npm run preview',
-    url: `http://127.0.0.1:${PORT}`,
-    reuseExistingServer: !process.env.CI,
-    timeout: 120_000,
-  },
+  webServer: [
+    {
+      command: 'npm run build && npm run preview',
+      url: `http://127.0.0.1:${PORT}`,
+      reuseExistingServer: !process.env.CI,
+      timeout: 120_000,
+    },
+    {
+      // A plain static file server over the same dist/ (tests/e2e/staticHost.ts), for tests/e2e/staticHost.spec.ts.
+      // It reads files per request, so it may start before the build above has finished.
+      command: 'node tests/e2e/staticHost.ts',
+      url: `http://127.0.0.1:${STATIC_PORT}/__ready`,
+      reuseExistingServer: !process.env.CI,
+      timeout: 30_000,
+    },
+  ],
   projects: [
     { name: 'desktop-chromium', use: { ...devices['Desktop Chrome'] } },
     { name: 'desktop-webkit', use: { ...devices['Desktop Safari'] } },
