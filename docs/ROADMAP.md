@@ -15,7 +15,7 @@ _Last verified: 2026-10-23, against `main` at `ab1436c` (P1-01 merged in #55, P1
 | GitHub issues | Existing issues #1–#39 are preserved. Reconciliation adds #41–#50 for two missing primary-release entries and eight approval-gated research entries; #40 is the existing documentation PR. |
 | AI learning results | None. No experiments have been run, so no learning claims can be made. |
 
-P1-02, P1-03, P1-04, P1-05 and P1-06 are **Complete**. P1-01 and P1-10 are **In Review**; the other 36 primary-release implementation features are **Not Started**. Eight research entries are **Blocked** pending explicit approval; Q-01 remains **In Review**. P1-02, P1-03, P1-04, P1-05 and P1-06 are the only implementation features marked Complete. The initial master specification is the owner's detailed project request; no separate specification was found. Re-verify this table against code and tests whenever statuses change.
+P1-02, P1-03, P1-04, P1-05, P1-06 and P1-07 are **Complete**. P1-01 and P1-10 are **In Review**; the other 35 primary-release implementation features are **Not Started**. Eight research entries are **Blocked** pending explicit approval; Q-01 remains **In Review**. P1-02, P1-03, P1-04, P1-05, P1-06 and P1-07 are the only implementation features marked Complete. The initial master specification is the owner's detailed project request; no separate specification was found. Re-verify this table against code and tests whenever statuses change.
 
 ### Existing work and reconciliation
 
@@ -63,7 +63,7 @@ Documentation-only checks are recorded as such; no application/device execution 
 | P1-04 | Track model and responsive Canvas 2D racetrack | 1 | P0 | Complete | P1-02 | [#4](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/4) |
 | P1-05 | Vehicle physics: acceleration, steering, braking and drag | 1 | P0 | Complete | P1-02 | [#5](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/5) |
 | P1-06 | Collision detection with track boundaries | 1 | P0 | Complete | P1-04, P1-05 | [#6](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/6) |
-| P1-07 | Ordered checkpoints, lap counting and lap timing | 1 | P0 | Not Started | P1-04, P1-05 | [#7](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/7) |
+| P1-07 | Ordered checkpoints, lap counting and lap timing | 1 | P0 | Complete | P1-04, P1-05 | [#7](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/7) |
 | P1-08 | Manual driving with keyboard and mobile touch controls | 1 | P0 | Not Started | P1-05, P1-06, P1-07 | [#8](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/8) |
 | P1-09 | Deterministic physics test suite | 1 | P0 | Not Started | P1-03, P1-05, P1-06, P1-07 | [#9](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/9) |
 | P1-10 | GitHub Actions CI | 1 | P0 | In Review | P1-01 | [#10](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/10) |
@@ -108,9 +108,8 @@ Dependencies are taken from the table above.
 
 - **In review:** P1-01 (scaffold) is merged into `main` (#55) but stays In Review until Codex's full review record is posted. WebKit emulation has passed in CI, and real iPhone/iPad evidence was recorded with P1-02. Q-01 remains in review.
 - **In review:** P1-10 (CI) is merged into `main` (#60) and stays In Review until Codex's full review record is posted.
-- **Complete:** P1-02 (fixed-timestep loop, #62), P1-03 (seeded generator, #64), P1-04 (track model and static track layer, #65), P1-05 (vehicle physics, #66) and P1-06 (collision detection, #67).
-- **Ready now:** P1-07 (its dependencies P1-04 and P1-05 are Complete), P2-01 (ray sensors; its dependency P1-06 is Complete), P1-11, and P2-03 (the network is pure maths and can be built alongside the simulator).
-- **Next wave:** P1-08 and P1-09, after P1-07.
+- **Complete:** P1-02 (fixed-timestep loop, #62), P1-03 (seeded generator, #64), P1-04 (track model and static track layer, #65), P1-05 (vehicle physics, #66), P1-06 (collision detection, #67) and P1-07 (checkpoints and laps, #69).
+- **Ready now (all dependencies Complete or merged):** P1-08 (manual driving) and P1-09 (deterministic physics test suite), which finish Phase 1; also P1-11, P2-01 (ray sensors), P2-03 (the network is pure maths), P2-06 (fitness), P2-10 (track splits) and P4-01 (track validation). Ready means the dependencies are met, not that implementation is authorised.
 - **Silverstone (approved 2026-10-23, planning only):** P4-06 (Silverstone import) after P4-01, P2-10, P2-05, P2-07 and P3-05; P2-11 (spatial index, after P1-06 and P2-01) only if P4-06's measured baseline misses the budget or the owner approves an architectural reason; P4-07 (camera) after P1-04 and P2-05, as a separate follow-up. Each still needs explicit owner implementation approval when its dependencies are complete; this planning approval does not authorise implementation. None of these interrupts the current phase.
 - **Phase 2 critical path:** P1-06 → P2-01 → P2-02, and P1-07 → P2-06, then P2-04 → P2-05 → P2-07 → P2-08.
 - **Early evaluation:** P1-04 + P1-07 → P2-10 supplies built-in training/validation/held-out fixtures before P2-07/P2-08; the editor is not a prerequisite.
@@ -232,7 +231,7 @@ Dependencies are taken from the table above.
 
 ### P1-07 — Ordered checkpoints, lap counting and lap timing
 
-- **Priority:** P0 · **Status:** Not Started · **Issue:** [#7](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/7)
+- **Priority:** P0 · **Status:** Complete · **Issue:** [#7](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/7)
 - **Depends on:** P1-04, P1-05
 - **Description:** Gates crossed only in order and in the forward direction count; crossing gate 0 after the last completes a lap; lap time measured in simulation time.
 - **Acceptance criteria:**
@@ -240,6 +239,12 @@ Dependencies are taken from the table above.
   - Lap count and lap time are correct for a scripted lap.
 - **Test requirements:**
   - Unit: in-order lap, back-and-forth on one gate, reverse lap, lap timing in ticks × DT.
+- **Built:** `sim/checkpoints.ts`. The car's rear axle (its state position) is the reference point; a gate counts when that point's straight move between consecutive ticks crosses the gate segment forwards, from behind or on its line to strictly ahead, end points included. Only the next gate in order can count; gate 0's first forward crossing starts lap timing and each later one, after gates 1 … n−1 in order, completes a lap. Lap times are whole ticks (× DT for seconds). Each car has its own immutable `LapProgress`. `stepRacer` advances progress only by the move P1-06's collision check accepted, so a step rejected by a crash credits nothing. Headless only: the page is unchanged. `npm run demo:laps` prints three timed laps by a scripted driver.
+- **Completion record (#69, merged by the owner at `0fbc742`; merged head `26fb7cf`):**
+  - Automated: lint, typecheck, 288 unit tests, build and `npm run demo:laps` passed locally; [CI run 40088286445](https://github.com/Harrisonxaph/Self-learning-Car-AI/actions/runs/40088286445) on the merged head passed at the first attempt with 48/48 browser tests, including desktop, iPhone 13 and iPad WebKit (also green on `f15398e`, run 40086972352).
+  - Devices: not applicable. Checkpoints are headless and the page is unchanged (identical bundle); real-device checks apply once laps are shown and cars driven (P1-08).
+  - Independent review: [Codex technical approval of `f15398e`](https://github.com/Harrisonxaph/Self-learning-Car-AI/pull/69#pullrequestreview-5638007429), after it ran every check itself plus 30,000 independent crossing and progress probes. Its two non-blocking notes were addressed in `26fb7cf`, which changes one documentation sentence and one test-helper line ending only; Codex's automated review of `26fb7cf` found no major issues, and its formal confirmation of that head is requested in the PR recording this completion.
+  - Owner merge approval: #69 merged by the owner.
 
 ### P1-08 — Manual driving with keyboard and mobile touch controls
 
@@ -800,3 +805,5 @@ These apply to every phase and are checked in review.
 | 2026-10-23 | P1-05 Complete: #66 merged by the owner at `998437e` after Codex technical approval of `45b72bd` and green CI (run 40017368055, 48/48 browser tests including WebKit, first attempt). Headless physics; no device check applies until cars are drawn (P1-08). |
 | 2026-10-24 | P1-06 collision detection (swept footprint-versus-boundary checks, stop-and-flag response) implemented on `feat/p1-06-collision` and moved to In Review; not Complete until Codex review and owner approval are recorded. |
 | 2026-10-24 | P1-06 Complete: #67 merged by the owner at `31a1a43` after Codex technical approval of `4fcf014` and green CI (run 40081115909, 48/48 browser tests including WebKit). Headless collision; no device check applies until cars are drawn (P1-08). P2-01 is now ready. |
+| 2026-10-24 | P1-07 ordered checkpoints, lap counting and tick-based lap timing implemented on `feat/p1-07-checkpoints` and moved to In Review; not Complete until Codex review and owner approval are recorded. |
+| 2026-10-24 | P1-07 Complete: #69 merged by the owner at `0fbc742` after Codex technical approval of `f15398e` (its notes addressed in the docs-only `26fb7cf`) and green CI (run 40088286445, 48/48 browser tests including WebKit). Headless; no device check applies until laps are shown (P1-08). P1-08, P1-09, P2-06, P2-10 and P4-01 are now ready by dependencies. |
