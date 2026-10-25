@@ -35,6 +35,7 @@ describe('genomes', () => {
     ['an infinite gene', [[Infinity, 0, 0], ramp(3)], 2, /Population\[0\]\[0\]/],
     ['a non-number gene', [ramp(3), [0, '1', 0]], 2, /Population\[1\]\[1\]/],
     ['a missing genome', [ramp(3), undefined], 2, /Population\[1\] must be an array/],
+    ['a hole in a sparse population', Object.assign(new Array(3), { 0: ramp(3), 2: ramp(3) }), 3, /Population\[1\] must be an array/],
   ])('checkPopulation rejects %s', (_name, population, size, message) => {
     expect(() => checkPopulation(population as unknown as number[][], size)).toThrow(RangeError);
     expect(() => checkPopulation(population as unknown as number[][], size)).toThrow(message);
@@ -62,6 +63,9 @@ describe('fitness and ranking', () => {
     ['−Infinity', [1, 2, -Infinity], 3, /Fitness\[2\]/],
     ['a string', [1, '2', 3], 3, /Fitness\[1\]/],
     ['not an array', 'abc', 3, /array of numbers/],
+    // Sparse arrays: forEach would skip these holes.
+    ['a missing score (sparse array)', Object.assign(new Array(3), { 0: 10, 2: 5 }), 3, /Fitness\[1\] .* got undefined/],
+    ['no scores at all (new Array(3))', new Array(3), 3, /Fitness\[0\]/],
   ])('rejects fitness with %s', (_name, fitness, size, message) => {
     expect(() => checkFitness(fitness as unknown as number[], size)).toThrow(RangeError);
     expect(() => checkFitness(fitness as unknown as number[], size)).toThrow(message);

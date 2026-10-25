@@ -31,7 +31,8 @@ export function checkPopulation(population: readonly ArrayLike<number>[], size: 
   if (typeof length !== 'number' || !Number.isInteger(length) || length < 1) {
     throw new RangeError('Population[0] must be a genome with at least one gene.');
   }
-  population.forEach((genome, i) => checkGenome(genome, length, `Population[${i}]`));
+  // An index loop, not forEach, so a hole in a sparse population is reported rather than skipped.
+  for (let i = 0; i < size; i += 1) checkGenome(population[i]!, length, `Population[${i}]`);
   return length;
 }
 

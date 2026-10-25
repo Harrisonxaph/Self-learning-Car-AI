@@ -73,6 +73,11 @@ describe('configuration', () => {
     expect(() => resolveEvolutionConfig(null)).toThrow(RangeError);
     expect(() => nextGeneration(population(), fitness.slice(1), config(), rngs(1))).toThrow(/one score per genome/);
     expect(() => nextGeneration(population(), [3, 11, NaN, 11, -2, 5], config(), rngs(1))).toThrow(/Fitness\[2\]/);
+    // Codex #84: a partly scored generation (a sparse array) must be rejected before selection.
+    const partial = new Array<number>(6);
+    partial[0] = 10;
+    expect(() => nextGeneration(population(), partial, config(), rngs(1))).toThrow(/Fitness\[1\]/);
+    expect(() => nextGeneration(population(), partial, config({ eliteCount: 6 }), rngs(1))).toThrow(/Fitness\[1\]/);
     expect(() => nextGeneration(population().slice(1), fitness, config(), rngs(1))).toThrow(/6 genomes/);
     expect(() => nextGeneration(population(), fitness, config(), { ...rngs(1), mutation: undefined } as unknown as EvolutionRngs)).toThrow(
       /"mutation" generator/,

@@ -261,7 +261,7 @@ Seven rays fanned across the car's front (−90°, −60°, −30°, 0°, 30°, 
   - rates outside [0, 1];
   - a negative or non-finite mutation scale;
   - any other operator type.
-- **Fitness:** one finite number per genome, supplied by the caller (the fitness function is P2-06); higher is better. Wrong length or non-finite scores throw a `RangeError`.
+- **Fitness:** one finite number per genome, supplied by the caller (the fitness function is P2-06); higher is better. Wrong length, non-finite scores or missing scores (holes in a sparse array, checked index by index) throw a `RangeError`. Populations are checked the same way.
 - **Ranking:** fitness descending, ties to the lower index, so results never depend on sort stability.
 - **Elitism:** the top `eliteCount` genomes are copied unchanged, in rank order, into places 0 … E−1. They are never crossed or mutated.
 - **Tournament selection:** `size` uniform draws with replacement (`rng.int(0, N)`); the fittest wins, ties to the lower index. Each remaining place picks parents A and B with two tournaments, and A may equal B.

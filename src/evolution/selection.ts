@@ -6,11 +6,13 @@ import type { Rng } from '../utils/rng';
 export function checkFitness(fitness: readonly number[], size: number): void {
   if (!Array.isArray(fitness)) throw new RangeError('Fitness must be an array of numbers.');
   if (fitness.length !== size) throw new RangeError(`Fitness must have one score per genome (${size}), got ${fitness.length}.`);
-  fitness.forEach((score: unknown, i) => {
+  // An index loop, not forEach: forEach skips the holes in a sparse array, which would let missing scores through.
+  for (let i = 0; i < size; i += 1) {
+    const score: unknown = fitness[i];
     if (typeof score !== 'number' || !Number.isFinite(score)) {
       throw new RangeError(`Fitness[${i}] must be a finite number, got ${String(score)}.`);
     }
-  });
+  }
 }
 
 /** Is genome a better than genome b? Higher fitness first; on a tie, the lower index. */
