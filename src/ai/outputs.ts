@@ -25,6 +25,9 @@ export function sigmoid(x: number): number {
  */
 export function outputsToControls(raw: ArrayLike<number>, brakeEnabled: boolean): Controls {
   if (typeof brakeEnabled !== 'boolean') throw new RangeError(`brakeEnabled must be a boolean, got ${String(brakeEnabled)}.`);
+  if (raw === null || typeof raw !== 'object' || typeof raw.length !== 'number') {
+    throw new RangeError('Raw outputs must be an array of 3 numbers.');
+  }
   if (raw.length !== 3) throw new RangeError(`Expected 3 raw outputs, got ${raw.length}.`);
   for (let i = 0; i < 3; i += 1) {
     if (!Number.isFinite(raw[i])) throw new RangeError(`Raw output ${i} must be finite, got ${raw[i]}.`);

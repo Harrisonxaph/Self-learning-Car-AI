@@ -61,6 +61,9 @@ describe('outputsToControls', () => {
     ['an infinite output', [Infinity, 0, 0], true],
     ['a non-boolean mask', [0, 0, 0], 1 as unknown as boolean],
     ['an undefined mask', [0, 0, 0], undefined as unknown as boolean],
+    ['null outputs', null as unknown as number[], true],
+    ['undefined outputs', undefined as unknown as number[], true],
+    ['a number instead of outputs', 3 as unknown as number[], true],
   ])('throws a RangeError for %s', (_name, raw, brakeEnabled) => {
     expect(() => outputsToControls(raw, brakeEnabled)).toThrow(RangeError);
   });
