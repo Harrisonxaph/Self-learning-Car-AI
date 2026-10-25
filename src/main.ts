@@ -5,8 +5,10 @@ import './style.css';
 import { createHumanDriver } from './ai/drivers';
 import stadiumOval from './data/tracks/stadium-oval.json';
 import { drawRace } from './render/raceView';
+import { drawSensors } from './render/sensorView';
 import { createTrackLayer } from './render/trackLayer';
 import { browserViewportEnvironment, createViewport, type ViewportSize } from './render/viewport';
+import { castRays, DEFAULT_SENSOR_CONFIG } from './sensors/rays';
 import { DEFAULT_SIM_CONFIG, DEFAULT_VEHICLE_PHYSICS } from './sim/config';
 import { createFixedStepClock } from './sim/fixedStep';
 import { loadTrack } from './sim/track';
@@ -18,6 +20,7 @@ import {
   createHeldInputs,
   type HoldAction,
 } from './ui/controls/input';
+import { debugRaysEnabled } from './ui/debugFlags';
 import { browserFrameEnvironment, startFrameLoop } from './ui/frameLoop';
 import { hudView, nextFeedback, type Feedback } from './ui/hud';
 
@@ -42,6 +45,9 @@ const hud = {
 const holdButtons = [...document.querySelectorAll<HTMLButtonElement>('button[data-action]')];
 
 const config = DEFAULT_SIM_CONFIG;
+// Ray sensor debug layer (P2-01): drawn only with `?debug=rays`. Sensors only read the world, so the
+// simulation is the same with or without it.
+const showRays = debugRaysEnabled(window.location.search);
 const dt = config.timestepSeconds;
 const track = loadTrack(stadiumOval);
 // The static track is drawn onto its own canvas, which is only redrawn when the size or track changes.
@@ -85,6 +91,15 @@ const draw = (size: ViewportSize) => {
   context.drawImage(layer.canvas, 0, 0);
   drawRace(context, size, layer.view, world);
   const { dataset } = canvas;
+  if (showRays) {
+    const readings = castRays(world.racer.car.vehicle, track, world.physics, DEFAULT_SENSOR_CONFIG);
+    drawSensors(context, size, layer.view, readings);
+    // World coordinates of the drawn rays, for the browser tests; they map them through the published transform.
+    dataset.rays = JSON.stringify({
+      origin: readings.origin,
+      rays: readings.rays.map(({ distance, hit, end }) => ({ distance, hit, end })),
+    });
+  }
   dataset.trackScale = String(layer.view.scale);
   dataset.trackOffsetX = String(layer.view.offsetX);
   dataset.trackOffsetY = String(layer.view.offsetY);
