@@ -15,7 +15,7 @@ _Last verified: 2026-10-24, against `main` at `e882825` (#75 merged: P1-01 and P
 | GitHub issues | Existing issues #1–#39 are preserved. Reconciliation adds #41–#50 for two missing primary-release entries and eight approval-gated research entries; #40 is the existing documentation PR. |
 | AI learning results | None. No experiments have been run, so no learning claims can be made. |
 
-P1-01 to P1-09 and P1-11 are **Complete**. P1-10 (CI) is **In Review** until merge-blocking is verified; the other 32 primary-release implementation features are **Not Started**. Eight research entries are **Blocked** pending explicit approval; Q-01 remains **In Review**. P1-01 to P1-09 and P1-11 are the only implementation features marked Complete. Phase 1's acceptance (drive, brake, crash, restart and complete laps on iPhone and iPad) is recorded under P1-08, but Phase 1 is not complete while P1-10 is In Review. The initial master specification is the owner's detailed project request; no separate specification was found. Re-verify this table against code and tests whenever statuses change.
+P1-01 to P1-09 and P1-11 are **Complete**. P1-10 (CI) is **In Review** until merge-blocking is verified; the other 32 primary-release implementation features are **Not Started**. Eight research entries are **Blocked** pending explicit approval. Q-01 (the review workflow) is **Complete**. P1-01 to P1-09 and P1-11 are the only implementation features marked Complete. Phase 1's acceptance (drive, brake, crash, restart and complete laps on iPhone and iPad) is recorded under P1-08, but Phase 1 is not complete while P1-10 is In Review. The initial master specification is the owner's detailed project request; no separate specification was found. Re-verify this table against code and tests whenever statuses change.
 
 ### Existing work and reconciliation
 
@@ -41,7 +41,7 @@ A feature is **Complete** only when:
 7. Codex independently reviews Claude's implementation at the current head, with no blocking findings; Codex-authored exceptions require a separate development agent. Human review does not replace this gate.
 8. Codex technical approval and the owner's explicit merge approval are recorded for the reviewed version. Under the chosen shared-account workflow, GitHub review comments are valid evidence; a formal Approved badge is not required.
 
-Documentation-only checks are recorded as such; no application/device execution is implied. Q-01 stays In Review until independent review and owner PR approval. Missing relevant manual checks prevent application features from becoming Complete. Claude Code is now the main developer and Codex the independent reviewer; follow [AGENTS.md](../AGENTS.md) for commit-specific review comments, re-review after changes and owner merge approval. This role assignment supersedes earlier role descriptions; historical authorship remains recorded below.
+Documentation-only checks are recorded as such; no application/device execution is implied. Q-01 was completed after independent review and the owner's explicit approval (see its entry). Missing relevant manual checks prevent application features from becoming Complete. Claude Code is now the main developer and Codex the independent reviewer; follow [AGENTS.md](../AGENTS.md) for commit-specific review comments, re-review after changes and owner merge approval. This role assignment supersedes earlier role descriptions; historical authorship remains recorded below.
 
 ## Stretch targets (must stay visible in every revision)
 
@@ -100,13 +100,13 @@ Documentation-only checks are recorded as such; no application/device execution 
 | P5-04 | Generalisation test suite and report | 5 | P1 | Not Started | P4-04, P4-05, P5-01 | [#36](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/36) |
 | P5-05 | Model comparison dashboard | 5 | P1 | Not Started | P4-05, P3-08 | [#37](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/37) |
 | P5-06 | Training performance improvements | 5 | P1 | Not Started | P3-07 | [#38](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/38) |
-| Q-01 | Definition of Done and independent review workflow | Process | P0 | In Review | — | [#39](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/39) |
+| Q-01 | Definition of Done and independent review workflow | Process | P0 | Complete | — | [#39](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/39) |
 
 ## Ready now vs waiting
 
 Dependencies are taken from the table above.
 
-- **In review:** P1-10 (CI), merged in #60 with a retrospective Codex technical approval. It stays In Review until CI is shown to block merging on failure (branch protection requiring the CI jobs for `main`), or the owner explicitly approves changing that criterion. Q-01 (Definition of Done and review workflow) also remains in review.
+- **In review:** P1-10 (CI), merged in #60 with a retrospective Codex technical approval. It stays In Review until CI is shown to block merging on failure (branch protection requiring the CI jobs for `main`), or the owner explicitly approves changing that criterion.
 - **Complete:** P1-02 (fixed-timestep loop, #62), P1-03 (seeded generator, #64), P1-04 (track model and static track layer, #65), P1-05 (vehicle physics, #66), P1-06 (collision detection, #67), P1-07 (checkpoints and laps, #69), P1-08 (manual driving, #70), P1-09 (deterministic simulation suite, #72), P1-01 (scaffold, #55, with a retrospective Codex review) and P1-11 (static deployment, #74).
 - **Ready now (all dependencies Complete or merged):** P2-01 (ray sensors), P2-03 (the network is pure maths), P2-06 (fitness), P2-10 (track splits) and P4-01 (track validation). Ready means the dependencies are met, not that implementation is authorised.
 - **Silverstone (approved 2026-10-23, planning only):** P4-06 (Silverstone import) after P4-01, P2-10, P2-05, P2-07 and P3-05; P2-11 (spatial index, after P1-06 and P2-01) only if P4-06's measured baseline misses the budget or the owner approves an architectural reason; P4-07 (camera) after P1-04 and P2-05, as a separate follow-up. Each still needs explicit owner implementation approval when its dependencies are complete; this planning approval does not authorise implementation. None of these interrupts the current phase.
@@ -724,29 +724,31 @@ Dependencies are taken from the table above.
 
 ### Q-01 — Definition of Done and independent review workflow
 
-- **Priority:** P0 · **Status:** In Review · **Issue:** [#39](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/39)
+- **Priority:** P0 · **Status:** Complete · **Issue:** [#39](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/39)
 - **Depends on:** none
 - **Description:** Adopt AGENTS.md completion criteria: Claude Code implements approved tasks and addresses findings; Codex independently reviews the current commit through GitHub review comments. Include actual tests, relevant device checks and explicit owner merge approval. A formal same-account approval badge is not required.
 - **Acceptance criteria:**
   - PR template in `.github/`; every feature PR lists roadmap ID, actual command results, manual checks done/outstanding, current head SHA, Codex review link/outcome and the owner's separate merge-approval reference. Later commits receive re-review; no agent merges automatically.
 - **Test requirements:**
   - Documentation consistency checks and independent review; no simulator/mobile checks apply to this documentation-only PR.
-- **Evidence so far:**
-  - **How the workflow and template reached `main`:**
+- **Completion record:**
+  - **The workflow on `main`:**
     - The owner merged the stacked PRs #51, #52 and #53 into their branches, not into `main`, and then merged #40 into `main` without #53's changes.
     - The owner then merged [#54](https://github.com/Harrisonxaph/Self-learning-Car-AI/pull/54) into `main` at `dbb0782`. #54's tree matches [#53](https://github.com/Harrisonxaph/Self-learning-Car-AI/pull/53)'s head `0e501a2`.
-    - These owner merges are owner merge evidence for those PRs, not an explicit approval of Q-01 as complete.
-  - **Independent review of the workflow:**
-    - My Claude Code review of #53 at `0e501a2` (Changes required) had a blocking finding on stale base and integration order. #54 resolved it by bringing #53's reviewed tree onto `main`.
-    - My [Claude Code review of the merged workflow](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/39#issuecomment-6390608815) at `844c33a` (Changes required) re-raised the open should-fix from the #53 review. On the shared account, owner approval written "in a GitHub comment" cannot be told apart from an agent's comment.
-    - The follow-up docs PR fixes it by adding "Owner evidence on a shared account" to AGENTS.md and pointing the PR template there. The review found no other blocking findings.
-  - Codex authored #52–#54, so its comments there are not independent review of the workflow.
-- **Outstanding before Complete:**
-  - (1) Codex review of the follow-up docs PR, and the owner merging it.
-  - (2) The owner's explicit approval of Q-01 as complete, given as an `Owner decision:` comment or a relayed owner instruction (AGENTS.md, "Owner evidence on a shared account").
-  - (3) A completion record linking the reviews, the merge and that approval.
-
-  No agent may record or imply owner approval.
+    - Codex authored #52–#54, so its comments there are not independent review of the workflow.
+  - **Independent (non-Codex) review:**
+    - Claude Code's review of #53 at `0e501a2` (Changes required) had a blocking finding on stale base and integration order. #54 resolved it.
+    - Claude Code's [review of the merged workflow](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/39#issuecomment-6390608815) at `844c33a` (Changes required) found one should-fix and no other blocking findings. On the shared account, owner approval written "in a GitHub comment" could not be told apart from agent text.
+  - **Fix:**
+    - [#78](https://github.com/Harrisonxaph/Self-learning-Car-AI/pull/78) added "Owner evidence on a shared account" to AGENTS.md and pointed the PR template there.
+    - Codex gave it [technical approval at `ae0b4dd`](https://github.com/Harrisonxaph/Self-learning-Car-AI/pull/78#pullrequestreview-5640534695), with green CI on that head (run 40141607399).
+    - The owner merged it at `787f185`.
+  - **Acceptance:**
+    - `.github/pull_request_template.md` on `main` has fields for the roadmap ID, actual command results, manual checks done and outstanding, the current head SHA, the Codex review link and reviewed SHA, and the owner's separate merge-approval reference.
+    - AGENTS.md requires re-review after new commits and forbids automatic merges by agents.
+    - The workflow is in use: P1-01 to P1-09 and P1-11 each have a recorded Codex technical approval and an owner merge (see the revision history; P1-01's approval was retrospective, and P1-08's was posted after its merge).
+  - **Owner approval:** [relayed owner instruction](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/39#issuecomment-6391301136) (Claude Code, 2026-10-25): "I approve Q-01 as Complete, subject to Codex verifying the evidence." Codex's verification of this record is the condition, and is reviewed on the completion PR.
+  - **Checks:** documentation only. No simulator, emulation or device checks apply.
 
 ## Phase 6 — Optional advanced research (9/10, not approved)
 
@@ -865,3 +867,4 @@ These apply to every phase and are checked in review.
 | 2026-10-24 | P1-11 static-host compatibility (plain static file server tests at the root and a sub-path, README deployment section) implemented on `feat/p1-11-static-deployment` and moved to In Review; not Complete until Codex review and owner approval, including the owner's decision on the iPhone preview evidence, are recorded. |
 | 2026-10-24 | P1-11 Complete: #74 merged by the owner at `52b835c` after Codex technical approval of `0d5a5b7` and of the reconciled head `0406567`, and green CI (runs 40110560517 and 40112890832, including WebKit). Device criterion met by existing owner-reported iPhone records of Vercel previews, accepted by Codex. |
 | 2026-10-24 | P1-01 Complete: retrospective Codex technical approval of `9ba08e8` (#55, merged at `5a3e494`) supplies the missing review record; no new implementation was needed. P1-10 also has a retrospective Codex technical approval of `af6350b` (#60, merged at `ab1436c`) but stays In Review: its "blocks on failure" criterion needs the owner's branch protection (or an explicit criterion change), which is not verified. Earlier rows named the reviewed heads as merge points; the merge commits are `5a3e494` and `ab1436c`. |
+| 2026-10-25 | Q-01 Complete: the non-Codex review of the merged workflow (should-fix fixed in #78, Codex technical approval of `ae0b4dd`, merged by the owner at `787f185`) and the owner's completion approval, relayed on #39 on condition that Codex verifies the evidence. |
