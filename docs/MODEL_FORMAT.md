@@ -343,6 +343,8 @@ Optional: `name`, `appVersion`, derived configuration hashes and `evaluation` (o
 
 For each layer transition `L → L+1` in order: all weights as `[outputIndex][inputIndex]` (row-major), then the biases for that layer's outputs. For 9-12-3 that is 108 weights + 12 biases + 36 weights + 3 biases = 159 values. Implemented in `src/ai/network.ts` (P2-03; `PARAMETER_ORDER` is the `parameters.order` string above). `tests/ai/network.test.ts` pins the order with hand-written networks and a one-hot sweep over all 159 positions.
 
+The genetic operators that evolve these arrays are `tournament-uniform-gaussian-v1` (P2-04, `src/evolution/`). They read `populationSize`, `eliteCount`, `selection`, `crossover` and `mutation` from `training.configuration`, with the field names in the example above, and P2-07 records the operator id alongside them.
+
 Fresh, untrained parameters are drawn with initialisation `uniform-pm1-v1`: 159 independent `rng.range(-1, 1)` draws, in parameter order. When P2-07 finalises `training.configuration`, it records this id there.
 
 ## Size

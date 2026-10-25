@@ -8,14 +8,14 @@ _Last verified: 2026-10-24, against `main` at `e882825` (#75 merged: P1-01 and P
 
 | Area | State |
 |------|-------|
-| Application code | Phase 1 features (P1-01 to P1-11): a Vite + strict TypeScript static page with a responsive Canvas 2D track, a fixed-timestep simulation (seeded generator, vehicle physics, collision, checkpoints and laps), and manual driving by keyboard and touch. P2-01 ray sensors (with a `?debug=rays` debug layer) are merged (#79) and In Review pending real-device checks. P2-02's nine network inputs are Complete (#81). P2-03's 9-12-3 network (pure inference and seeded initialisation, not yet wired to a driver) is In Review on `feat/p2-03-feedforward-network`. No evolution or training exists yet. |
+| Application code | Phase 1 features (P1-01 to P1-11): a Vite + strict TypeScript static page with a responsive Canvas 2D track, a fixed-timestep simulation (seeded generator, vehicle physics, collision, checkpoints and laps), and manual driving by keyboard and touch. P2-01 ray sensors (with a `?debug=rays` debug layer) are merged (#79) and In Review pending real-device checks. P2-02's nine network inputs are Complete (#81). P2-03's 9-12-3 network (pure inference and seeded initialisation, not yet wired to a driver) is Complete (#82). P2-04's genetic operators (tournament selection, uniform crossover, Gaussian mutation, elitism over flat genomes) are In Review on `feat/p2-04-genetic-operators`. No training loop or fitness function exists yet. |
 | Tests and CI | `package.json` scripts, ESLint with architecture boundary rules, Vitest unit tests (including the P1-09 golden determinism suite) and Playwright browser tests in six Chromium/WebKit desktop, phone and tablet projects, against `vite preview` and a plain static file server. GitHub Actions CI (P1-10, #60) runs all of them on every pull request and push to `main`. Whether failing CI blocks merges depends on the owner's branch-protection setting, which has not been verified, so P1-10 stays In Review. |
 | Deployment | The owner's Vercel Git integration builds a preview deployment for every pull request and a production deployment from `main`. The production deployment of `38ff6a6` (#72's merge) was observed as Ready through the Vercel API on 2026-10-24. The owner has loaded previews on a real iPhone 15 and iPad Pro in Safari (P1-02, P1-04, P1-08 records). P1-11 is Complete (#74). |
 | Planning docs | Added by this roadmap PR: `AGENTS.md`, `docs/ROADMAP.md`, `docs/ARCHITECTURE.md`, `docs/AI_EVALUATION.md`, `docs/MODEL_FORMAT.md`, `docs/TESTING.md`. |
 | GitHub issues | Existing issues #1–#39 are preserved. Reconciliation adds #41–#50 for two missing primary-release entries and eight approval-gated research entries; #40 is the existing documentation PR. |
 | AI learning results | None. No experiments have been run, so no learning claims can be made. |
 
-P1-01 to P1-09 and P1-11 are **Complete**. P1-10 (CI) is **In Review** until merge-blocking is verified, P2-01 (ray sensors) is **In Review**: merged in #79 at `5c18365` with Codex technical approval, pending real iPhone/iPad checks. P2-02 (network inputs) is **Complete** (#81). P2-03 (feedforward network) is **In Review** on `feat/p2-03-feedforward-network`. The other 29 primary-release implementation features are **Not Started**. Eight research entries are **Blocked** pending explicit approval. Q-01 (the review workflow) is **Complete**. P1-01 to P1-09, P1-11 and P2-02 are the only implementation features marked Complete. Phase 1's acceptance (drive, brake, crash, restart and complete laps on iPhone and iPad) is recorded under P1-08, but Phase 1 is not complete while P1-10 is In Review. The initial master specification is the owner's detailed project request; no separate specification was found. Re-verify this table against code and tests whenever statuses change.
+P1-01 to P1-09 and P1-11 are **Complete**. P1-10 (CI) is **In Review** until merge-blocking is verified, P2-01 (ray sensors) is **In Review**: merged in #79 at `5c18365` with Codex technical approval, pending real iPhone/iPad checks. P2-02 (network inputs) is **Complete** (#81). P2-03 (feedforward network) is **Complete** (#82). P2-04 (genetic operators) is **In Review** on `feat/p2-04-genetic-operators`. The other 28 primary-release implementation features are **Not Started**. Eight research entries are **Blocked** pending explicit approval. Q-01 (the review workflow) is **Complete**. P1-01 to P1-09, P1-11, P2-02 and P2-03 are the only implementation features marked Complete. Phase 1's acceptance (drive, brake, crash, restart and complete laps on iPhone and iPad) is recorded under P1-08, but Phase 1 is not complete while P1-10 is In Review. The initial master specification is the owner's detailed project request; no separate specification was found. Re-verify this table against code and tests whenever statuses change.
 
 ### Existing work and reconciliation
 
@@ -70,8 +70,8 @@ Documentation-only checks are recorded as such; no application/device execution 
 | P1-11 | Vercel deployment compatibility | 1 | P1 | Complete | P1-01 | [#11](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/11) |
 | P2-01 | Seven forward ray sensors | 2 | P0 | In Review | P1-06 | [#12](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/12) |
 | P2-02 | Nine network inputs: rays, speed and checkpoint heading error | 2 | P0 | Complete | P2-01, P1-07 | [#13](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/13) |
-| P2-03 | Feedforward network 9-12-3 with independent steering, throttle and brake | 2 | P0 | In Review | P1-01 | [#14](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/14) |
-| P2-04 | Genetic operators: selection, crossover, mutation and elitism | 2 | P0 | Not Started | P1-03, P2-03 | [#15](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/15) |
+| P2-03 | Feedforward network 9-12-3 with independent steering, throttle and brake | 2 | P0 | Complete | P1-01 | [#14](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/14) |
+| P2-04 | Genetic operators: selection, crossover, mutation and elitism | 2 | P0 | In Review | P1-03, P2-03 | [#15](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/15) |
 | P2-05 | Population training loop over multiple generations (headless and rendered) | 2 | P0 | Not Started | P2-02, P2-04, P2-06 | [#16](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/16) |
 | P2-06 | Fitness function with anti-exploitation guards | 2 | P0 | Not Started | P1-07 | [#17](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/17) |
 | P2-07 | Seeded training experiments and configuration recording | 2 | P0 | Not Started | P2-05, P2-10 | [#18](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/18) |
@@ -106,8 +106,8 @@ Documentation-only checks are recorded as such; no application/device execution 
 
 Dependencies are taken from the table above.
 
-- **In review:** P1-10 (CI), merged in #60 with a retrospective Codex technical approval. It stays In Review until CI is shown to block merging on failure (branch protection requiring the CI jobs for `main`), or the owner explicitly approves changing that criterion. P2-01 (ray sensors) was merged by the owner in #79 at `5c18365` (the same tree as the Codex-approved head `f69d01c`); it stays In Review until real iPhone/iPad Safari checks of the debug layer are recorded. P2-03 (feedforward network) is in review on `feat/p2-03-feedforward-network`, pending Codex review and owner approval.
-- **Complete:** P1-02 (fixed-timestep loop, #62), P1-03 (seeded generator, #64), P1-04 (track model and static track layer, #65), P1-05 (vehicle physics, #66), P1-06 (collision detection, #67), P1-07 (checkpoints and laps, #69), P1-08 (manual driving, #70), P1-09 (deterministic simulation suite, #72), P1-01 (scaffold, #55, with a retrospective Codex review), P1-11 (static deployment, #74) and P2-02 (network inputs, #81).
+- **In review:** P1-10 (CI), merged in #60 with a retrospective Codex technical approval. It stays In Review until CI is shown to block merging on failure (branch protection requiring the CI jobs for `main`), or the owner explicitly approves changing that criterion. P2-01 (ray sensors) was merged by the owner in #79 at `5c18365` (the same tree as the Codex-approved head `f69d01c`); it stays In Review until real iPhone/iPad Safari checks of the debug layer are recorded. P2-04 (genetic operators) is in review on `feat/p2-04-genetic-operators`, pending Codex review and owner approval.
+- **Complete:** P1-02 (fixed-timestep loop, #62), P1-03 (seeded generator, #64), P1-04 (track model and static track layer, #65), P1-05 (vehicle physics, #66), P1-06 (collision detection, #67), P1-07 (checkpoints and laps, #69), P1-08 (manual driving, #70), P1-09 (deterministic simulation suite, #72), P1-01 (scaffold, #55, with a retrospective Codex review), P1-11 (static deployment, #74), P2-02 (network inputs, #81) and P2-03 (feedforward network, #82).
 - **Ready now (all dependencies Complete or merged):** P2-06 (fitness), P2-10 (track splits) and P4-01 (track validation). Ready means the dependencies are met, not that implementation is authorised.
 - **Silverstone (approved 2026-10-23, planning only):** P4-06 (Silverstone import) after P4-01, P2-10, P2-05, P2-07 and P3-05; P2-11 (spatial index, after P1-06 and P2-01) only if P4-06's measured baseline misses the budget or the owner approves an architectural reason; P4-07 (camera) after P1-04 and P2-05, as a separate follow-up. Each still needs explicit owner implementation approval when its dependencies are complete; this planning approval does not authorise implementation. None of these interrupts the current phase.
 - **Phase 2 critical path:** P1-06 → P2-01 → P2-02, and P1-07 → P2-06, then P2-04 → P2-05 → P2-07 → P2-08.
@@ -379,14 +379,14 @@ Dependencies are taken from the table above.
 
 ### P2-03 — Feedforward network 9-12-3 with independent steering, throttle and brake
 
-- **Priority:** P0 · **Status:** In Review · **Issue:** [#14](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/14)
+- **Priority:** P0 · **Status:** Complete · **Issue:** [#14](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/14)
 - **Depends on:** P1-01
 - **Description:** Pure inference module: flat parameter array (documented order), tanh hidden layer, outputs mapped to steering tanh, throttle sigmoid, brake sigmoid; optional brake mask.
 - **Acceptance criteria:**
   - 159 parameters; hand-computed small network matches; outputs in range; inference does not import evolution code.
 - **Test requirements:**
   - Unit: forward pass, parameter order, output ranges, brake mask.
-- **Implementation (In Review):**
+- **Implementation:**
   - **Authorization:** the owner's instruction, [relayed on #14](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/14#issuecomment-6403981748), together with the plan.
   - **Code:**
     - `src/ai/network.ts`: the fixed 9-12-3 layout, the 159-parameter documented order, `evaluate`, `runNetwork` and `initialParameters` (seeded, `uniform-pm1-v1`).
@@ -394,18 +394,37 @@ Dependencies are taken from the table above.
     - The contract is in ARCHITECTURE.md, "Network".
   - **Tests:** `tests/ai/network.test.ts` and `tests/ai/outputs.test.ts`.
   - **Not changed:** no driver or vehicle wiring, which #14 does not require. No evolution, training or persistence.
-  - **Device checks:** none apply. The code is headless and nothing on the page changes.
-  - **Still needed:** Codex review and owner merge approval.
+- **Completion record:**
+  - **Merge:** [#82](https://github.com/Harrisonxaph/Self-learning-Car-AI/pull/82), merged by the owner at `814d4e0`. Its tree is identical to the reviewed head `0042f5f`.
+  - **Review:** [Codex technical approval of `0042f5f`](https://github.com/Harrisonxaph/Self-learning-Car-AI/pull/82#pullrequestreview-5645695024). Codex independently ran `npm ci`, lint, typecheck, 561 unit tests, the build, and all six browser projects (148 passed, 14 existing skips).
+  - **CI:** green, including WebKit (run 40239101523).
+  - **Tests:** 50 unit tests: hand-computed networks, a one-hot sweep of all 159 positions, output ranges, the brake mask and the inference/evolution separation.
+  - **Device checks:** not applicable. The code is headless, and the production assets are byte-identical.
+  - **Owner approval:** the owner's merge (AGENTS.md owner evidence).
+  - **Known non-blocking finding, tracked in [#83](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/83):** `outputsToControls(null | undefined)` throws `TypeError` rather than `RangeError`. `runNetwork` is unaffected. The fix (`82c8cea`) was pushed after the merge and is not on `main`.
 
 ### P2-04 — Genetic operators: selection, crossover, mutation and elitism
 
-- **Priority:** P0 · **Status:** Not Started · **Issue:** [#15](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/15)
+- **Priority:** P0 · **Status:** In Review · **Issue:** [#15](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/15)
 - **Depends on:** P1-03, P2-03
 - **Description:** Tournament selection, uniform crossover, Gaussian mutation (rate and scale) and elitism over flat genomes, all using the seeded RNG.
 - **Acceptance criteria:**
   - Elites copied unchanged; mutation rate 0 is identity; population size constant; same seed gives same next generation.
 - **Test requirements:**
   - Unit tests for each operator and a determinism test.
+- **Implementation (In Review):**
+  - **Authorization:** the owner's instruction, [relayed on #15](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/15#issuecomment-6404455709), together with the operator choices and validation rules.
+  - **Code:** `src/evolution/`, operator set `tournament-uniform-gaussian-v1`:
+    - `genome.ts`: flat-genome checks and copies;
+    - `selection.ts`: ranking and tournament selection;
+    - `crossover.ts`: uniform crossover;
+    - `mutation.ts`: Gaussian mutation;
+    - `population.ts`: `resolveEvolutionConfig`, `createEvolutionRngs` and `nextGeneration` with elitism.
+    - The contract is in ARCHITECTURE.md, "Evolution".
+  - **Tests:** `tests/evolution/operators.test.ts` and `tests/evolution/population.test.ts`, using hand-scored fitness fixtures. The fitness function is P2-06.
+  - **Not changed:** no training loop, fitness function, driving integration, dashboard or persistence.
+  - **Device checks:** none apply. The code is headless and nothing on the page changes.
+  - **Still needed:** Codex review and owner merge approval.
 
 ### P2-05 — Population training loop over multiple generations (headless and rendered)
 
@@ -902,3 +921,4 @@ These apply to every phase and are checked in review.
 | 2026-10-25 | Q-01 Complete: the non-Codex review of the merged workflow (should-fix fixed in #78, Codex technical approval of `ae0b4dd`, merged by the owner at `787f185`) and the owner's completion approval, relayed on #39 on condition that Codex verifies the evidence. |
 | 2026-10-25 | P2-02 nine network inputs (seven normalised rays, normalised speed, signed heading error to the next gate's centre from the rear axle ÷ π) implemented on `feat/p2-02-network-inputs` and moved to In Review. P2-01 reconciled: merged in #79 at `5c18365`, still In Review because no real iPhone/iPad results are recorded. |
 | 2026-10-25 | P2-02 Complete: #81 merged by the owner at `4f3abef` (same tree as `7bda450`), after Codex technical approval and green CI (run 40212259053, including WebKit); device checks not applicable. P2-03 9-12-3 feedforward network (pure inference, documented parameter order, tanh/sigmoid outputs, brake mask, seeded uniform initialisation) implemented on `feat/p2-03-feedforward-network` and moved to In Review. P2-01 remains In Review for real iPhone/iPad checks. |
+| 2026-10-25 | P2-03 Complete: #82 merged by the owner at `814d4e0` (same tree as `0042f5f`), after Codex technical approval and green CI (run 40239101523, including WebKit); device checks not applicable. Its non-blocking null-vector finding is tracked in #83. P2-04 genetic operators (tournament selection, uniform crossover, Gaussian mutation, elitism; separate seeded generators) implemented on `feat/p2-04-genetic-operators` and moved to In Review. P2-01 remains In Review for real iPhone/iPad checks. |

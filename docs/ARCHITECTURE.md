@@ -30,11 +30,11 @@ src/
     outputs.ts            maps raw outputs → steering, throttle, brake; brake mask (P2-03)
     drivers.ts            Driver interface; human driver built (P1-08); neural, random, rule-based later
   evolution/              genomes and genetic operators, no DOM
-    genome.ts             flat Float64Array of weights and biases
-    selection.ts          tournament selection
-    crossover.ts          uniform or arithmetic crossover
-    mutation.ts           Gaussian mutation with rate and scale
-    population.ts         next-generation builder with elitism
+    genome.ts             flat Float64Array of weights and biases; checks and copies (P2-04)
+    selection.ts          fitness ranking and tournament selection (P2-04)
+    crossover.ts          uniform crossover (P2-04)
+    mutation.ts           Gaussian mutation with rate and scale (P2-04)
+    population.ts         config, per-operator generators, next generation with elitism (P2-04)
   training/
     fitness.ts            fitness and termination rules (anti-exploitation)
     trainer.ts            generation loop; headless or rendered
@@ -250,6 +250,26 @@ Seven rays fanned across the car's front (−90°, −60°, −30°, 0°, 30°, 
 - Population of P genomes (start with P = 50, configurable).
 - Each generation: evaluate every car on one selected training circuit under identical start conditions → sort by fitness → copy the top E unchanged (elitism) → fill the rest by tournament selection, crossover and Gaussian mutation. Multiple selectable circuits are required; training one evolutionary run across multiple circuits is optional R-06, not a primary-release prerequisite.
 - Mutation rate, mutation scale, crossover type, population size, elitism count, max episode time and seed are all part of the experiment configuration.
+
+**Genetic operators contract** (built in P2-04, `src/evolution/`; `EVOLUTION_OPERATORS = "tournament-uniform-gaussian-v1"`):
+
+- **Genomes:** flat arrays of finite numbers, all the same length (at least 1) within a population. Evolution never reads the network layout. A network genome is its 159 parameters (P2-03), and evolved genomes pass `checkParameters`. Every genome evolution returns is a new `Float64Array`. Nothing passed in is written, and outputs never alias inputs or each other.
+- **Config:** `resolveEvolutionConfig` returns a frozen copy of `{ populationSize, eliteCount, selection: { type: "tournament", size }, crossover: { type: "uniform", rate }, mutation: { rate, scale } }`, with the same field names as MODEL_FORMAT's `training.configuration`. It throws a `RangeError` naming the field for:
+  - a population size that is not an integer from 2 to 100,000;
+  - an elite count that is not an integer from 0 to the population size;
+  - a tournament size that is not an integer from 1 to the population size;
+  - rates outside [0, 1];
+  - a negative or non-finite mutation scale;
+  - any other operator type.
+- **Fitness:** one finite number per genome, supplied by the caller (the fitness function is P2-06); higher is better. Wrong length or non-finite scores throw a `RangeError`.
+- **Ranking:** fitness descending, ties to the lower index, so results never depend on sort stability.
+- **Elitism:** the top `eliteCount` genomes are copied unchanged, in rank order, into places 0 … E−1. They are never crossed or mutated.
+- **Tournament selection:** `size` uniform draws with replacement (`rng.int(0, N)`); the fittest wins, ties to the lower index. Each remaining place picks parents A and B with two tournaments, and A may equal B.
+- **Uniform crossover:** with probability `crossover.rate` (one `next()` per child), each gene comes from A when its `next()` draw is below ½, otherwise from B. Without crossover, the child is a copy of A. Every child gene is its parents' gene at the same position.
+- **Gaussian mutation:** per gene, one `next()`. Below `mutation.rate`, `gaussian(0, scale)` is added. Rate 0 or scale 0 changes nothing. A gene that overflows throws a `RangeError`.
+- **Generators:** `nextGeneration(population, fitness, config, { selection, crossover, mutation })` uses one generator per operator. `createEvolutionRngs(parent)` derives them with `createRng(parent.nextUint32())`, in that order. Crossover and mutation settings therefore never change which parents are selected, and mutation never shifts crossover. The same inputs and generator states always give the same generation. `gaussian` uses `Math.log` and `Math.cos`, so mutation is reproducible within one JavaScript engine (see Randomness).
+- **Result:** `{ genomes, eliteSources, parents }`: the N new genomes, the source index of each elite, and parents A and B for each child.
+- **Separation:** evolution imports only `utils/rng`. It never imports inference, training, persistence, rendering or the DOM. Lint enforces this, and a test checks the imports.
 
 ## Drivers
 
