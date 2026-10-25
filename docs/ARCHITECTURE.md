@@ -26,7 +26,7 @@ src/
     rays.ts               7 ray casts from the body centre → normalised distances (P2-01)
   ai/                     inference only, no evolution imports
     network.ts            feedforward net (9-12-3), forward pass
-    inputs.ts             builds the 9-value input vector
+    inputs.ts             builds the 9-value input vector (P2-02)
     outputs.ts            maps raw outputs → steering, throttle, brake
     drivers.ts            Driver interface; human driver built (P1-08); neural, random, rule-based later
   evolution/              genomes and genetic operators, no DOM
@@ -161,7 +161,25 @@ Seven rays fanned across the car's front (−90°, −60°, −30°, 0°, 30°, 
 |---|-------|-------|
 | 0–6 | ray hit distance ÷ `RAY_LENGTH` (1 = nothing hit) | 0 to 1 |
 | 7 | forward speed ÷ `MAX_SPEED` | 0 to 1 |
-| 8 | signed angle from car heading to the next checkpoint's centre ÷ π | −1 to 1 |
+| 8 | signed angle from car heading to the next checkpoint's centre ÷ π | −1 (exclusive) to 1 |
+
+**Network inputs contract** (built in P2-02, `src/ai/inputs.ts`; `INPUT_CONTRACT = "seven-rays-speed-heading-v1"`):
+
+- **Builder:** `buildInputs(racer, track, physics, sensorConfig = DEFAULT_SENSOR_CONFIG)` returns a frozen array of 9 finite numbers. It is headless and pure: it reads the world and never changes it, and nothing is drawn. It does not touch `Observation` or the drivers; a neural driver will feed these inputs to the network in a later item.
+- **Order and names:** `INPUT_NAMES` is `ray-90`, `ray-60`, `ray-30`, `ray0`, `ray30`, `ray60`, `ray90`, `speed`, `headingError`, matching MODEL_FORMAT's `architecture.inputs`. The ray names follow the configured angles (`inputNames(config)`).
+- **Rays (0–6):** each ray's `normalised` distance from `castRays` (ray sensor contract below), in the config's angle order, in [0, 1], where 1 is clear.
+- **Speed (7):** forward speed ÷ `physics.maxSpeed`, clamped to [0, 1]. The speed is never negative, and the clamp only guards rounding above the derived top speed.
+- **Heading error (8):**
+  - **Target:** the centre (midpoint of `a` and `b`) of `track.gates[progress.nextGate]`, the only gate that can count next.
+  - **Reference point:** the rear axle (the vehicle state's `position`), the point checkpoints use for crossings. The target therefore moves to the following gate on exactly the tick the gate is credited. The sensor origin (body centre) is not used here.
+  - **Value:** `wrapAngle(atan2(target − reference) − heading) / π`. Positive means the target is to the car's right (towards +y at heading 0), the side positive steering turns towards. Negative means left, and 0 means straight ahead.
+  - **Wrapping:** the angle is wrapped into (−π, π], so the value is in (−1, 1]. A target exactly behind reads +1; one just left of behind reads close to −1.
+  - **Degenerate case:** a reference point exactly on the target reads 0.
+  - **Crashed cars:** inputs are still computed, from the pose where the car stopped.
+- **Errors:** `buildInputs` throws a `RangeError` for:
+  - a `maxSpeed` that is not finite or not above 0, or a non-finite speed;
+  - a `nextGate` that is not an integer index into the gates, or a track with no gates;
+  - anything the ray sensors reject (pose, wheelbase, sensor config).
 
 **Ray sensor contract** (built in P2-01, `src/sensors/rays.ts`; part of `seven-rays-speed-heading-v1`):
 

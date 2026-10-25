@@ -321,6 +321,7 @@ The example contains all 159 values. Arrays serialize to JSON without precision 
 | `codeVersion`, `simulationVersion` | string, positive integer | Source revision/build identifier and simulation contract version; recorded for reproducibility. |
 | `architecture.layers` | integer[] | Currently must be `[9, 12, 3]`. |
 | `architecture.*Activation(s)`, `inputs`, `outputs` | | Must match what the running app supports, or the model is rejected with a clear message. |
+| `architecture.inputs` | string[] | For `seven-rays-speed-heading-v1`: the ray names (`ray<angle>`, one per `sensors.anglesDegrees` entry, in that order), then `speed` and `headingError`; the default is `ray-90` … `ray90`, `speed`, `headingError`. `speed` is forward speed ÷ `physics.maxSpeed`, clamped to [0, 1]. `headingError` is the signed angle from the heading to the next gate's centre, measured from the rear axle and wrapped into (−π, π], ÷ π. It is positive to the right, and 0 when the rear axle is on the centre. The full definition is in docs/ARCHITECTURE.md, "Network inputs contract" (`src/ai/inputs.ts`). |
 | `architecture.brakeEnabled` | boolean | `false` for no-braking models. Inference then forces brake = 0. |
 | `parameters.count` | integer | Must equal the count computed from `layers`. |
 | `parameters.values` | number[] | Length = `count`. Every value finite (no `NaN`, `Infinity` or `null`). |
