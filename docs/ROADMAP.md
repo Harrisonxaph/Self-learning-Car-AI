@@ -8,14 +8,14 @@ _Last verified: 2026-10-24, against `main` at `e882825` (#75 merged: P1-01 and P
 
 | Area | State |
 |------|-------|
-| Application code | Phase 1 features (P1-01 to P1-11): a Vite + strict TypeScript static page with a responsive Canvas 2D track, a fixed-timestep simulation (seeded generator, vehicle physics, collision, checkpoints and laps), and manual driving by keyboard and touch. P2-01 ray sensors (with a `?debug=rays` debug layer) are In Review on `feat/p2-01-ray-sensors`. No network, evolution or training exists yet. |
+| Application code | Phase 1 features (P1-01 to P1-11): a Vite + strict TypeScript static page with a responsive Canvas 2D track, a fixed-timestep simulation (seeded generator, vehicle physics, collision, checkpoints and laps), and manual driving by keyboard and touch. P2-01 ray sensors (with a `?debug=rays` debug layer) are merged (#79) and In Review pending real-device checks. P2-02's nine network inputs are In Review on `feat/p2-02-network-inputs`. No network, evolution or training exists yet. |
 | Tests and CI | `package.json` scripts, ESLint with architecture boundary rules, Vitest unit tests (including the P1-09 golden determinism suite) and Playwright browser tests in six Chromium/WebKit desktop, phone and tablet projects, against `vite preview` and a plain static file server. GitHub Actions CI (P1-10, #60) runs all of them on every pull request and push to `main`. Whether failing CI blocks merges depends on the owner's branch-protection setting, which has not been verified, so P1-10 stays In Review. |
 | Deployment | The owner's Vercel Git integration builds a preview deployment for every pull request and a production deployment from `main`. The production deployment of `38ff6a6` (#72's merge) was observed as Ready through the Vercel API on 2026-10-24. The owner has loaded previews on a real iPhone 15 and iPad Pro in Safari (P1-02, P1-04, P1-08 records). P1-11 is Complete (#74). |
 | Planning docs | Added by this roadmap PR: `AGENTS.md`, `docs/ROADMAP.md`, `docs/ARCHITECTURE.md`, `docs/AI_EVALUATION.md`, `docs/MODEL_FORMAT.md`, `docs/TESTING.md`. |
 | GitHub issues | Existing issues #1–#39 are preserved. Reconciliation adds #41–#50 for two missing primary-release entries and eight approval-gated research entries; #40 is the existing documentation PR. |
 | AI learning results | None. No experiments have been run, so no learning claims can be made. |
 
-P1-01 to P1-09 and P1-11 are **Complete**. P1-10 (CI) is **In Review** until merge-blocking is verified, and P2-01 (ray sensors) is **In Review** pending real iPhone/iPad checks and owner approval (Codex technical approval of `2391aba` is recorded); the other 31 primary-release implementation features are **Not Started**. Eight research entries are **Blocked** pending explicit approval. Q-01 (the review workflow) is **Complete**. P1-01 to P1-09 and P1-11 are the only implementation features marked Complete. Phase 1's acceptance (drive, brake, crash, restart and complete laps on iPhone and iPad) is recorded under P1-08, but Phase 1 is not complete while P1-10 is In Review. The initial master specification is the owner's detailed project request; no separate specification was found. Re-verify this table against code and tests whenever statuses change.
+P1-01 to P1-09 and P1-11 are **Complete**. P1-10 (CI) is **In Review** until merge-blocking is verified, P2-01 (ray sensors) is **In Review**: merged in #79 at `5c18365` with Codex technical approval, pending real iPhone/iPad checks. P2-02 (network inputs) is **In Review** on `feat/p2-02-network-inputs`. The other 30 primary-release implementation features are **Not Started**. Eight research entries are **Blocked** pending explicit approval. Q-01 (the review workflow) is **Complete**. P1-01 to P1-09 and P1-11 are the only implementation features marked Complete. Phase 1's acceptance (drive, brake, crash, restart and complete laps on iPhone and iPad) is recorded under P1-08, but Phase 1 is not complete while P1-10 is In Review. The initial master specification is the owner's detailed project request; no separate specification was found. Re-verify this table against code and tests whenever statuses change.
 
 ### Existing work and reconciliation
 
@@ -69,7 +69,7 @@ Documentation-only checks are recorded as such; no application/device execution 
 | P1-10 | GitHub Actions CI | 1 | P0 | In Review | P1-01 | [#10](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/10) |
 | P1-11 | Vercel deployment compatibility | 1 | P1 | Complete | P1-01 | [#11](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/11) |
 | P2-01 | Seven forward ray sensors | 2 | P0 | In Review | P1-06 | [#12](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/12) |
-| P2-02 | Nine network inputs: rays, speed and checkpoint heading error | 2 | P0 | Not Started | P2-01, P1-07 | [#13](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/13) |
+| P2-02 | Nine network inputs: rays, speed and checkpoint heading error | 2 | P0 | In Review | P2-01, P1-07 | [#13](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/13) |
 | P2-03 | Feedforward network 9-12-3 with independent steering, throttle and brake | 2 | P0 | Not Started | P1-01 | [#14](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/14) |
 | P2-04 | Genetic operators: selection, crossover, mutation and elitism | 2 | P0 | Not Started | P1-03, P2-03 | [#15](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/15) |
 | P2-05 | Population training loop over multiple generations (headless and rendered) | 2 | P0 | Not Started | P2-02, P2-04, P2-06 | [#16](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/16) |
@@ -106,7 +106,7 @@ Documentation-only checks are recorded as such; no application/device execution 
 
 Dependencies are taken from the table above.
 
-- **In review:** P1-10 (CI), merged in #60 with a retrospective Codex technical approval. It stays In Review until CI is shown to block merging on failure (branch protection requiring the CI jobs for `main`), or the owner explicitly approves changing that criterion. P2-01 (ray sensors) is in review on `feat/p2-01-ray-sensors`; it has Codex technical approval of `2391aba` (#79) and needs real iPhone/iPad Safari checks of the debug layer and the owner's merge approval.
+- **In review:** P1-10 (CI), merged in #60 with a retrospective Codex technical approval. It stays In Review until CI is shown to block merging on failure (branch protection requiring the CI jobs for `main`), or the owner explicitly approves changing that criterion. P2-01 (ray sensors) was merged by the owner in #79 at `5c18365` (the same tree as the Codex-approved head `f69d01c`); it stays In Review until real iPhone/iPad Safari checks of the debug layer are recorded. P2-02 (network inputs) is in review on `feat/p2-02-network-inputs`, pending Codex review and owner approval.
 - **Complete:** P1-02 (fixed-timestep loop, #62), P1-03 (seeded generator, #64), P1-04 (track model and static track layer, #65), P1-05 (vehicle physics, #66), P1-06 (collision detection, #67), P1-07 (checkpoints and laps, #69), P1-08 (manual driving, #70), P1-09 (deterministic simulation suite, #72), P1-01 (scaffold, #55, with a retrospective Codex review) and P1-11 (static deployment, #74).
 - **Ready now (all dependencies Complete or merged):** P2-03 (the network is pure maths), P2-06 (fitness), P2-10 (track splits) and P4-01 (track validation). Ready means the dependencies are met, not that implementation is authorised.
 - **Silverstone (approved 2026-10-23, planning only):** P4-06 (Silverstone import) after P4-01, P2-10, P2-05, P2-07 and P3-05; P2-11 (spatial index, after P1-06 and P2-01) only if P4-06's measured baseline misses the budget or the owner approves an architectural reason; P4-07 (camera) after P1-04 and P2-05, as a separate follow-up. Each still needs explicit owner implementation approval when its dependencies are complete; this planning approval does not authorise implementation. None of these interrupts the current phase.
@@ -350,17 +350,25 @@ Dependencies are taken from the table above.
   - **Code:** `src/sensors/rays.ts` (validated `SensorConfig` with `origin: "body-centre"`, `castRay`, `castRays`, `sensorOrigin`), `src/render/sensorView.ts` (debug layer), `src/ui/debugFlags.ts` (`?debug=rays`, off by default), wired in `src/main.ts` only.
   - **Tests:** `tests/sensors/rays.test.ts`, `tests/render/sensorView.test.ts`, `tests/ui/debugFlags.test.ts` and `tests/e2e/sensorDebug.spec.ts`.
   - **Review:** [Codex technical approval of `2391aba`](https://github.com/Harrisonxaph/Self-learning-Car-AI/pull/79#pullrequestreview-5640771501), with green CI (run 40142699454, including WebKit).
-  - **Still needed:** owner merge approval, and real iPhone and iPad Safari checks of the debug layer (alignment while driving, rotation, app switching, unchanged page without the flag). Browser emulation does not replace these.
+  - **Merged:** by the owner in #79 at `5c18365`, with the same tree as `f69d01c`, which has [Codex technical approval](https://github.com/Harrisonxaph/Self-learning-Car-AI/pull/79#pullrequestreview-5640915383) and green CI (run 40149613329).
+  - **Still needed:** real iPhone and iPad Safari checks of the debug layer (alignment while driving, rotation, app switching, unchanged page without the flag). Browser emulation does not replace these.
 
 ### P2-02 — Nine network inputs: rays, speed and checkpoint heading error
 
-- **Priority:** P0 · **Status:** Not Started · **Issue:** [#13](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/13)
+- **Priority:** P0 · **Status:** In Review · **Issue:** [#13](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/13)
 - **Depends on:** P2-01, P1-07
 - **Description:** Build the 9-value input vector: 7 ray distances, forward speed ÷ MAX_SPEED and signed heading error to the next checkpoint ÷ π.
 - **Acceptance criteria:**
   - All inputs within documented ranges; heading-error sign matches left/right.
 - **Test requirements:**
   - Unit: known poses give known vectors.
+- **Implementation (In Review):**
+  - **Authorization:** the owner's instruction, [relayed on #13](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/13#issuecomment-6400122416), together with the input contract and test plan.
+  - **Code:** `src/ai/inputs.ts` builds the nine inputs headlessly (`buildInputs`), with `INPUT_NAMES` and `INPUT_CONTRACT` (`seven-rays-speed-heading-v1`). The contract is in ARCHITECTURE.md, "Network inputs".
+  - **Tests:** `tests/ai/inputs.test.ts`.
+  - **Not changed:** `Observation` and the drivers. A neural driver will use the inputs in a later item.
+  - **Device checks:** none apply. The inputs are headless; nothing is drawn and the page is unchanged.
+  - **Still needed:** Codex review and owner merge approval. P2-01, which P2-02 depends on, is merged but still In Review for its device checks.
 
 ### P2-03 — Feedforward network 9-12-3 with independent steering, throttle and brake
 
@@ -875,3 +883,4 @@ These apply to every phase and are checked in review.
 | 2026-10-24 | P1-01 Complete: retrospective Codex technical approval of `9ba08e8` (#55, merged at `5a3e494`) supplies the missing review record; no new implementation was needed. P1-10 also has a retrospective Codex technical approval of `af6350b` (#60, merged at `ab1436c`) but stays In Review: its "blocks on failure" criterion needs the owner's branch protection (or an explicit criterion change), which is not verified. Earlier rows named the reviewed heads as merge points; the merge commits are `5a3e494` and `ab1436c`. |
 | 2026-10-24 | P2-01 ray sensors (seven validated rays from the body centre, `?debug=rays` debug layer) implemented on `feat/p2-01-ray-sensors` and moved to In Review; not Complete until Codex review, owner approval and real iPhone/iPad Safari checks are recorded. |
 | 2026-10-25 | Q-01 Complete: the non-Codex review of the merged workflow (should-fix fixed in #78, Codex technical approval of `ae0b4dd`, merged by the owner at `787f185`) and the owner's completion approval, relayed on #39 on condition that Codex verifies the evidence. |
+| 2026-10-25 | P2-02 nine network inputs (seven normalised rays, normalised speed, signed heading error to the next gate's centre from the rear axle ÷ π) implemented on `feat/p2-02-network-inputs` and moved to In Review. P2-01 reconciled: merged in #79 at `5c18365`, still In Review because no real iPhone/iPad results are recorded. |
