@@ -341,7 +341,9 @@ Optional: `name`, `appVersion`, derived configuration hashes and `evaluation` (o
 
 ## Parameter order
 
-For each layer transition `L → L+1` in order: all weights as `[outputIndex][inputIndex]` (row-major), then the biases for that layer's outputs. For 9-12-3 that is 108 weights + 12 biases + 36 weights + 3 biases = 159 values. A unit test pins this order with a hand-written network.
+For each layer transition `L → L+1` in order: all weights as `[outputIndex][inputIndex]` (row-major), then the biases for that layer's outputs. For 9-12-3 that is 108 weights + 12 biases + 36 weights + 3 biases = 159 values. Implemented in `src/ai/network.ts` (P2-03; `PARAMETER_ORDER` is the `parameters.order` string above). `tests/ai/network.test.ts` pins the order with hand-written networks and a one-hot sweep over all 159 positions.
+
+Fresh, untrained parameters are drawn with initialisation `uniform-pm1-v1`: 159 independent `rng.range(-1, 1)` draws, in parameter order. When P2-07 finalises `training.configuration`, it records this id there.
 
 ## Size
 
