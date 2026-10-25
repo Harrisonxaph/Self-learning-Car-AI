@@ -25,9 +25,9 @@ src/
   sensors/
     rays.ts               7 ray casts from the body centre → normalised distances (P2-01)
   ai/                     inference only, no evolution imports
-    network.ts            feedforward net (9-12-3), forward pass
+    network.ts            feedforward net (9-12-3), forward pass, seeded initialisation (P2-03)
     inputs.ts             builds the 9-value input vector (P2-02)
-    outputs.ts            maps raw outputs → steering, throttle, brake
+    outputs.ts            maps raw outputs → steering, throttle, brake; brake mask (P2-03)
     drivers.ts            Driver interface; human driver built (P1-08); neural, random, rule-based later
   evolution/              genomes and genetic operators, no DOM
     genome.ts             flat Float64Array of weights and biases
@@ -211,6 +211,39 @@ Seven rays fanned across the car's front (−90°, −60°, −30°, 0°, 30°, 
 - Parameter count: 9×12 + 12 + 12×3 + 3 = **159**.
 - Weights are stored as one flat array in a documented order (see `docs/MODEL_FORMAT.md`), so evolution can work on genomes without knowing layer structure.
 - "No-braking" experiments keep the same 9-12-3 shape and force `brake = 0`, so parameter counts match and only braking differs.
+
+**Network contract** (built in P2-03, `src/ai/network.ts` and `src/ai/outputs.ts`):
+
+- **Layout:** `LAYERS = [9, 12, 3]` and `PARAMETER_COUNT = 159`, in the MODEL_FORMAT order (`PARAMETER_ORDER`): for each layer, `weights[out][in]` row-major, then `biases[out]`.
+
+  | Indices | Contents |
+  |---|---|
+  | 0–107 | W1: hidden `j` from input `i` at `9·j + i` |
+  | 108–119 | b1 |
+  | 120–155 | W2: output `k` from hidden `j` at `120 + 12·k + j` |
+  | 156–158 | b2 |
+
+  `weightIndex(layer, to, from)` and `biasIndex(layer, to)` give these positions.
+- **Forward pass:** `evaluate(parameters, inputs)` returns new arrays: `hidden = tanh(W1·x + b1)` (12 values in [−1, 1]) and `raw = W2·hidden + b2` (3 linear values).
+- **Controls:** `runNetwork(parameters, inputs, { brakeEnabled })` returns `Controls`:
+  - `steering = tanh(o0)`, in [−1, 1];
+  - `throttle = sigmoid(o1)`, in [0, 1];
+  - `brake = sigmoid(o2)`, in [0, 1], or exactly 0 when `brakeEnabled` is false.
+
+  The three outputs are independent. `sigmoid` is computed so it never overflows, reaching exactly 0 or 1 at the extremes.
+- **Validation:** a `RangeError` is thrown for:
+  - parameters that are not exactly 159 finite numbers (an array or a `Float64Array`);
+  - inputs that are not exactly 9 finite numbers;
+  - a non-boolean `brakeEnabled`;
+  - a hidden or output sum that overflows to ±Infinity (huge weights or inputs).
+
+  Results are never NaN.
+- **No hidden state:** these are pure functions with no module-level mutable state. Arguments are never written.
+- **Initialisation:** `initialParameters(rng)` returns a new `Float64Array` of 159 independent `rng.range(-1, 1)` draws, in parameter order. This is `INITIALISATION`, id `uniform-pm1-v1`.
+  - It advances the generator by exactly 159 draws, so a seed reproduces the same network.
+  - `range` is used rather than `gaussian` because its arithmetic is exact in every JavaScript engine.
+  - P2-07 records this id in the training configuration. A2 (untrained) and A8/A9 (random-search) baselines use the same distribution.
+- **Separation:** inference imports only `sim` types and `utils/rng`, never evolution or training. Lint enforces this, and a test checks the imports. The network is not yet wired to a driver; a neural driver comes with later Phase 2 items.
 
 ## Evolution
 
