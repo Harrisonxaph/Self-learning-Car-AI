@@ -1,6 +1,6 @@
 # Testing
 
-> Status: the commands below exist from P1-01 onwards. Only the project foundation (canvas sizing, page start-up and the architecture lint rules), the fixed-timestep loop, the seeded random generator, the track model and static track layer, the vehicle physics, collision detection, checkpoints and laps, manual driving and the deterministic simulation suite are tested so far; the rest of the table under "What must be tested" applies as each feature lands. Report only results you actually ran.
+> Status: the commands below exist from P1-01 onwards. Tested so far: the project foundation (canvas sizing, page start-up and the architecture lint rules), the fixed-timestep loop, the seeded random generator, the track model and static track layer, the vehicle physics, collision detection, checkpoints and laps, manual driving, the deterministic simulation suite, and the Phase 2 sensors, network inputs, network, genetic operators, fitness guards and training loop. The rest of the table under "What must be tested" applies as each feature lands. Unit tests have a 30 s per-test limit (`vite.config.ts`), because several deterministic driving tests take about 2 s alone and more on a busy runner. Report only results you actually ran.
 
 ## Commands
 

@@ -302,8 +302,7 @@ describe('legitimate ordered progress', () => {
     const partial = partialProgressAt(first.world.racer.car.vehicle.position, 1, 41, START, oval);
     expect(end.partialProgress).toBe(partial);
     expect(fitness(end, lapRules)).toBeCloseTo(41000 + 1000 * partial + 10000 + bonus(lap1) + bonus(lap2), 6);
-    // About 10,000 driven ticks: well under the limit alone, but over Vitest's 5 s default on a busy machine.
-  }, 30_000);
+  });
 });
 
 describe('anti-exploitation guards', () => {

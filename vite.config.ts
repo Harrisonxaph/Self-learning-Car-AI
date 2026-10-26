@@ -16,5 +16,8 @@ export default defineConfig({
     environment: 'node',
     include: ['tests/**/*.test.ts'],
     exclude: ['tests/e2e/**', 'node_modules/**'],
+    // Several deterministic driving tests take about 2 s alone, and more on a busy two-CPU runner, which pushed
+    // some past Vitest's 5 s default. The limit only catches hangs; it does not change what any test checks.
+    testTimeout: 30_000,
   },
 });
