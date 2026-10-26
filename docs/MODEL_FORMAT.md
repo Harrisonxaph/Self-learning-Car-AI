@@ -295,7 +295,8 @@ This is synthetic format data, not an experiment or evidence of learning. The 15
         "lapWeight": 5000,
         "collisionPenalty": 500,
         "lapTimeBonusScale": 2000,
-        "referenceLapSeconds": 30
+        "referenceLapSeconds": 30,
+        "maxLapTimeRatio": 2
       },
       "inputContract": "seven-rays-speed-heading-v1",
       "outputContract": "steering-throttle-brake-v1"
@@ -373,6 +374,7 @@ Validation lives in `src/persistence/modelFormat.ts` and is a pure function retu
 ## Compatibility
 
 - `schemaVersion` changes when the JSON structure changes. Newer apps migrate older versions through explicit, tested migration functions (`v1 → v2`, …). Models with a version newer than the app supports are rejected with "made by a newer version".
+- The `fitness` block holds the weights of `fitnessVersion` 1 (`src/training/fitness.ts`, P2-06): `checkpointWeight`, `partialProgressWeight`, `lapWeight`, `collisionPenalty`, `lapTimeBonusScale`, `referenceLapSeconds` and `maxLapTimeRatio` (the cap on reference ÷ lap time). `partialProgressWeight` must not exceed `checkpointWeight`. `maxEpisodeSeconds`, `stallSeconds` and `maxLaps` are its termination limits.
 - `fitnessVersion` changes whenever the fitness formula changes. Models with different fitness versions can still be loaded and driven, but the comparison view must not rank them by fitness. Rank them by evaluation metrics instead.
 - The full `training.configuration.physics` and timestep are authoritative; an optional `physicsConfigHash` detects differences but never replaces the data. A model trained under compatible but different physics loads with a warning that its behaviour and old scores may differ; unsupported simulation/input/output contracts are rejected.
 
