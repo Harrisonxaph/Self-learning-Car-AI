@@ -496,7 +496,7 @@ Dependencies are taken from the table above.
     - [Codex technical approval of `6672bea`](https://github.com/Harrisonxaph/Self-learning-Car-AI/pull/85#pullrequestreview-5657613853).
   - **Codex's own runs:** install, lint, typecheck and build on `6672bea`. Its first default-concurrency unit run had one timeout: the seeded two-lap test took 5062 ms against the 5 s default. It passed alone and in a full run with 2 workers (695 tests). That test gets an explicit 30 s timeout in P2-05's PR. Codex ran the full six-project browser suite on `8ff1a92`.
   - **CI on `6672bea`** (run 40369048174): both jobs green, including WebKit.
-  - **CI on `main` at `4e02d70`** (run 40385636959): the lint, typecheck, unit and build job is green. The browser job had not finished when this record was written.
+  - **CI on `main` at `4e02d70`** (run 40385636959): the lint, typecheck, unit and build job is green. The browser job was cancelled after 20 minutes in its `playwright install` step, before any browser test ran. The same tree's browser tests passed in run 40369048174, and the failure is in browser installation, not the code; a re-run of that job is outstanding.
   - **Tests:** 58 unit tests in `tests/training/fitness.test.ts`.
   - **Device checks:** not applicable. The code is headless, and the production assets were unchanged.
   - **Owner approval:** the owner's merge (AGENTS.md owner evidence).
