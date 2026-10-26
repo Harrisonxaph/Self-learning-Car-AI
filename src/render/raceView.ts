@@ -1,7 +1,8 @@
 // Draws the moving parts over the cached track layer: the next gate to cross, and the car's footprint with
 // a mark at its nose. Reads the world and never changes it. Coordinates are mapped to CSS pixels with the
 // same transform as the track layer, so the car sits exactly where the simulation says it is.
-import { vehicleFootprint } from '../sim/collision';
+import { vehicleFootprint, type Car } from '../sim/collision';
+import type { VehiclePhysics } from '../sim/config';
 import type { World } from '../sim/world';
 import { worldToScreen, type WorldToScreen } from './trackView';
 import type { ViewportSize } from './viewport';
@@ -17,6 +18,8 @@ export const RACE_COLOURS = Object.freeze({
   locator: 'rgba(255, 255, 255, 0.55)',
   car: '#4aa3ff',
   crashedCar: '#ff5a5a',
+  /** Training mode: a car whose episode ended without a crash (stalled, timed out or completed). */
+  finishedCar: '#7d8794',
   outline: '#0b1118',
   nose: '#ffffff',
 });
@@ -49,10 +52,36 @@ export function drawRace(context: RaceContext, size: ViewportSize, view: WorldTo
   context.lineWidth = 1.5;
   context.stroke();
 
+  drawCarBody(context, corners, car.crashed ? RACE_COLOURS.crashedCar : RACE_COLOURS.car);
+}
+
+/** A car drawn in training mode (P2-05), and whether its episode has ended. */
+export interface DrawnCar {
+  readonly car: Car;
+  readonly finished: boolean;
+}
+
+/**
+ * Draws a whole population (training mode, P2-05): every car's footprint and nose, finished cars first and
+ * running cars on top, so the cars still driving stay visible where they overlap. Running cars are blue, crashed
+ * cars red and other finished cars grey. Reads the cars and never changes them.
+ */
+export function drawCars(context: RaceContext, size: ViewportSize, view: WorldToScreen, cars: readonly DrawnCar[], physics: VehiclePhysics): void {
+  context.setTransform(size.pixelRatio, 0, 0, size.pixelRatio, 0, 0);
+  const ordered = [...cars.filter((c) => c.finished), ...cars.filter((c) => !c.finished)];
+  for (const { car, finished } of ordered) {
+    const corners = vehicleFootprint(car.vehicle, physics).map((p) => worldToScreen(view, p));
+    const fill = car.crashed ? RACE_COLOURS.crashedCar : finished ? RACE_COLOURS.finishedCar : RACE_COLOURS.car;
+    drawCarBody(context, corners, fill);
+  }
+}
+
+/** The car body (its collision footprint, filled and outlined) and the white nose wedge. */
+function drawCarBody(context: RaceContext, corners: readonly Point[], fill: string): void {
   context.beginPath();
   corners.forEach((p, i) => (i === 0 ? context.moveTo(p.x, p.y) : context.lineTo(p.x, p.y)));
   context.closePath();
-  context.fillStyle = car.crashed ? RACE_COLOURS.crashedCar : RACE_COLOURS.car;
+  context.fillStyle = fill;
   context.fill();
   context.strokeStyle = RACE_COLOURS.outline;
   context.lineWidth = 1;

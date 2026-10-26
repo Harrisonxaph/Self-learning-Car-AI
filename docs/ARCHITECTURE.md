@@ -13,7 +13,7 @@
 
 ```
 src/
-  main.ts                 entry point: wires UI, loop and renderer
+  main.ts                 entry point: manual driving, or the training view with ?mode=train (P2-05)
   sim/                    pure simulation, no DOM
     config.ts             fixed timestep, physics constants
     vehicle.ts            car state and physics step
@@ -37,7 +37,7 @@ src/
     population.ts         config, per-operator generators, next generation with elitism (P2-04)
   training/
     fitness.ts            episode fitness and termination rules, anti-exploitation guards (P2-06)
-    trainer.ts            generation loop; headless or rendered
+    trainer.ts            population training loop, headless or under the frame loop (P2-05)
     experiment.ts         experiment config, seeds, result records
     stats.ts              per-generation statistics
   persistence/
@@ -48,7 +48,7 @@ src/
     viewport.ts           canvas sizing with capped pixel ratio
     trackView.ts          world-to-screen fit (uniform scale, centred, margin)
     trackLayer.ts         cached static track layer
-    raceView.ts           next gate, car footprint, nose and locator ring (P1-08)
+    raceView.ts           next gate, car footprint, nose and locator ring (P1-08); all training cars (P2-05)
     sensorView.ts         ray sensor debug layer, shown with ?debug=rays (P2-01)
     renderer.ts
     layers/               track, cars, sensors, overlays
@@ -57,6 +57,8 @@ src/
     controls/input.ts     keyboard and touch input, safe release (P1-08)
     hud.ts                lap display and event messages (P1-08)
     debugFlags.ts         debug views switched on from the address, e.g. ?debug=rays (P2-01)
+    pageMode.ts           manual driving by default, training view with ?mode=train (P2-05)
+    trainingPage.ts       rendered training: the trainer under the frame loop, all cars drawn (P2-05)
     dashboard/            stats, fitness graph
     editor/               track editor
   utils/
@@ -323,6 +325,51 @@ Seven rays fanned across the car's front (−90°, −60°, −30°, 0°, 30°, 
   - No term grows with time alone, and lap-time bonuses need completed laps.
 - **Limitation:** a degenerate track with overlapping gates can let a car complete "laps" by crossing back and forth. Scoring stays bounded by `maxLaps` and the lap-ratio cap; rejecting that geometry belongs to track validation (P4-01).
 - **Separation:** fitness imports only `sim/`, never inference, evolution, rendering or the DOM (lint for the last two; a test checks the imports). It never steps the simulation.
+
+## Training loop
+
+**Population trainer** (built in P2-05, `src/training/trainer.ts`). The plan was documented on [#16](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/16#issuecomment-6425226371) before coding.
+
+- **One simulation path:** each running car, each fixed tick, calls only existing functions, in this order:
+  1. `buildInputs` (P2-02);
+  2. `runNetwork` (P2-03, with `brakeEnabled`);
+  3. `stepRacer` (physics, swept collision and gates, the same function `stepWorld` uses for the human car);
+  4. `recordTick` (P2-06).
+
+  At the end of a generation, `scoreEpisode` gives each car's fitness and `nextGeneration` (P2-04) builds the next population.
+- **Cars (multi-car Option A):** each car is `{ genome, racer, episode }`, with nothing mutable shared.
+  - Rays and collision test track boundaries only, so cars never see, block or hit each other. Every car starts on the track's start pose, overlapping the others.
+  - A car's result depends only on its genome and the shared, immutable track, physics and configuration. It is bit-identical alone, in any population, in any order, and next to copies of itself.
+- **Lifecycle:**
+  1. **Start:** a generation starts one fresh car per genome (`startRacer` and `startEpisode`: start pose, at rest, tick 0).
+  2. **Ticks:** each tick steps every car whose episode has no outcome, in index order. Finished cars are frozen.
+  3. **End:** the generation ends when every car has an outcome, which happens within `maxEpisodeTicks`.
+  4. **Scoring:** statistics are recorded:
+     - each car's fitness;
+     - best, mean and worst fitness;
+     - the champion's index and a copy of its genome;
+     - outcome counts and cars with a lap;
+     - maximum gates passed;
+     - the generation's length in ticks and the ticks summed over all cars.
+  5. **Next generation:** the next population starts, with elites first and unchanged. Nothing carries over except genomes, so an elite scores exactly its previous fitness.
+- **Configuration:**
+  - `TrainingConfig` is the seed plus the evolution block, `fitness`, `maxEpisodeSeconds`, `stallSeconds`, `maxLaps` and `brakeEnabled`. These are MODEL_FORMAT names, and the defaults are its example (50 cars, seed 1). The track, physics and timestep are the environment.
+  - Everything is validated through the existing resolvers. The seed must be an integer from 0 to 4,294,967,295.
+- **Recorded:** `record()` returns the resolved configuration, the timestep, the sensor configuration and the per-generation statistics. It also returns the version references a champion replay needs:
+  - `RNG_ALGORITHM`, `EVOLUTION_OPERATORS`, `INITIALISATION.id` and `PARAMETER_ORDER`;
+  - `INPUT_CONTRACT`, `OUTPUT_CONTRACT` (`steering-throttle-brake-v1`, now in `ai/outputs.ts`) and `FITNESS_VERSION`;
+  - the track's id and version.
+
+  These are in memory only. Saving them is P2-07 and P3-05.
+- **Randomness:** the trainer owns one run generator, `createRng(seed)`. Its first draw seeds the initial-population generator, which fills genomes in index order. Each generation transition takes exactly three more draws, through `createEvolutionRngs`. Episodes use no randomness, so stepping order and drawing cannot change any stream.
+- **Headless:** `runGeneration` and `trainHeadless(config, environment, generations)` run in Node. `npm run demo:train` prints 50 generations with the default configuration, in about 80 s here.
+- **Rendered (`?mode=train`, `ui/trainingPage.ts`):**
+  - The page's frame loop calls `trainer.step()` once per fixed tick, at most `maxStepsPerFrame` per frame. Drawing (`drawCars`) only reads car state, so results match a headless run; a test drives the loop at several frame rates.
+  - Running cars are blue, crashed cars red and other finished cars grey. One status line names the generation and how many cars are still running, and the manual controls and lap display are hidden.
+  - The default page is still manual driving.
+  - There is no dashboard, graph, speed control, saving or replay; those are P3-01 to P3-05.
+- **Observed with the defaults:** 3 laps of the oval (about 1,474 m) cannot fit in 60 s at the 23.7 m/s top speed. So `completed` is unreachable on this track with these limits, and lapping cars end as `timeout`. This is a configuration fact, not a result.
+- **Separation:** the trainer imports `ai`, `evolution`, `sensors`, `sim`, `utils` and `training` only. Lint forbids rendering, UI, persistence and the DOM, and a test checks the imports.
 
 ## Drivers
 
