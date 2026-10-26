@@ -36,7 +36,7 @@ src/
     mutation.ts           Gaussian mutation with rate and scale (P2-04)
     population.ts         config, per-operator generators, next generation with elitism (P2-04)
   training/
-    fitness.ts            fitness and termination rules (anti-exploitation)
+    fitness.ts            episode fitness and termination rules, anti-exploitation guards (P2-06)
     trainer.ts            generation loop; headless or rendered
     experiment.ts         experiment config, seeds, result records
     stats.ts              per-generation statistics
@@ -261,7 +261,7 @@ Seven rays fanned across the car's front (−90°, −60°, −30°, 0°, 30°, 
   - rates outside [0, 1];
   - a negative or non-finite mutation scale;
   - any other operator type.
-- **Fitness:** one finite number per genome, supplied by the caller (the fitness function is P2-06); higher is better. Wrong length, non-finite scores or missing scores (holes in a sparse array, checked index by index) throw a `RangeError`. Populations are checked the same way.
+- **Fitness:** one finite number per genome, supplied by the caller (the episode fitness is P2-06, `training/fitness.ts`; evolution does not import it); higher is better. Wrong length, non-finite scores or missing scores (holes in a sparse array, checked index by index) throw a `RangeError`. Populations are checked the same way.
 - **Ranking:** fitness descending, ties to the lower index, so results never depend on sort stability.
 - **Elitism:** the top `eliteCount` genomes are copied unchanged, in rank order, into places 0 … E−1. They are never crossed or mutated.
 - **Tournament selection:** `size` uniform draws with replacement (`rng.int(0, N)`); the fittest wins, ties to the lower index. Each remaining place picks parents A and B with two tournaments, and A may equal B.
@@ -270,6 +270,55 @@ Seven rays fanned across the car's front (−90°, −60°, −30°, 0°, 30°, 
 - **Generators:** `nextGeneration(population, fitness, config, { selection, crossover, mutation })` uses one generator per operator. `createEvolutionRngs(parent)` derives them with `createRng(parent.nextUint32())`, in that order. Crossover and mutation settings therefore never change which parents are selected, and mutation never shifts crossover. The same inputs and generator states always give the same generation. `gaussian` uses `Math.log` and `Math.cos`, so mutation is reproducible within one JavaScript engine (see Randomness).
 - **Result:** `{ genomes, eliteSources, parents }`: the N new genomes, the source index of each elite, and parents A and B for each child.
 - **Separation:** evolution imports only `utils/rng`. It never imports inference, training, persistence, rendering or the DOM. Lint enforces this, and a test checks the imports.
+
+## Fitness
+
+**Episode scoring contract** (built in P2-06, `src/training/fitness.ts`; `FITNESS_VERSION = 1`, recorded as `fitnessVersion`). The design was documented on [#17](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/17#issuecomment-6422048941) before coding.
+
+- **Formula** (points):
+
+  ```
+  fitness = checkpointWeight × gatesPassed
+          + partialProgressWeight × partialProgress                  (0 ≤ partialProgress ≤ 0.99)
+          + Σ completed laps ( lapWeight + lapTimeBonusScale × min(maxLapTimeRatio, referenceLapSeconds / lapSeconds) )
+          − (crashed ? collisionPenalty : 0)
+  ```
+
+  Defaults (MODEL_FORMAT's `fitness` block): 1000, 1000, 5000, 2000 × min(2, 30 s / lap time), penalty 500. `scoreEpisode` returns each term and the total. Distance and speed earn nothing.
+- **Ordered progress:** `gatesPassed` and the lap ticks are P1-07's credits (only the next gate, forwards, through the gate, using the move collision accepted), including the first gate 0 crossing that starts lap timing. Lap seconds are whole ticks × the fixed timestep.
+- **Partial progress (`partialProgressAt`):**
+  - **Segment:** the fraction of the way along the segment from an anchor to the next gate's centre. The anchor is the start position before the first credit, then the previous gate's centre (gate n−1 before gate 0).
+  - **Clamping:** the fraction is clamped to [0, 0.99].
+  - **When it is 0:**
+    - more than one road width (the longer of the two gates) from the segment;
+    - strictly ahead of the next gate's line without having crossed it.
+  - **High-water mark:** the episode keeps the largest value since the last gate credit. It resets only when a gate is credited, so an approach is earned once and is always worth less than a crossing.
+- **Termination (`recordTick`):** after each tick, the first match wins:
+  1. **`completed`:** `maxLaps` laps done.
+  2. **`crashed`:** the car touched a wall. The move that would have hit the wall is rejected by collision, so it credits nothing, and the penalty applies once.
+  3. **`stalled`:** no new gate credit for `stallTicks`. Partial progress does not reset this timer.
+  4. **`timeout`:** `maxEpisodeTicks` ticks have run.
+
+  `resolveEpisodeRules` converts `maxEpisodeSeconds` (60), `stallSeconds` (5) and `maxLaps` (3) into ticks: ⌈seconds ÷ timestep⌉, with a 1e-9 tolerance, so 3600 and 300 ticks at 1/60 s. Recording after an outcome throws. The caller (the P2-05 trainer) steps each car with `stepRacer` and records it once per tick.
+- **Validation:** `resolveFitnessConfig` and `resolveEpisodeRules` return frozen copies and throw a `RangeError` naming the field for:
+  - a wrong `version`;
+  - negative or non-finite weights;
+  - a non-positive reference lap, limit or timestep;
+  - `maxLapTimeRatio` below 1;
+  - a non-integer `maxLaps`.
+
+  `startEpisode` needs fresh progress. `recordTick` rejects:
+  - a racer that is not exactly one tick later;
+  - a gate count or lap count that went down;
+  - an undone crash;
+  - a non-finite position or an invalid next gate.
+- **Guards** (AI_EVALUATION.md §6):
+  - Farming and oscillation earn one credit at most.
+  - Idling, creeping, circling and wrong-way driving stall with at most the bounded approach.
+  - Crashes are penalised and keep only the progress made before them.
+  - No term grows with time alone, and lap-time bonuses need completed laps.
+- **Limitation:** a degenerate track with overlapping gates can let a car complete "laps" by crossing back and forth. Scoring stays bounded by `maxLaps` and the lap-ratio cap; rejecting that geometry belongs to track validation (P4-01).
+- **Separation:** fitness imports only `sim/`, never inference, evolution, rendering or the DOM (lint for the last two; a test checks the imports). It never steps the simulation.
 
 ## Drivers
 

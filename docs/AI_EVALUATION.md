@@ -96,6 +96,8 @@ fitness = 1000 × checkpointsReached
         − (crashed ? 500 : 0)
 ```
 
+**Implemented (P2-06):** `src/training/fitness.ts`, `fitnessVersion` 1 (see ARCHITECTURE.md "Fitness"). It uses this formula with MODEL_FORMAT's default weights and one change: the lap-time ratio is capped at `maxLapTimeRatio` (default 2), so a completed lap's bonus is bounded. It ends episodes as `completed` (`maxLaps`), `crashed`, `stalled` (5 s without a new gate) or `timeout` (60 s). There is no separate wrong-way termination; the stall timeout covers it. The weights are untuned starting values and have not been tuned on any track. No training run has used them.
+
 Each guard needs a unit test that scripts the exploit (for example a car oscillating across gate 3) and asserts that repeated farming without new valid progress cannot accumulate fitness.
 
 The suggested partial-progress term is an absolute, bounded episode value, not a sum paid every tick. Compute progress along the current ordered track segment, clamp it to [0, 1), and never accumulate repeated credit for approaching, reversing or circling near a gate. Reset it only after a valid next-gate crossing. Check wall collision and gate validity consistently within a swept tick so crossing outside the road earns no credit. Tests must distinguish legitimate new ordered progress from repeat farming; an initial bounded approach can increase fitness, while repeated oscillation without a new valid gate cannot accumulate it. Test start/finish wrapping, overlapping gates, reverse crossings and high-speed corner cuts.
