@@ -355,7 +355,7 @@ Seven rays fanned across the car's front (−90°, −60°, −30°, 0°, 30°, 
 - **Configuration:**
   - `TrainingConfig` is the seed plus the evolution block, `fitness`, `maxEpisodeSeconds`, `stallSeconds`, `maxLaps` and `brakeEnabled`. These are MODEL_FORMAT names, and the defaults are its example (50 cars, seed 1). The track, physics and timestep are the environment.
   - Everything is validated through the existing resolvers. The seed must be an integer from 0 to 4,294,967,295.
-- **Recorded:** `record()` returns the resolved configuration, the timestep, the sensor configuration and the per-generation statistics. It also returns the version references a champion replay needs:
+- **Recorded:** `record()` returns the resolved configuration, a copy of the vehicle physics, the timestep, the sensor configuration and the per-generation statistics. It also returns the version references a champion replay needs:
   - `RNG_ALGORITHM`, `EVOLUTION_OPERATORS`, `INITIALISATION.id` and `PARAMETER_ORDER`;
   - `INPUT_CONTRACT`, `OUTPUT_CONTRACT` (`steering-throttle-brake-v1`, now in `ai/outputs.ts`) and `FITNESS_VERSION`;
   - the track's id and version.

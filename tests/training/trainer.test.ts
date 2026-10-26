@@ -86,6 +86,18 @@ describe('configuration', () => {
     expect(setup.rules).toEqual({ timestepSeconds: 1 / 60, maxEpisodeTicks: 900, stallTicks: 300, maxLaps: 3 });
   });
 
+  it('records the physics the cars drove with, so runs under different physics have different records', () => {
+    const record = trainHeadless(SMALL, ENV, 1);
+    expect(record.physics).toEqual(DEFAULT_VEHICLE_PHYSICS);
+    expect(record.physics).not.toBe(DEFAULT_VEHICLE_PHYSICS);
+    expect(Object.isFrozen(record.physics)).toBe(true);
+    expect(record.timestepSeconds).toBe(1 / 60);
+    const faster = { ...DEFAULT_VEHICLE_PHYSICS, engineAcceleration: 10 };
+    const other = trainHeadless(SMALL, { ...ENV, physics: faster }, 1);
+    expect(other.physics).toEqual(faster);
+    expect(other.physics).not.toEqual(record.physics);
+  });
+
   it.each([
     ['seed', -1],
     ['seed', 1.5],

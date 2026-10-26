@@ -133,10 +133,15 @@ export interface GenerationStats {
   readonly totalEpisodeTicks: number;
 }
 
-/** Everything needed to describe a run so far: configuration, versions and per-generation statistics. */
+/**
+ * Everything needed to describe and reproduce a run so far: configuration, the physics and timestep the cars
+ * drove with, the sensor layout, version references and per-generation statistics.
+ */
 export interface TrainingRecord {
   readonly config: TrainingConfig;
   readonly versions: TrainingVersions;
+  /** A copy of the vehicle physics every car used. */
+  readonly physics: VehiclePhysics;
   readonly timestepSeconds: number;
   readonly sensors: SensorConfig;
   readonly generations: readonly GenerationStats[];
@@ -337,6 +342,7 @@ export function createTrainer(input: unknown, environment: TrainingEnvironment):
       Object.freeze({
         config: setup.config,
         versions: setup.versions,
+        physics: Object.freeze({ ...setup.environment.physics }),
         timestepSeconds: setup.environment.timestepSeconds,
         sensors: setup.sensors,
         generations: Object.freeze([...history]),
