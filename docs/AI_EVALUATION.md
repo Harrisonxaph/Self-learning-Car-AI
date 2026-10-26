@@ -1,6 +1,6 @@
 # AI evaluation protocol
 
-> Status: **protocol only, no results**. No simulator or training code exists yet (verified 2026-10-23). Every results table below is empty on purpose. Do not fill it in until the experiment has actually run, and record its seeds and configuration when you do.
+> Status: **protocol only, no results**. The simulator and the Phase 2 training pieces exist: sensors and network inputs, the network, the genetic operators, the fitness function and the population training loop (P2-01 to P2-06; see ROADMAP.md for each status). Demonstration runs exist (`npm run demo:train`, `?mode=train`), but no experiment in this document has been run, and no learning has been demonstrated (verified 2026-10-26). Every results table below is empty on purpose. Do not fill it in until the experiment has actually run, and record its seeds and configuration when you do.
 
 This document explains how we tell genuine learned driving apart from luck, memorising one track, or exploiting the reward.
 
@@ -96,7 +96,7 @@ fitness = 1000 × checkpointsReached
         − (crashed ? 500 : 0)
 ```
 
-**Implemented (P2-06):** `src/training/fitness.ts`, `fitnessVersion` 1 (see ARCHITECTURE.md "Fitness"). It uses this formula with MODEL_FORMAT's default weights and one change: the lap-time ratio is capped at `maxLapTimeRatio` (default 2), so a completed lap's bonus is bounded. It ends episodes as `completed` (`maxLaps`), `crashed`, `stalled` (5 s without a new gate) or `timeout` (60 s). There is no separate wrong-way termination; the stall timeout covers it. The weights are untuned starting values and have not been tuned on any track. No training run has used them.
+**Implemented (P2-06):** `src/training/fitness.ts`, `fitnessVersion` 1 (see ARCHITECTURE.md "Fitness"). It uses this formula with MODEL_FORMAT's default weights and one change: the lap-time ratio is capped at `maxLapTimeRatio` (default 2), so a completed lap's bonus is bounded. It ends episodes as `completed` (`maxLaps`), `crashed`, `stalled` (5 s without a new gate) or `timeout` (60 s). There is no separate wrong-way termination; the stall timeout covers it. The weights are untuned starting values and have not been tuned on any track. The P2-05 trainer uses them for its demonstration runs; those runs are a training signal on one track, not an experiment.
 
 Each guard needs a unit test that scripts the exploit (for example a car oscillating across gate 3) and asserts that repeated farming without new valid progress cannot accumulate fitness.
 
