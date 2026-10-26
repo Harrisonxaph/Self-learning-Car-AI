@@ -82,6 +82,8 @@ describe('configuration', () => {
       fitnessVersion: FITNESS_VERSION,
       trackId: 'stadium-oval',
       trackVersion: '1',
+      trackHash: 'sha256:f1c3e1a7f9ef938d7a1ffd4bcb79e4260fd870b4c637fdf43389ee7f4aefe8c2',
+      trackSplit: 'training',
     });
     expect(setup.rules).toEqual({ timestepSeconds: 1 / 60, maxEpisodeTicks: 900, stallTicks: 300, maxLaps: 3 });
   });

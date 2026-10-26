@@ -327,7 +327,7 @@ The example contains all 159 values. Arrays serialize to JSON without precision 
 | `parameters.count` | integer | Must equal the count computed from `layers`. |
 | `parameters.values` | number[] | Length = `count`. Every value finite (no `NaN`, `Infinity` or `null`). |
 | `training.generation` | integer ≥ 0 | |
-| `training.trackIds`, `training.trackVersions` | nonempty string[], object | Track identifiers and content version/hash for every training track. |
+| `training.trackIds`, `training.trackVersions` | nonempty string[], object | Track identifiers and content version/hash for every training track. For built-in tracks the IDs, versions, splits and `sha256:` content hashes come from `src/data/tracks/index.json` (P2-10); a training track must be in the training split. |
 | `training.configuration` | object | Required complete resolved configuration: physics/timestep, PRNG algorithm/version, sensors/normalisation and control contracts, population, selection, crossover, mutation, elitism, generation budget, fitness version/weights and termination settings. A hash alone is insufficient. Duplicated summary fields must agree with it. |
 | `training.seed` | unsigned 32-bit integer or null | Required key. Seeded runs store the seed. Legacy unseeded data uses null with `training.seedUnavailableReason`; mark it non-reproducible. |
 | `training.configuration.sensors.origin` | string | Required. Where the rays start; only `"body-centre"` is defined: the rear-axle reference plus `wheelbase / 2` along the heading (docs/ARCHITECTURE.md, ray sensor contract). Reject any other value. |
