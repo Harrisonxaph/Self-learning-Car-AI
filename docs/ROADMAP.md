@@ -4,18 +4,18 @@ A free, browser-based sandbox where 2D cars learn steering, acceleration and bra
 
 ## Verified project status
 
-_Last verified: 2026-10-26, against `main` at `1a98ce9` (#84 merged: P2-04 genetic operators and the P2-03 completion record)._
+_Last verified: 2026-10-26, against `main` at `4e02d70` (#85 merged: P2-06 fitness function and the P2-04 completion record)._
 
 | Area | State |
 |------|-------|
-| Application code | Phase 1 features (P1-01 to P1-11): a Vite + strict TypeScript static page with a responsive Canvas 2D track, a fixed-timestep simulation (seeded generator, vehicle physics, collision, checkpoints and laps), and manual driving by keyboard and touch. P2-01 ray sensors (with a `?debug=rays` debug layer) are merged (#79) and In Review pending real-device checks. P2-02's nine network inputs are Complete (#81). P2-03's 9-12-3 network (pure inference and seeded initialisation, not yet wired to a driver) is Complete (#82). P2-04's genetic operators (tournament selection, uniform crossover, Gaussian mutation, elitism over flat genomes) are Complete (#84). P2-06's episode fitness and termination rules are In Review on `feat/p2-06-fitness`. No training loop exists yet, and nothing has been trained. |
+| Application code | Phase 1 features (P1-01 to P1-11): a Vite + strict TypeScript static page with a responsive Canvas 2D track, a fixed-timestep simulation (seeded generator, vehicle physics, collision, checkpoints and laps), and manual driving by keyboard and touch. P2-01 ray sensors (with a `?debug=rays` debug layer) are merged (#79) and In Review pending real-device checks. P2-02's nine network inputs are Complete (#81). P2-03's 9-12-3 network (pure inference and seeded initialisation, not yet wired to a driver) is Complete (#82). P2-04's genetic operators (tournament selection, uniform crossover, Gaussian mutation, elitism over flat genomes) are Complete (#84). P2-06's episode fitness and termination rules are Complete (#85). P2-05's population training loop (headless, and rendered with `?mode=train`) is In Review on `feat/p2-05-training-loop`. No experiment has been run, and no learning is claimed. |
 | Tests and CI | `package.json` scripts, ESLint with architecture boundary rules, Vitest unit tests (including the P1-09 golden determinism suite) and Playwright browser tests in six Chromium/WebKit desktop, phone and tablet projects, against `vite preview` and a plain static file server. GitHub Actions CI (P1-10, #60) runs all of them on every pull request and push to `main`. Whether failing CI blocks merges depends on the owner's branch-protection setting, which has not been verified, so P1-10 stays In Review. |
 | Deployment | The owner's Vercel Git integration builds a preview deployment for every pull request and a production deployment from `main`. The production deployment of `38ff6a6` (#72's merge) was observed as Ready through the Vercel API on 2026-10-24. The owner has loaded previews on a real iPhone 15 and iPad Pro in Safari (P1-02, P1-04, P1-08 records). P1-11 is Complete (#74). |
 | Planning docs | Added by this roadmap PR: `AGENTS.md`, `docs/ROADMAP.md`, `docs/ARCHITECTURE.md`, `docs/AI_EVALUATION.md`, `docs/MODEL_FORMAT.md`, `docs/TESTING.md`. |
 | GitHub issues | Existing issues #1–#39 are preserved. Reconciliation adds #41–#50 for two missing primary-release entries and eight approval-gated research entries; #40 is the existing documentation PR. |
 | AI learning results | None. No experiments have been run, so no learning claims can be made. |
 
-P1-01 to P1-09 and P1-11 are **Complete**. P1-10 (CI) is **In Review** until merge-blocking is verified, P2-01 (ray sensors) is **In Review**: merged in #79 at `5c18365` with Codex technical approval, pending real iPhone/iPad checks. P2-02 (network inputs) is **Complete** (#81). P2-03 (feedforward network) is **Complete** (#82). P2-04 (genetic operators) is **Complete** (#84). P2-06 (fitness function) is **In Review** on `feat/p2-06-fitness`. The other 27 primary-release implementation features are **Not Started**. Eight research entries are **Blocked** pending explicit approval. Q-01 (the review workflow) is **Complete**. P1-01 to P1-09, P1-11 and P2-02 to P2-04 are the only implementation features marked Complete. Phase 1's acceptance (drive, brake, crash, restart and complete laps on iPhone and iPad) is recorded under P1-08, but Phase 1 is not complete while P1-10 is In Review. The initial master specification is the owner's detailed project request; no separate specification was found. Re-verify this table against code and tests whenever statuses change.
+P1-01 to P1-09 and P1-11 are **Complete**. P1-10 (CI) is **In Review** until merge-blocking is verified, P2-01 (ray sensors) is **In Review**: merged in #79 at `5c18365` with Codex technical approval, pending real iPhone/iPad checks. P2-02 (network inputs) is **Complete** (#81). P2-03 (feedforward network) is **Complete** (#82). P2-04 (genetic operators) is **Complete** (#84). P2-06 (fitness function) is **Complete** (#85). P2-05 (training loop) is **In Review** on `feat/p2-05-training-loop`. The other 26 primary-release implementation features are **Not Started**. Eight research entries are **Blocked** pending explicit approval. Q-01 (the review workflow) is **Complete**. P1-01 to P1-09, P1-11, P2-02 to P2-04 and P2-06 are the only implementation features marked Complete. Phase 1's acceptance (drive, brake, crash, restart and complete laps on iPhone and iPad) is recorded under P1-08, but Phase 1 is not complete while P1-10 is In Review. The initial master specification is the owner's detailed project request; no separate specification was found. Re-verify this table against code and tests whenever statuses change.
 
 ### Existing work and reconciliation
 
@@ -72,8 +72,8 @@ Documentation-only checks are recorded as such; no application/device execution 
 | P2-02 | Nine network inputs: rays, speed and checkpoint heading error | 2 | P0 | Complete | P2-01, P1-07 | [#13](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/13) |
 | P2-03 | Feedforward network 9-12-3 with independent steering, throttle and brake | 2 | P0 | Complete | P1-01 | [#14](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/14) |
 | P2-04 | Genetic operators: selection, crossover, mutation and elitism | 2 | P0 | Complete | P1-03, P2-03 | [#15](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/15) |
-| P2-05 | Population training loop over multiple generations (headless and rendered) | 2 | P0 | Not Started | P2-02, P2-04, P2-06 | [#16](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/16) |
-| P2-06 | Fitness function with anti-exploitation guards | 2 | P0 | In Review | P1-07 | [#17](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/17) |
+| P2-05 | Population training loop over multiple generations (headless and rendered) | 2 | P0 | In Review | P2-02, P2-04, P2-06 | [#16](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/16) |
+| P2-06 | Fitness function with anti-exploitation guards | 2 | P0 | Complete | P1-07 | [#17](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/17) |
 | P2-07 | Seeded training experiments and configuration recording | 2 | P0 | Not Started | P2-05, P2-10 | [#18](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/18) |
 | P2-08 | Random-driving baselines and controlled improvement experiment | 2 | P0 | Not Started | P2-07 | [#19](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/19) |
 | P2-09 | Braking output experiment toggle and braking feasibility check **(ST4)** | 2 | P1 | Not Started | P2-03, P2-05, P2-07, P2-10 | [#20](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/20) |
@@ -106,9 +106,9 @@ Documentation-only checks are recorded as such; no application/device execution 
 
 Dependencies are taken from the table above.
 
-- **In review:** P1-10 (CI), merged in #60 with a retrospective Codex technical approval. It stays In Review until CI is shown to block merging on failure (branch protection requiring the CI jobs for `main`), or the owner explicitly approves changing that criterion. P2-01 (ray sensors) was merged by the owner in #79 at `5c18365` (the same tree as the Codex-approved head `f69d01c`); it stays In Review until real iPhone/iPad Safari checks of the debug layer are recorded. P2-06 (fitness function) is in review on `feat/p2-06-fitness`, pending Codex review and owner approval.
-- **Complete:** P1-02 (fixed-timestep loop, #62), P1-03 (seeded generator, #64), P1-04 (track model and static track layer, #65), P1-05 (vehicle physics, #66), P1-06 (collision detection, #67), P1-07 (checkpoints and laps, #69), P1-08 (manual driving, #70), P1-09 (deterministic simulation suite, #72), P1-01 (scaffold, #55, with a retrospective Codex review), P1-11 (static deployment, #74), P2-02 (network inputs, #81), P2-03 (feedforward network, #82) and P2-04 (genetic operators, #84).
-- **Ready now (all dependencies Complete or merged):** P2-10 (track splits) and P4-01 (track validation). P2-05 (the training loop) becomes ready when P2-06 is merged. Ready means the dependencies are met, not that implementation is authorised.
+- **In review:** P1-10 (CI), merged in #60 with a retrospective Codex technical approval. It stays In Review until CI is shown to block merging on failure (branch protection requiring the CI jobs for `main`), or the owner explicitly approves changing that criterion. P2-01 (ray sensors) was merged by the owner in #79 at `5c18365` (the same tree as the Codex-approved head `f69d01c`); it stays In Review until real iPhone/iPad Safari checks of the debug layer are recorded. P2-05 (training loop) is in review on `feat/p2-05-training-loop`, pending Codex review, owner approval and real iPhone/iPad checks of `?mode=train`.
+- **Complete:** P1-02 (fixed-timestep loop, #62), P1-03 (seeded generator, #64), P1-04 (track model and static track layer, #65), P1-05 (vehicle physics, #66), P1-06 (collision detection, #67), P1-07 (checkpoints and laps, #69), P1-08 (manual driving, #70), P1-09 (deterministic simulation suite, #72), P1-01 (scaffold, #55, with a retrospective Codex review), P1-11 (static deployment, #74), P2-02 (network inputs, #81), P2-03 (feedforward network, #82), P2-04 (genetic operators, #84) and P2-06 (fitness function, #85).
+- **Ready now (all dependencies Complete or merged):** P2-10 (track splits) and P4-01 (track validation). P2-07 (experiments) needs P2-05 and P2-10. Ready means the dependencies are met, not that implementation is authorised.
 - **Silverstone (approved 2026-10-23, planning only):** P4-06 (Silverstone import) after P4-01, P2-10, P2-05, P2-07 and P3-05; P2-11 (spatial index, after P1-06 and P2-01) only if P4-06's measured baseline misses the budget or the owner approves an architectural reason; P4-07 (camera) after P1-04 and P2-05, as a separate follow-up. Each still needs explicit owner implementation approval when its dependencies are complete; this planning approval does not authorise implementation. None of these interrupts the current phase.
 - **Phase 2 critical path:** P1-06 → P2-01 → P2-02, and P1-07 → P2-06, then P2-04 → P2-05 → P2-07 → P2-08.
 - **Early evaluation:** P1-04 + P1-07 → P2-10 supplies built-in training/validation/held-out fixtures before P2-07/P2-08; the editor is not a prerequisite.
@@ -437,7 +437,7 @@ Dependencies are taken from the table above.
 
 ### P2-05 — Population training loop over multiple generations (headless and rendered)
 
-- **Priority:** P0 · **Status:** Not Started · **Issue:** [#16](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/16)
+- **Priority:** P0 · **Status:** In Review · **Issue:** [#16](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/16)
 - **Depends on:** P2-02, P2-04, P2-06
 - **Description:** Trainer that evaluates a population under identical start conditions, records per-generation stats and versioned champion/configuration references for replay and builds the next generation; runs headless in Node and rendered in the browser.
 - **Acceptance criteria:**
@@ -447,10 +447,30 @@ Dependencies are taken from the table above.
 - **Test requirements:**
   - Integration: 5-generation headless run is deterministic.
   - Integration: independence test (same genome alone vs in a shuffled population gives identical results).
+- **Implementation (In Review):**
+  - **Authorization:** the owner's instruction, [relayed on #16](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/16#issuecomment-6425226371), together with the lifecycle, independence, RNG and headless/rendered plan documented before coding.
+  - **Code:**
+    - `src/training/trainer.ts`: `createTrainer`, `runGeneration`, `trainHeadless`, `stepCar`, `stepGeneration` and `evaluateGenome`. It has per-generation statistics and champion copies, and a record of the configuration and version references.
+    - `src/ui/trainingPage.ts` and `src/ui/pageMode.ts`: `?mode=train` runs the trainer under the frame loop.
+    - `drawCars` in `src/render/raceView.ts`.
+    - `OUTPUT_CONTRACT` in `src/ai/outputs.ts`.
+    - `npm run demo:train`.
+    - The contract is in ARCHITECTURE.md, "Training loop".
+  - **Tests:**
+    - `tests/training/trainer.test.ts`: lifecycle, independence, transitions and elites, a 5-generation determinism check, frame loop versus headless, 50 generations and separation;
+    - `tests/training/trainingDemo.test.ts`;
+    - `tests/ui/pageMode.test.ts` and `tests/ui/trainingPage.test.ts`;
+    - `drawCars` tests;
+    - `tests/e2e/training.spec.ts`.
+  - **Not changed:** no dashboard, graphs, speed controls, saving or replay (Phase 3), and no experiments (P2-07, P2-08).
+    - No learning is claimed: fitness rising in these runs is a training signal on one track.
+    - With the defaults, 3 laps cannot fit in 60 s on the oval, so `completed` is unreachable there. This is recorded as a configuration fact.
+  - **Device checks:** outstanding. Real iPhone/iPad Safari checks of `?mode=train` (docs/TESTING.md) have not been performed.
+  - **Still needed:** Codex review, the device checks and owner merge approval.
 
 ### P2-06 — Fitness function with anti-exploitation guards
 
-- **Priority:** P0 · **Status:** In Review · **Issue:** [#17](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/17)
+- **Priority:** P0 · **Status:** Complete · **Issue:** [#17](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/17)
 - **Depends on:** P1-07
 - **Description:** Fitness from ordered checkpoint progress, laps and completed-lap time bonus, with stall timeout, max episode time and no reward for distance or speed alone (AI_EVALUATION.md §6).
 - **Acceptance criteria:**
@@ -458,7 +478,7 @@ Dependencies are taken from the table above.
   - Fitness formula versioned (`fitnessVersion`).
 - **Test requirements:**
   - Unit: one test per exploit plus normal-lap scoring.
-- **Implementation (In Review):**
+- **Implementation:**
   - **Authorization:** the owner's instruction, [relayed on #17](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/17#issuecomment-6422048941), together with the formula, credit, termination and exploit-prevention design documented before coding.
   - **Code:** `src/training/fitness.ts`, `fitnessVersion` 1:
     - `resolveFitnessConfig` and `resolveEpisodeRules`;
@@ -468,8 +488,18 @@ Dependencies are taken from the table above.
     - The contract is in ARCHITECTURE.md, "Fitness". MODEL_FORMAT's example adds `maxLapTimeRatio`.
   - **Tests:** `tests/training/fitness.test.ts`, with hand-calculated values: one scripted test per §6 exploit, normal-lap scoring, boundaries, deterministic replay and validation.
   - **Not changed:** no population training loop, dashboard, persistence or driver wiring. No weights have been tuned and no training has run, so the tests are evidence that the guards work, not of learning.
-  - **Device checks:** none apply. The code is headless, and nothing on the page changes.
-  - **Still needed:** Codex review and owner merge approval.
+- **Completion record:**
+  - **Merge:** [#85](https://github.com/Harrisonxaph/Self-learning-Car-AI/pull/85), merged by the owner at `4e02d70`. Its tree is identical to the reviewed head `6672bea`.
+  - **Review:**
+    - Codex first returned [Changes required on `8ff1a92`](https://github.com/Harrisonxaph/Self-learning-Car-AI/pull/85#pullrequestreview-5656191350), with two P2 findings (overflowing fitness, unusable tick budgets) and one P3 (weight relationship).
+    - All three were fixed in `6672bea`, with regression tests.
+    - [Codex technical approval of `6672bea`](https://github.com/Harrisonxaph/Self-learning-Car-AI/pull/85#pullrequestreview-5657613853).
+  - **Codex's own runs:** install, lint, typecheck and build on `6672bea`. Its first default-concurrency unit run had one timeout: the seeded two-lap test took 5062 ms against the 5 s default. It passed alone and in a full run with 2 workers (695 tests). That test gets an explicit 30 s timeout in P2-05's PR. Codex ran the full six-project browser suite on `8ff1a92`.
+  - **CI on `6672bea`** (run 40369048174): both jobs green, including WebKit.
+  - **CI on `main` at `4e02d70`** (run 40385636959): the lint, typecheck, unit and build job is green. The browser job was cancelled after 20 minutes in its `playwright install` step, before any browser test ran. The same tree's browser tests passed in run 40369048174, and the failure is in browser installation, not the code; a re-run of that job is outstanding.
+  - **Tests:** 58 unit tests in `tests/training/fitness.test.ts`.
+  - **Device checks:** not applicable. The code is headless, and the production assets were unchanged.
+  - **Owner approval:** the owner's merge (AGENTS.md owner evidence).
 
 ### P2-07 — Seeded training experiments and configuration recording
 
@@ -944,3 +974,4 @@ These apply to every phase and are checked in review.
 | 2026-10-25 | P2-02 Complete: #81 merged by the owner at `4f3abef` (same tree as `7bda450`), after Codex technical approval and green CI (run 40212259053, including WebKit); device checks not applicable. P2-03 9-12-3 feedforward network (pure inference, documented parameter order, tanh/sigmoid outputs, brake mask, seeded uniform initialisation) implemented on `feat/p2-03-feedforward-network` and moved to In Review. P2-01 remains In Review for real iPhone/iPad checks. |
 | 2026-10-25 | P2-03 Complete: #82 merged by the owner at `814d4e0` (same tree as `0042f5f`), after Codex technical approval and green CI (run 40239101523, including WebKit); device checks not applicable. Its non-blocking null-vector finding is tracked in #83. P2-04 genetic operators (tournament selection, uniform crossover, Gaussian mutation, elitism; separate seeded generators) implemented on `feat/p2-04-genetic-operators` and moved to In Review. P2-01 remains In Review for real iPhone/iPad checks. |
 | 2026-10-26 | P2-04 Complete: #84 merged by the owner at `1a98ce9` (same tree as `d429872`), after Codex technical approval of `d429872` and green CI (run 40242573267 including WebKit; `main` run 40243046217); device checks not applicable. P2-06 episode fitness (ordered gates, a bounded partial-progress high-water mark, capped lap-time bonus, crash penalty; completed, crashed, stalled and timeout outcomes) implemented on `feat/p2-06-fitness` and moved to In Review. P2-01 remains In Review for real iPhone/iPad checks. |
+| 2026-10-26 | P2-06 Complete: #85 merged by the owner at `4e02d70` (same tree as `6672bea`), after Codex's Changes required on `8ff1a92` was fixed and Codex gave technical approval of `6672bea`, with green CI (run 40369048174, including WebKit); device checks not applicable. P2-05 population training loop (independent neural cars through one simulation path, seeded run generator, elites, per-generation statistics; headless, and rendered with `?mode=train`) implemented on `feat/p2-05-training-loop` and moved to In Review; real iPhone/iPad checks of the training view are outstanding. P1-10 and P2-01 remain In Review. |

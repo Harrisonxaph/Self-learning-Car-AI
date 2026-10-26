@@ -8,6 +8,9 @@
 // brake at once, as a human holding several buttons can.
 import type { Controls } from '../sim/vehicle';
 
+/** The output contract this module implements; saved models record it as `outputContract` (docs/MODEL_FORMAT.md). */
+export const OUTPUT_CONTRACT = 'steering-throttle-brake-v1';
+
 /**
  * The logistic function 1 / (1 + e^−x), computed so it never overflows: for very large |x| it returns
  * exactly 0 or 1, never NaN. sigmoid(0) = 0.5 and sigmoid(−x) = 1 − sigmoid(x).

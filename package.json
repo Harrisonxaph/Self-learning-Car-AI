@@ -19,7 +19,8 @@
     "test:golden:update": "vitest run tests/sim/golden.test.ts --mode golden-update",
     "demo:vehicle": "vitest run tests/sim/vehicleDemo.test.ts --silent=false --reporter=verbose",
     "demo:collision": "vitest run tests/sim/collisionDemo.test.ts --silent=false --reporter=verbose",
-    "demo:laps": "vitest run tests/sim/lapDemo.test.ts --silent=false --reporter=verbose"
+    "demo:laps": "vitest run tests/sim/lapDemo.test.ts --silent=false --reporter=verbose",
+    "demo:train": "vitest run tests/training/trainingDemo.test.ts --mode train-demo --silent=false --reporter=verbose"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

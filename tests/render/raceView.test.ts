@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import stadiumOval from '../../src/data/tracks/stadium-oval.json';
-import { RACE_COLOURS, drawRace, type RaceContext } from '../../src/render/raceView';
+import { RACE_COLOURS, drawCars, drawRace, type RaceContext } from '../../src/render/raceView';
 import { worldToScreen } from '../../src/render/trackView';
 import { computeViewportSize } from '../../src/render/viewport';
 import { vehicleFootprint } from '../../src/sim/collision';
@@ -64,5 +64,36 @@ describe('drawRace', () => {
     const copy = structuredClone(world);
     draw(world);
     expect(world).toEqual(copy);
+  });
+});
+
+describe('drawCars (training mode, P2-05)', () => {
+  const physics = DEFAULT_VEHICLE_PHYSICS;
+  const at = (x: number, crashed = false) => ({ vehicle: { position: { x, y: 40 }, heading: 0, speed: 0 }, crashed });
+
+  it('draws each car on its footprint: running blue on top, finished grey, crashed red', () => {
+    const { context, calls } = fakeContext();
+    const cars = [
+      { car: at(0), finished: false },
+      { car: at(10, true), finished: true },
+      { car: at(20), finished: true },
+    ];
+    drawCars(context, size, view, cars, physics);
+    const bodies = calls.filter((c) => c.name === 'fill' && c.fillStyle !== RACE_COLOURS.nose).map((c) => c.fillStyle);
+    // Finished cars first (in population order), then the running car, so running cars stay visible.
+    expect(bodies).toEqual([RACE_COLOURS.crashedCar, RACE_COLOURS.finishedCar, RACE_COLOURS.car]);
+    expect(calls.filter((c) => c.name === 'fill' && c.fillStyle === RACE_COLOURS.nose)).toHaveLength(3);
+    // The running car's body starts at its footprint's first corner, mapped to the screen.
+    const first = worldToScreen(view, vehicleFootprint(at(0).vehicle, physics)[0]!);
+    const moves = calls.filter((c) => c.name === 'moveTo').map((c) => c.args);
+    expect(moves).toContainEqual([first.x, first.y]);
+  });
+
+  it('never changes the cars, and draws nothing but the transform for an empty population', () => {
+    const cars = Object.freeze([Object.freeze({ car: Object.freeze(at(0)), finished: false })]);
+    expect(() => drawCars(fakeContext().context, size, view, cars, physics)).not.toThrow();
+    const { context, calls } = fakeContext();
+    drawCars(context, size, view, [], physics);
+    expect(calls.map((c) => c.name)).toEqual(['setTransform']);
   });
 });

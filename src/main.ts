@@ -1,6 +1,7 @@
 // Entry point: finds the page elements, loads the built-in track, wires human input to the simulation,
 // runs the fixed-step loop and draws each frame. Input, simulation and drawing stay in their own modules;
-// this file only connects them.
+// this file only connects them. With `?mode=train` it runs the population training view instead
+// (ui/trainingPage.ts, P2-05); the default page is manual driving.
 import './style.css';
 import { createHumanDriver } from './ai/drivers';
 import stadiumOval from './data/tracks/stadium-oval.json';
@@ -23,6 +24,8 @@ import {
 import { debugRaysEnabled } from './ui/debugFlags';
 import { browserFrameEnvironment, startFrameLoop } from './ui/frameLoop';
 import { hudView, nextFeedback, type Feedback } from './ui/hud';
+import { pageMode } from './ui/pageMode';
+import { startTrainingPage } from './ui/trainingPage';
 
 const element = <T extends Element>(selector: string): T => {
   const found = document.querySelector<T>(selector);
@@ -30,8 +33,9 @@ const element = <T extends Element>(selector: string): T => {
   return found;
 };
 const canvas = element<HTMLCanvasElement>('#sim-canvas');
-const context = canvas.getContext('2d');
-if (!context) throw new Error('Canvas 2D drawing is not supported.');
+const canvasContext = canvas.getContext('2d');
+if (!canvasContext) throw new Error('Canvas 2D drawing is not supported.');
+const context: CanvasRenderingContext2D = canvasContext;
 const simTime = element<HTMLOutputElement>('#sim-time');
 const hud = {
   laps: element<HTMLOutputElement>('#hud-laps'),
@@ -58,106 +62,124 @@ const trackLayer = createTrackLayer(() => {
   return { canvas: layerCanvas, context: layerContext };
 });
 
-// Input: keys and on-screen buttons record what is held; the simulation reads it once per tick.
-const held = createHeldInputs();
-let restartRequested = false;
-const requestRestart = () => {
-  restartRequested = true;
-};
-const restartButton = element<HTMLButtonElement>('#restart');
-// Space on the focused Restart button activates it, as on any button, instead of braking.
-attachKeyboard(window, held, requestRestart, (target) => target === restartButton);
-attachSafetyRelease(window, document, held);
-for (const button of holdButtons) attachHoldButton(button, button.dataset.action as HoldAction, held);
-restartButton.addEventListener('click', (event) => {
-  requestRestart();
-  // A tap or click (detail > 0) leaves no focus behind, so Space brakes again straight away. Keyboard
-  // activation (detail 0) keeps focus on the button, as keyboard users expect.
-  if (event.detail > 0) restartButton.blur();
-});
-const driver = createHumanDriver(held.read);
-
-let world: World = createWorld(track, DEFAULT_VEHICLE_PHYSICS);
-let shownWorld = world;
-let restartedSinceShown = false;
-let feedback: Feedback | null = null;
-
-/** Draws the track and the car, and records the transform and car state for the browser tests. */
-const draw = (size: ViewportSize) => {
-  const layer = trackLayer.get(track, size);
-  context.setTransform(1, 0, 0, 1, 0, 0);
-  context.clearRect(0, 0, size.width, size.height);
-  if (!layer) return;
-  context.drawImage(layer.canvas, 0, 0);
-  drawRace(context, size, layer.view, world);
-  const { dataset } = canvas;
-  if (showRays) {
-    const readings = castRays(world.racer.car.vehicle, track, world.physics, DEFAULT_SENSOR_CONFIG);
-    drawSensors(context, size, layer.view, readings);
-    // World coordinates of the drawn rays, for the browser tests; they map them through the published transform.
-    dataset.rays = JSON.stringify({
-      origin: readings.origin,
-      rays: readings.rays.map(({ distance, hit, end }) => ({ distance, hit, end })),
-    });
-  }
-  dataset.trackScale = String(layer.view.scale);
-  dataset.trackOffsetX = String(layer.view.offsetX);
-  dataset.trackOffsetY = String(layer.view.offsetY);
-  dataset.trackLayerBuilds = String(trackLayer.builds());
-};
-
-const setText = (target: HTMLElement, text: string) => {
-  if (target.textContent !== text) target.textContent = text;
-};
-
-/** Copies the world into the page: HUD text, the event message, and data attributes for the browser tests. */
-const showState = () => {
-  const view = hudView(world, dt);
-  setText(hud.laps, String(view.laps));
-  setText(hud.current, view.currentLap);
-  setText(hud.last, view.lastLap);
-  setText(hud.best, view.bestLap);
-  setText(hud.gate, view.nextGate);
-  setText(hud.speed, String(view.speedKmh));
-  feedback = nextFeedback(shownWorld, world, feedback, dt, restartedSinceShown);
-  shownWorld = world;
-  restartedSinceShown = false;
-  setText(hud.message, feedback?.text ?? (view.crashed ? 'Crashed! Press R or tap Restart.' : ''));
-  hud.message.dataset.kind = feedback?.kind ?? '';
-
-  const { car, progress } = world.racer;
-  Object.assign(canvas.dataset, {
-    carX: String(car.vehicle.position.x),
-    carY: String(car.vehicle.position.y),
-    carHeading: String(car.vehicle.heading),
-    carSpeed: String(car.vehicle.speed),
-    crashed: String(car.crashed),
-    laps: String(progress.lapTicks.length),
-    gatesPassed: String(progress.gatesPassed),
-    nextGate: String(progress.nextGate),
+if (pageMode(window.location.search) === 'train') {
+  startTrainingPage({
+    canvas,
+    context,
+    status: hud.message,
+    hide: [element<HTMLElement>('.hud'), element<HTMLElement>('.controls'), element<HTMLElement>('.keys-help')],
+    trackLayer,
+    track,
+    physics: DEFAULT_VEHICLE_PHYSICS,
+    config,
   });
-  const input = held.read();
-  for (const button of holdButtons) button.classList.toggle('held', input[button.dataset.action as HoldAction]);
+} else {
+  startDrivingPage();
+}
 
-  const label = `${elapsedSeconds(world, config).toFixed(1)} s`;
-  if (simTime.textContent !== label) simTime.textContent = label;
-  simTime.dataset.tick = String(world.tick);
-};
+/** Manual driving (P1-08): the human driver, the HUD and the optional ray debug layer. */
+function startDrivingPage(): void {
+  // Input: keys and on-screen buttons record what is held; the simulation reads it once per tick.
+  const held = createHeldInputs();
+  let restartRequested = false;
+  const requestRestart = () => {
+    restartRequested = true;
+  };
+  const restartButton = element<HTMLButtonElement>('#restart');
+  // Space on the focused Restart button activates it, as on any button, instead of braking.
+  attachKeyboard(window, held, requestRestart, (target) => target === restartButton);
+  attachSafetyRelease(window, document, held);
+  for (const button of holdButtons) attachHoldButton(button, button.dataset.action as HoldAction, held);
+  restartButton.addEventListener('click', (event) => {
+    requestRestart();
+    // A tap or click (detail > 0) leaves no focus behind, so Space brakes again straight away. Keyboard
+    // activation (detail 0) keeps focus on the button, as keyboard users expect.
+    if (event.detail > 0) restartButton.blur();
+  });
+  const driver = createHumanDriver(held.read);
 
-const viewport = createViewport(canvas, browserViewportEnvironment(canvas), draw);
+  let world: World = createWorld(track, DEFAULT_VEHICLE_PHYSICS);
+  let shownWorld = world;
+  let restartedSinceShown = false;
+  let feedback: Feedback | null = null;
 
-startFrameLoop(browserFrameEnvironment(), createFixedStepClock(config), {
-  // One simulation path: every tick applies a pending restart, asks the driver, then steps the world.
-  step: () => {
-    if (restartRequested) {
-      restartRequested = false;
-      world = restartWorld(world);
-      restartedSinceShown = true;
+  /** Draws the track and the car, and records the transform and car state for the browser tests. */
+  const draw = (size: ViewportSize) => {
+    const layer = trackLayer.get(track, size);
+    context.setTransform(1, 0, 0, 1, 0, 0);
+    context.clearRect(0, 0, size.width, size.height);
+    if (!layer) return;
+    context.drawImage(layer.canvas, 0, 0);
+    drawRace(context, size, layer.view, world);
+    const { dataset } = canvas;
+    if (showRays) {
+      const readings = castRays(world.racer.car.vehicle, track, world.physics, DEFAULT_SENSOR_CONFIG);
+      drawSensors(context, size, layer.view, readings);
+      // World coordinates of the drawn rays, for the browser tests; they map them through the published transform.
+      dataset.rays = JSON.stringify({
+        origin: readings.origin,
+        rays: readings.rays.map(({ distance, hit, end }) => ({ distance, hit, end })),
+      });
     }
-    world = stepWorld(world, driver.decide({ car: world.racer.car }), config);
-  },
-  render: () => {
-    draw(viewport.current());
-    showState();
-  },
-});
+    dataset.trackScale = String(layer.view.scale);
+    dataset.trackOffsetX = String(layer.view.offsetX);
+    dataset.trackOffsetY = String(layer.view.offsetY);
+    dataset.trackLayerBuilds = String(trackLayer.builds());
+  };
+
+  const setText = (target: HTMLElement, text: string) => {
+    if (target.textContent !== text) target.textContent = text;
+  };
+
+  /** Copies the world into the page: HUD text, the event message, and data attributes for the browser tests. */
+  const showState = () => {
+    const view = hudView(world, dt);
+    setText(hud.laps, String(view.laps));
+    setText(hud.current, view.currentLap);
+    setText(hud.last, view.lastLap);
+    setText(hud.best, view.bestLap);
+    setText(hud.gate, view.nextGate);
+    setText(hud.speed, String(view.speedKmh));
+    feedback = nextFeedback(shownWorld, world, feedback, dt, restartedSinceShown);
+    shownWorld = world;
+    restartedSinceShown = false;
+    setText(hud.message, feedback?.text ?? (view.crashed ? 'Crashed! Press R or tap Restart.' : ''));
+    hud.message.dataset.kind = feedback?.kind ?? '';
+
+    const { car, progress } = world.racer;
+    Object.assign(canvas.dataset, {
+      carX: String(car.vehicle.position.x),
+      carY: String(car.vehicle.position.y),
+      carHeading: String(car.vehicle.heading),
+      carSpeed: String(car.vehicle.speed),
+      crashed: String(car.crashed),
+      laps: String(progress.lapTicks.length),
+      gatesPassed: String(progress.gatesPassed),
+      nextGate: String(progress.nextGate),
+    });
+    const input = held.read();
+    for (const button of holdButtons) button.classList.toggle('held', input[button.dataset.action as HoldAction]);
+
+    const label = `${elapsedSeconds(world, config).toFixed(1)} s`;
+    if (simTime.textContent !== label) simTime.textContent = label;
+    simTime.dataset.tick = String(world.tick);
+  };
+
+  const viewport = createViewport(canvas, browserViewportEnvironment(canvas), draw);
+
+  startFrameLoop(browserFrameEnvironment(), createFixedStepClock(config), {
+    // One simulation path: every tick applies a pending restart, asks the driver, then steps the world.
+    step: () => {
+      if (restartRequested) {
+        restartRequested = false;
+        world = restartWorld(world);
+        restartedSinceShown = true;
+      }
+      world = stepWorld(world, driver.decide({ car: world.racer.car }), config);
+    },
+    render: () => {
+      draw(viewport.current());
+      showState();
+    },
+  });
+}
