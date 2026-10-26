@@ -14,7 +14,8 @@
 //   using the move collision accepted), including the first crossing of gate 0, which starts lap timing.
 // - partialProgress is a high-water mark, not a per-tick sum: the largest fraction of the way from an anchor to
 //   the next gate's centre reached since the last gate credit (see partialProgressAt). It resets only when a new
-//   gate is credited. Capped below 1, so any approach is worth less than one real crossing.
+//   gate is credited. Capped below 1, and partialProgressWeight may not exceed checkpointWeight, so any approach
+//   is worth less than one real crossing.
 // - Lap seconds are whole ticks × the fixed timestep. The ratio cap keeps the bonus bounded even on a
 //   degenerate track whose "lap" takes a few ticks.
 //
@@ -128,8 +129,10 @@ const finitePositive = (value: unknown, name: string, what: string): number => {
 
 /**
  * Checks fitness weights and returns a frozen copy. Throws RangeError naming the field for: a version other than
- * FITNESS_VERSION; a negative or non-finite weight, penalty or scale; a referenceLapSeconds that is not finite and
- * greater than 0; a maxLapTimeRatio that is not finite and at least 1.
+ * FITNESS_VERSION; a negative or non-finite weight, penalty or scale; a partialProgressWeight above checkpointWeight
+ * (so an approach, at most PARTIAL_PROGRESS_CAP × partialProgressWeight, is always worth less than a crossing
+ * whenever crossings are worth anything); a referenceLapSeconds that is not finite and greater than 0; a
+ * maxLapTimeRatio that is not finite and at least 1.
  */
 export function resolveFitnessConfig(input: unknown): FitnessConfig {
   const what = 'Fitness config';
@@ -138,10 +141,17 @@ export function resolveFitnessConfig(input: unknown): FitnessConfig {
   if (c.version !== FITNESS_VERSION) {
     throw new RangeError(`${what} "version" must be ${FITNESS_VERSION}, got ${String(c.version)}.`);
   }
+  const checkpointWeight = finiteAtLeast(c.checkpointWeight, 'checkpointWeight', 0, what);
+  const partialProgressWeight = finiteAtLeast(c.partialProgressWeight, 'partialProgressWeight', 0, what);
+  if (partialProgressWeight > checkpointWeight) {
+    throw new RangeError(
+      `${what} "partialProgressWeight" must not exceed "checkpointWeight" (${checkpointWeight}), got ${partialProgressWeight}.`,
+    );
+  }
   return Object.freeze({
     version: FITNESS_VERSION,
-    checkpointWeight: finiteAtLeast(c.checkpointWeight, 'checkpointWeight', 0, what),
-    partialProgressWeight: finiteAtLeast(c.partialProgressWeight, 'partialProgressWeight', 0, what),
+    checkpointWeight,
+    partialProgressWeight,
     lapWeight: finiteAtLeast(c.lapWeight, 'lapWeight', 0, what),
     collisionPenalty: finiteAtLeast(c.collisionPenalty, 'collisionPenalty', 0, what),
     lapTimeBonusScale: finiteAtLeast(c.lapTimeBonusScale, 'lapTimeBonusScale', 0, what),
@@ -150,15 +160,25 @@ export function resolveFitnessConfig(input: unknown): FitnessConfig {
   });
 }
 
-/** Whole ticks covering `seconds`: ⌈seconds ÷ dt⌉, with a 1e-9 tolerance so 5 s at 1/60 s is exactly 300. */
-function ticksFor(seconds: number, timestepSeconds: number): number {
-  return Math.max(1, Math.ceil(seconds / timestepSeconds - 1e-9));
+/**
+ * Whole ticks covering `seconds`: ⌈seconds ÷ dt⌉, with a 1e-9 tolerance so 5 s at 1/60 s is exactly 300. Throws
+ * RangeError naming the field if the count is not a safe integer (for example a tiny timestep), since such a limit
+ * could never be reached and would silently switch its termination rule off.
+ */
+function ticksFor(seconds: number, timestepSeconds: number, name: string): number {
+  const ticks = Math.max(1, Math.ceil(seconds / timestepSeconds - 1e-9));
+  if (!Number.isSafeInteger(ticks)) {
+    throw new RangeError(
+      `Episode limits "${name}" of ${seconds} s at a ${timestepSeconds} s timestep is not a usable whole number of ticks (at most ${Number.MAX_SAFE_INTEGER}).`,
+    );
+  }
+  return ticks;
 }
 
 /**
  * Converts episode limits to whole ticks of `timestepSeconds`. Throws RangeError naming the field for a
- * maxEpisodeSeconds, stallSeconds or timestep that is not finite and greater than 0, or a maxLaps that is not
- * an integer of at least 1.
+ * maxEpisodeSeconds, stallSeconds or timestep that is not finite and greater than 0, a limit whose tick count is
+ * not a safe integer, or a maxLaps that is not an integer of at least 1.
  */
 export function resolveEpisodeRules(limits: unknown, timestepSeconds: number): EpisodeRules {
   const what = 'Episode limits';
@@ -173,8 +193,8 @@ export function resolveEpisodeRules(limits: unknown, timestepSeconds: number): E
   }
   return Object.freeze({
     timestepSeconds: dt,
-    maxEpisodeTicks: ticksFor(maxEpisodeSeconds, dt),
-    stallTicks: ticksFor(stallSeconds, dt),
+    maxEpisodeTicks: ticksFor(maxEpisodeSeconds, dt, 'maxEpisodeSeconds'),
+    stallTicks: ticksFor(stallSeconds, dt, 'stallSeconds'),
     maxLaps,
   });
 }
@@ -289,16 +309,25 @@ export function recordTick(episode: Episode, racer: Racer, track: Track, rules: 
   };
 }
 
-/** The episode's fitness so far (or final, once it has an outcome), with each term of the formula. */
+/** Returns `value` if finite; otherwise throws RangeError, so evolution never receives a non-finite fitness. */
+function finiteTerm(value: number, name: string): number {
+  if (!Number.isFinite(value)) throw new RangeError(`Fitness "${name}" is not finite (${value}); the weights are too large.`);
+  return value;
+}
+
+/**
+ * The episode's fitness so far (or final, once it has an outcome), with each term of the formula. Throws
+ * RangeError if any term or the total overflows (very large weights), because P2-04 selection needs finite fitness.
+ */
 export function scoreEpisode(episode: Episode, configInput: FitnessConfig, rules: EpisodeRules): FitnessBreakdown {
   const config = resolveFitnessConfig(configInput);
-  const checkpoints = config.checkpointWeight * episode.gatesPassed;
-  const partialProgress = config.partialProgressWeight * episode.partialProgress;
-  const laps = config.lapWeight * episode.lapTicks.length;
+  const checkpoints = finiteTerm(config.checkpointWeight * episode.gatesPassed, 'checkpoints');
+  const partialProgress = finiteTerm(config.partialProgressWeight * episode.partialProgress, 'partialProgress');
+  const laps = finiteTerm(config.lapWeight * episode.lapTicks.length, 'laps');
   let lapTimeBonus = 0;
   for (const ticks of episode.lapTicks) {
     const ratio = config.referenceLapSeconds / lapSeconds(ticks, rules.timestepSeconds);
-    lapTimeBonus += config.lapTimeBonusScale * Math.min(config.maxLapTimeRatio, ratio);
+    lapTimeBonus = finiteTerm(lapTimeBonus + config.lapTimeBonusScale * Math.min(config.maxLapTimeRatio, ratio), 'lapTimeBonus');
   }
   const collisionPenalty = episode.crashed ? config.collisionPenalty : 0;
   return {
@@ -308,6 +337,6 @@ export function scoreEpisode(episode: Episode, configInput: FitnessConfig, rules
     laps,
     lapTimeBonus,
     collisionPenalty,
-    total: checkpoints + partialProgress + laps + lapTimeBonus - collisionPenalty,
+    total: finiteTerm(checkpoints + partialProgress + laps + lapTimeBonus - collisionPenalty, 'total'),
   };
 }

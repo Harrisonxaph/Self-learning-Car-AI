@@ -103,6 +103,15 @@ describe('configuration', () => {
     expect(() => resolveFitnessConfig({ ...DEFAULT_FITNESS_CONFIG, [field]: value })).toThrow(new RegExp(`"${field}"`));
   });
 
+  it('rejects a partial-progress weight above the checkpoint weight, so an approach never outscores a crossing', () => {
+    const config = (checkpointWeight: number, partialProgressWeight: number) => ({ ...DEFAULT_FITNESS_CONFIG, checkpointWeight, partialProgressWeight });
+    expect(() => resolveFitnessConfig(config(100, 1000))).toThrow(/"partialProgressWeight" must not exceed "checkpointWeight"/);
+    expect(() => resolveFitnessConfig(config(0, 1))).toThrow(/"partialProgressWeight"/);
+    expect(resolveFitnessConfig(config(100, 100))).toMatchObject({ checkpointWeight: 100, partialProgressWeight: 100 });
+    // With equal weights, the largest approach (0.99 of the way) is still worth less than the crossing.
+    expect(PARTIAL_PROGRESS_CAP * 100).toBeLessThan(100);
+  });
+
   it('rejects a fitness config that is not an object, and accepts zero weights', () => {
     expect(() => resolveFitnessConfig(null)).toThrow(RangeError);
     expect(() => resolveFitnessConfig(3)).toThrow(RangeError);
@@ -120,6 +129,17 @@ describe('configuration', () => {
     ['maxLaps', '3'],
   ])('rejects episode limit %s = %s', (field, value) => {
     expect(() => resolveEpisodeRules({ ...DEFAULT_EPISODE_LIMITS, [field]: value }, DT)).toThrow(new RegExp(`"${field}"`));
+  });
+
+  it('rejects finite limits and timesteps whose tick count is not a safe integer, naming the field', () => {
+    // A denormal timestep turns every limit into Infinity ticks, which would switch stall and timeout off.
+    expect(() => resolveEpisodeRules(DEFAULT_EPISODE_LIMITS, Number.MIN_VALUE)).toThrow(/"maxEpisodeSeconds"/);
+    expect(() => rules({ maxEpisodeSeconds: 1e300 })).toThrow(/"maxEpisodeSeconds".*not a usable whole number of ticks/);
+    expect(() => rules({ stallSeconds: 1e20 })).toThrow(/"stallSeconds"/);
+    // The boundary: 2^53 − 1 ticks is accepted, 2^53 is not.
+    const limits = (maxEpisodeSeconds: number) => ({ maxEpisodeSeconds, stallSeconds: 5, maxLaps: 3 });
+    expect(resolveEpisodeRules(limits(Number.MAX_SAFE_INTEGER), 1).maxEpisodeTicks).toBe(Number.MAX_SAFE_INTEGER);
+    expect(() => resolveEpisodeRules(limits(2 ** 53), 1)).toThrow(/"maxEpisodeSeconds"/);
   });
 
   it('rejects bad timesteps and non-object limits', () => {
@@ -168,6 +188,23 @@ describe('the formula, term by term (hand-calculated, default weights)', () => {
     const result = scoreEpisode({ ...base, gatesPassed: 21, partialProgress: 0.5, lapTicks: [1800], crashed: true }, config, RULES);
     // 210 + 2 + 100 + 3 × min(5, 60 / 30) − 7
     expect(result).toEqual({ fitnessVersion: 1, checkpoints: 210, partialProgress: 2, laps: 100, lapTimeBonus: 6, collisionPenalty: 7, total: 311 });
+  });
+
+  it('throws rather than return a non-finite fitness when finite weights overflow', () => {
+    const MAX = Number.MAX_VALUE;
+    const with_ = (weights: Partial<typeof DEFAULT_FITNESS_CONFIG>, episode: Partial<Episode>) => () =>
+      scoreEpisode({ ...base, ...episode }, { ...DEFAULT_FITNESS_CONFIG, ...weights }, RULES);
+    // A product overflows.
+    expect(with_({ checkpointWeight: MAX }, { gatesPassed: 2 })).toThrow(/"checkpoints" is not finite/);
+    expect(with_({ lapWeight: MAX }, { lapTicks: [1800, 1800] })).toThrow(/"laps"/);
+    expect(with_({ lapTimeBonusScale: MAX }, { lapTicks: [900] })).toThrow(/"lapTimeBonus"/); // MAX × ratio 2
+    // Each lap's bonus is finite but their sum is not.
+    expect(with_({ lapTimeBonusScale: MAX }, { lapTicks: [1800, 1800] })).toThrow(/"lapTimeBonus"/);
+    // Every term is finite but the total is not.
+    expect(with_({ checkpointWeight: MAX, partialProgressWeight: MAX }, { gatesPassed: 1, partialProgress: 0.99 })).toThrow(/"total"/);
+    // The same weights with smaller counts still score.
+    expect(with_({ checkpointWeight: MAX }, { gatesPassed: 1 })()).toMatchObject({ checkpoints: MAX, total: MAX });
+    expect(with_({ collisionPenalty: MAX }, { crashed: true })().total).toBe(-MAX);
   });
 
   it('never exceeds one gate for any approach: a crossing always beats partial progress', () => {

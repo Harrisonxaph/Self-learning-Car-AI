@@ -292,7 +292,7 @@ Seven rays fanned across the car's front (−90°, −60°, −30°, 0°, 30°, 
   - **When it is 0:**
     - more than one road width (the longer of the two gates) from the segment;
     - strictly ahead of the next gate's line without having crossed it.
-  - **High-water mark:** the episode keeps the largest value since the last gate credit. It resets only when a gate is credited, so an approach is earned once and is always worth less than a crossing.
+  - **High-water mark:** the episode keeps the largest value since the last gate credit. It resets only when a gate is credited, so an approach is earned once. Because the config requires `partialProgressWeight` ≤ `checkpointWeight` (the defaults are equal), an approach (at most 0.99 × `partialProgressWeight`) is always worth less than a crossing whenever crossings earn anything.
 - **Termination (`recordTick`):** after each tick, the first match wins:
   1. **`completed`:** `maxLaps` laps done.
   2. **`crashed`:** the car touched a wall. The move that would have hit the wall is rejected by collision, so it credits nothing, and the penalty applies once.
@@ -303,7 +303,9 @@ Seven rays fanned across the car's front (−90°, −60°, −30°, 0°, 30°, 
 - **Validation:** `resolveFitnessConfig` and `resolveEpisodeRules` return frozen copies and throw a `RangeError` naming the field for:
   - a wrong `version`;
   - negative or non-finite weights;
+  - a `partialProgressWeight` above `checkpointWeight`;
   - a non-positive reference lap, limit or timestep;
+  - a limit whose tick count is not a safe integer (for example a denormal timestep, which would otherwise turn the stall and timeout limits into Infinity);
   - `maxLapTimeRatio` below 1;
   - a non-integer `maxLaps`.
 
@@ -312,6 +314,8 @@ Seven rays fanned across the car's front (−90°, −60°, −30°, 0°, 30°, 
   - a gate count or lap count that went down;
   - an undone crash;
   - a non-finite position or an invalid next gate.
+
+  `scoreEpisode` throws a `RangeError` naming the term if any term, the lap-bonus sum or the total overflows to a non-finite value (very large finite weights), because evolution only accepts finite fitness.
 - **Guards** (AI_EVALUATION.md §6):
   - Farming and oscillation earn one credit at most.
   - Idling, creeping, circling and wrong-way driving stall with at most the bounded approach.
