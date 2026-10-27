@@ -18,6 +18,7 @@ import {
   ExperimentCompatibilityError,
   ExperimentConfigError,
   ExperimentRecordError,
+  jsonDifferences,
   manifestRecord,
   MAX_GENERATIONS,
   parseExperimentRecord,
@@ -511,6 +512,28 @@ describe('replay detects changed results', () => {
     expect(result.championsReplayed).toEqual([true, true]);
     expect(result.differences).toHaveLength(1);
     expect(result.differences[0]).toContain(`runs[1].generations[1].cars[${other}].fitness.total`);
+  });
+
+  it('reports a recorded result with an extra lap (lap lists of different lengths) as a difference, not an error', () => {
+    const record = mutable();
+    const final = record.runs[0].generations[1];
+    const other = (final.stats.championIndex + 1) % 4;
+    final.cars[other].lapTicks.push(5);
+    rehash(record);
+    const result = replayExperiment(record, ENGINE);
+    expect(result.identical).toBe(false);
+    expect(result.differences).toContain(`runs[0].generations[1].cars[${other}].lapTicks[${final.cars[other].lapTicks.length - 1}]: recorded 5, missing from the replay`);
+  });
+
+  it('compares JSON with missing elements and fields on either side without throwing', () => {
+    expect(jsonDifferences({ laps: [1] }, { laps: [1, 2] }, 'x')).toEqual(['x.laps[1]: missing from the record, replayed 2']);
+    expect(jsonDifferences({ laps: [1, 2] }, { laps: [1] }, 'x')).toEqual(['x.laps[1]: recorded 2, missing from the replay']);
+    expect(jsonDifferences({ a: 1 }, { a: 1, b: { c: 2 } }, 'x')).toEqual(['x.b: missing from the record, replayed {"c":2}']);
+    expect(jsonDifferences({ a: 1, b: 2 }, { a: 1 }, 'x')).toEqual(['x.b: recorded 2, missing from the replay']);
+    expect(jsonDifferences([1, 2, 3], [1, 9, 3])).toEqual(['[1]: recorded 2, replayed 9']);
+    expect(jsonDifferences({ a: [1] }, { a: { 0: 1 } }, 'x')).toEqual(['x.a: recorded [1], replayed {"0":1}']);
+    expect(jsonDifferences(RECORD.runs, copy().runs)).toEqual([]);
+    expect(jsonDifferences([...Array(30).keys()], Array(30).fill(-1))).toHaveLength(20);
   });
 
   it('reports a champion that does not reproduce its episode', () => {

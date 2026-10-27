@@ -263,9 +263,24 @@ export function canonicalJson(value: unknown): string {
 
 const hashOf = (value: unknown): string => `sha256:${sha256Hex(canonicalJson(value))}`;
 
-/** Paths where two JSON values differ (at most `limit`), depth first. */
+/**
+ * Paths where two JSON values differ (at most `limit`), depth first, each with both values. An element or field
+ * present on one side only (for example a lap one run completed and the other did not) is reported as missing.
+ */
+export function jsonDifferences(a: unknown, b: unknown, path = '', limit = 20): string[] {
+  const out: string[] = [];
+  differences(a, b, path, out, limit);
+  return out;
+}
+
 function differences(a: unknown, b: unknown, path: string, out: string[], limit: number): void {
   if (out.length >= limit) return;
+  if (a === undefined || b === undefined) {
+    if (a !== b) {
+      out.push(`${path}: ${a === undefined ? 'missing from the record' : `recorded ${canonicalJson(a)}`}, ${b === undefined ? 'missing from the replay' : `replayed ${canonicalJson(b)}`}`);
+    }
+    return;
+  }
   const aObject = a !== null && typeof a === 'object';
   const bObject = b !== null && typeof b === 'object';
   if (!aObject || !bObject || Array.isArray(a) !== Array.isArray(b)) {
@@ -777,8 +792,7 @@ export function replayExperiment(input: unknown, engine: ExperimentEngine, sourc
     training: record.configuration.training,
   };
   const runs = plan.seeds.map((seed) => runSeed(plan, seed));
-  const found: string[] = [];
-  differences(record.runs, runs, 'runs', found, 20);
+  const found = jsonDifferences(record.runs, runs, 'runs');
   const championsReplayed = record.runs.map((run) => replayChampion(record, run));
   const sameSourceRevision = source && source.revision !== null && record.source.revision !== null ? source.revision === record.source.revision : null;
   return { identical: found.length === 0 && championsReplayed.every(Boolean), differences: found, championsReplayed, sameSourceRevision };

@@ -59,6 +59,19 @@ describe('experiment command line', () => {
     expect(replay.out).toContain(`runs[0].generations[2].cars[${other}].fitness.total`);
   });
 
+  it('exits 1, not 2, when a replayed car completes a different number of laps', () => {
+    const record = JSON.parse(readFileSync(RECORD, 'utf8'));
+    const final = record.runs[1].generations[2];
+    const other = (final.stats.championIndex + 1) % final.cars.length;
+    final.cars[other].lapTicks.push(5);
+    record.resultsHash = `sha256:${sha256Hex(canonicalJson(record.runs))}`;
+    const replay = cli('replay', write('extra-lap.json', record));
+    expect(replay.err).toBe('');
+    expect(replay.code).toBe(1);
+    expect(replay.out).toContain(`runs[1].generations[2].cars[${other}].lapTicks[`);
+    expect(replay.out).toContain('missing from the replay');
+  });
+
   it.each([
     ['a record edited without its hash', () => {
       const record = JSON.parse(readFileSync(RECORD, 'utf8'));
