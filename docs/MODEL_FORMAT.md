@@ -6,7 +6,7 @@ A saved model ("brain") is a single JSON document. The same document is used for
 
 ## Version 1 example
 
-This is synthetic format data, not an experiment or evidence of learning. The 159 zero parameters are a valid-sized illustrative genome; the configuration values illustrate a proposed contract and are not tuned settings or measured results. `training.configuration` must contain the runner's complete resolved settings when real models are saved; implementation P2-07 finalises those settings before P3-05 persists them.
+This is synthetic format data, not an experiment or evidence of learning. The 159 zero parameters are a valid-sized illustrative genome; the configuration values illustrate a proposed contract and are not tuned settings or measured results. `training.configuration` must contain the runner's complete resolved settings when real models are saved. P2-07's experiment records (ARCHITECTURE.md "Experiments") now hold those settings as `configuration.training`, with the contracts under `contracts`. P3-05 persists them in models.
 
 ```json
 {
@@ -319,7 +319,7 @@ The example contains all 159 values. Arrays serialize to JSON without precision 
 | `schemaVersion` | integer | Version 1 reader accepts exactly 1; reject unknown versions before use. |
 | `id` | string | UUID from `crypto.randomUUID()`, with an isolated fallback. ID generation must never consume a simulation/evolution PRNG stream. |
 | `createdAt` | string | ISO 8601 UTC timestamp. |
-| `codeVersion`, `simulationVersion` | string, positive integer | Source revision/build identifier and simulation contract version; recorded for reproducibility. |
+| `codeVersion`, `simulationVersion` | string, positive integer | Source revision/build identifier and simulation contract version (`SIMULATION_VERSION` in `src/sim/config.ts`, currently 1); recorded for reproducibility. |
 | `architecture.layers` | integer[] | Currently must be `[9, 12, 3]`. |
 | `architecture.*Activation(s)`, `inputs`, `outputs` | | Must match what the running app supports, or the model is rejected with a clear message. |
 | `architecture.inputs` | string[] | For `seven-rays-speed-heading-v1`: the ray names (`ray<angle>`, one per `sensors.anglesDegrees` entry, in that order), then `speed` and `headingError`; the default is `ray-90` … `ray90`, `speed`, `headingError`. `speed` is forward speed ÷ `physics.maxSpeed`, clamped to [0, 1]. `headingError` is the signed angle from the heading to the next gate's centre, measured from the rear axle and wrapped into (−π, π], ÷ π. It is positive to the right, and 0 when the rear axle is on the centre. The full definition is in docs/ARCHITECTURE.md, "Network inputs contract" (`src/ai/inputs.ts`). |
@@ -344,9 +344,9 @@ Optional: `name`, `appVersion`, derived configuration hashes and `evaluation` (o
 
 For each layer transition `L → L+1` in order: all weights as `[outputIndex][inputIndex]` (row-major), then the biases for that layer's outputs. For 9-12-3 that is 108 weights + 12 biases + 36 weights + 3 biases = 159 values. Implemented in `src/ai/network.ts` (P2-03; `PARAMETER_ORDER` is the `parameters.order` string above). `tests/ai/network.test.ts` pins the order with hand-written networks and a one-hot sweep over all 159 positions.
 
-The genetic operators that evolve these arrays are `tournament-uniform-gaussian-v1` (P2-04, `src/evolution/`). They read `populationSize`, `eliteCount`, `selection`, `crossover` and `mutation` from `training.configuration`, with the field names in the example above, and P2-07 records the operator id alongside them.
+The genetic operators that evolve these arrays are `tournament-uniform-gaussian-v1` (P2-04, `src/evolution/`). They read `populationSize`, `eliteCount`, `selection`, `crossover` and `mutation` from `training.configuration`, with the field names in the example above, and P2-07's experiment records hold the operator id (`contracts.evolutionOperators`) alongside them.
 
-Fresh, untrained parameters are drawn with initialisation `uniform-pm1-v1`: 159 independent `rng.range(-1, 1)` draws, in parameter order. When P2-07 finalises `training.configuration`, it records this id there.
+Fresh, untrained parameters are drawn with initialisation `uniform-pm1-v1`: 159 independent `rng.range(-1, 1)` draws, in parameter order. P2-07's experiment records hold this id (`contracts.initialisation`) and the trainer's PRNG stream layout (`contracts.rngStreams`).
 
 ## Size
 

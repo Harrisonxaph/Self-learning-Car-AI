@@ -1,6 +1,6 @@
 # AI evaluation protocol
 
-> Status: **protocol only, no results**. The simulator and the Phase 2 training pieces exist: sensors and network inputs, the network, the genetic operators, the fitness function and the population training loop (P2-01 to P2-06; see ROADMAP.md for each status). Demonstration runs exist (`npm run demo:train`, `?mode=train`), but no experiment in this document has been run, and no learning has been demonstrated (verified 2026-10-26). Every results table below is empty on purpose. Do not fill it in until the experiment has actually run, and record its seeds and configuration when you do.
+> Status: **protocol only, no results**. The simulator and the Phase 2 training pieces exist: sensors and network inputs, the network, the genetic operators, the fitness function, the population training loop (P2-01 to P2-06), the track splits (P2-10) and the experiment runner that records and replays seeded runs (P2-07); see ROADMAP.md for each status. Demonstration runs exist (`npm run demo:train`, `?mode=train`, `npm run experiment` with `experiments/configs/smoke-oval.json`), but no experiment in this document has been run, and no learning has been demonstrated (verified 2026-10-27). Every results table below is empty on purpose. Do not fill it in until the experiment has actually run, and record its seeds and configuration when you do.
 
 This document explains how we tell genuine learned driving apart from luck, memorising one track, or exploiting the reward.
 
@@ -107,6 +107,8 @@ The suggested partial-progress term is an absolute, bounded episode value, not a
 Each experiment records: experiment ID, git commit, config (population, generations, mutation rate and scale, crossover, elitism, physics constants, sensor layout, fitness weights, max episode time), training seeds, evaluation seeds, track IDs per split, engine and version, date, and raw per-episode results (JSON in `experiments/results/`).
 
 Also record PRNG algorithm/version, simulation version, track content versions, control/normalisation settings, completed evaluation count, total simulated-tick budget, termination rules, selected frozen model IDs and validation-selection rule. Store raw episode outcomes before aggregation; keep large artifacts outside champion JSON and link them by manifest/hash.
+
+**Runner (P2-07):** `npm run experiment -- run <config.json> --out <record.json>` writes a complete record of seeded training runs on one built-in training track. It holds the resolved configuration, seeds, every contract version, physics, sensors, the split manifest and track hash, budgets, raw per-car results for every generation, per-generation statistics, and each run's frozen champion with provenance. `npm run experiment -- replay <record.json>` re-runs it in the same engine and checks every result is identical (ARCHITECTURE.md "Experiments"). The runner trains and records only. Its champion is chosen by training fitness and labelled as such. It runs no validation selection and no held-out evaluation, and its records say so (`evaluations: none`). The baselines, evaluation seeds and statistics for E1–E6 are P2-08 onwards. Records from the example configuration show only that recording and replay work; they are not results.
 
 | ID | Question | Agents | Tracks | Seeds | Depends on |
 |----|----------|--------|--------|-------|------------|

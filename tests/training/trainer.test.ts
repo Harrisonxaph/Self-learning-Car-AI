@@ -74,6 +74,7 @@ describe('configuration', () => {
     const setup = createTrainingSetup(SMALL, ENV);
     expect(setup.versions).toEqual({
       rngAlgorithm: RNG_ALGORITHM,
+      rngStreams: 'trainer-run-initial-then-3-per-transition-v1',
       evolutionOperators: EVOLUTION_OPERATORS,
       initialisation: 'uniform-pm1-v1',
       parameterOrder: 'layer-major; per layer: weights[out][in] row-major, then biases[out]',
