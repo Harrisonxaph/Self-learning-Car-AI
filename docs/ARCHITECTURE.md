@@ -38,6 +38,7 @@ src/
   training/
     fitness.ts            episode fitness and termination rules, anti-exploitation guards (P2-06)
     trainer.ts            population training loop, headless or under the frame loop (P2-05)
+    trackSplits.ts        built-in track splits and the training/selection/held-out boundaries (P2-10)
     experiment.ts         experiment config, seeds, result records
     stats.ts              per-generation statistics
   persistence/
@@ -63,9 +64,10 @@ src/
     editor/               track editor
   utils/
     rng.ts                seeded PRNG: sfc32 seeded by splitmix32
+    sha256.ts             SHA-256 for track content hashes and frozen-model IDs (P2-10)
     math.ts               vectors, angles, segment intersection
   data/
-    tracks/               built-in training, validation and held-out tracks (JSON)
+    tracks/               built-in training, validation and held-out tracks (JSON) and their split manifest index.json (P2-10)
 tests/                    mirrors src/; e2e/ for Playwright
 ```
 
@@ -370,6 +372,37 @@ Seven rays fanned across the car's front (−90°, −60°, −30°, 0°, 30°, 
   - There is no dashboard, graph, speed control, saving or replay; those are P3-01 to P3-05.
 - **Observed with the defaults:** 3 laps of the oval (about 1,474 m) cannot fit in 60 s at the 23.7 m/s top speed. So `completed` is unreachable on this track with these limits, and lapping cars end as `timeout`. This is a configuration fact, not a result.
 - **Separation:** the trainer imports `ai`, `evolution`, `sensors`, `sim`, `utils` and `training` only. Lint forbids rendering, UI, persistence and the DOM, and a test checks the imports.
+
+## Track splits
+
+**Built-in splits and their boundaries** (built in P2-10, `src/training/trackSplits.ts`, `src/data/tracks/index.json`). The plan was documented on [#41](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/41#issuecomment-6427320313) before coding. The protocol is AI_EVALUATION.md §5.
+
+- **Circuits:** one per split. All are anticlockwise, with the infield on the left and gate `a` on the inner boundary (P1-07).
+
+  | Split | Track | Corners | Width | Lap | Gates |
+  |---|---|---|---|---|---|
+  | training | `stadium-oval` v1, unchanged | two 180° curves of radius 40 m | 14 m | 491 m | 20 |
+  | validation | `rounded-rectangle` v1 | four 90° corners of radius 15 m | 12 m | 394 m | 14 |
+  | held-out | `hairpin-chicane` v1 | right-left chicane (±30°, radius 25 m), left and right 180° hairpins (radius 12 m), four 90° corners (radius 16 m) | 11 m | 502 m | 18 |
+
+  The new circuits' centre lines are straights and circular arcs. Arcs are sampled every 15°, and straights are split into pieces of at most 10 m. Both boundaries are offsets by half the width, gates sit on boundary vertices about 25 m apart, and the start pose is 6 m behind gate 0. The JSON is committed data.
+- **Manifest:** format `self-driving-ai-evolution/track-splits`, version 1. Each entry has `id`, `version`, `split`, `file` and `contentHash`.
+  - `contentHash` is `sha256:` followed by the SHA-256 (`utils/sha256.ts`) of `JSON.stringify(loadTrack(file))`. `loadTrack` fixes the field order, so formatting doesn't matter, but any content change does; change the version and the hash together.
+  - A second, **geometry hash** covers only the boundaries, start and gates. It recognises the same circuit under another ID or name.
+- **Loading:** `loadTrackSplits(manifest, files)` returns frozen splits in manifest order. `BUILT_IN_TRACK_SPLITS` is the built-in set. It throws `TrackSplitError` for:
+  - a wrong format or version, or a malformed entry;
+  - a duplicate ID or file;
+  - an unknown or empty split;
+  - a missing file, or a file that does not load;
+  - an ID or version mismatch;
+  - a stale content hash;
+  - two entries with the same geometry.
+- **Boundaries:** each one throws `TrackLeakageError` when crossed.
+  - **Training:** `trainingTrack(id)`. The trainer also calls `assertTrainingTrack` on every track it is given. Every manifest entry the track matches, by ID or by geometry, is checked, and the track is rejected if any of them is a validation or held-out track. A renamed copy is caught, including one given the training oval's own ID. A track counts as `training` only when its geometry is a training circuit. Anything else is `unregistered`: a synthetic test track, or new geometry under a training ID. A run's version references record `trackHash` and `trackSplit`.
+  - **Selection:** `validationTrack(id)` and `selectByValidation(results)`. The second chooses the model with the best mean score, ties to the first listed, and rejects any result whose track is not a validation track. Means are computed on scaled scores, so finite scores cannot overflow to the wrong choice.
+  - **Held-out:** `heldOutTrack(id, model)` takes only a model from `freezeModel(parameters, provenance)`. That model is a frozen copy whose `id` is the SHA-256 of its parameters and provenance. A non-frozen model, a forged ID or an altered model is refused. So is a model whose ID matches but whose content `freezeModel` would not produce: a missing or non-finite parameter, or a provenance value that is not a string, finite number or boolean. `freezeModel` requires a positive integer parameter count.
+- **Not included:** an experiment runner (P2-07, P2-08), a general track validator (P4-01) and more circuits (P4-04). The geometry hash is exact, so a moved, scaled or mirrored copy counts as a different circuit; held-out integrity also relies on review and on the experiment protocol. No network has been trained or evaluated on the validation or held-out circuits.
+- **Separation:** `trackSplits.ts` imports only `sim`, `utils` and the track data. A test checks this.
 
 ## Drivers
 

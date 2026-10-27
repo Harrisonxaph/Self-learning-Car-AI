@@ -1,0 +1,31 @@
+{
+  "format": "self-driving-ai-evolution/track-splits",
+  "version": 1,
+  "note": "Built-in track splits (P2-10, docs/AI_EVALUATION.md section 5). Training tracks are for evolution; validation tracks are for choosing hyperparameters and champions; held-out tracks are only for the final evaluation of frozen models and are never used for tuning. contentHash is sha256 of JSON.stringify(loadTrack(file)); change a track's version and hash together. P4-04 adds more circuits.",
+  "tracks": [
+    {
+      "id": "stadium-oval",
+      "version": "1",
+      "split": "training",
+      "file": "stadium-oval.json",
+      "contentHash": "sha256:f1c3e1a7f9ef938d7a1ffd4bcb79e4260fd870b4c637fdf43389ee7f4aefe8c2",
+      "description": "Two 120 m straights joined by two 180-degree left curves of radius 40 m; 14 m wide; 491 m lap; 20 gates."
+    },
+    {
+      "id": "rounded-rectangle",
+      "version": "1",
+      "split": "validation",
+      "file": "rounded-rectangle.json",
+      "contentHash": "sha256:9d9908c388bc685829d92d5e1f846421c008cf9302303ec6d572578bb0cb9dc9",
+      "description": "Straights of 100 m and 50 m joined by four 90-degree left corners of radius 15 m; 12 m wide; 394 m lap; 14 gates. Centre line of straights and arcs (arcs sampled every 15 degrees, straights split into pieces of at most 10 m), boundaries offset by half the width, gates on boundary vertices about 25 m apart."
+    },
+    {
+      "id": "hairpin-chicane",
+      "version": "1",
+      "split": "held-out",
+      "file": "hairpin-chicane.json",
+      "contentHash": "sha256:313f00c635d3667dfdfa5c37ba1f2731d1810a91b0801fb4234699d38a5f5770",
+      "description": "A right-left chicane (30 degrees each way, radius 25 m), a left then a right 180-degree hairpin (radius 12 m) and four 90-degree left corners (radius 16 m); 11 m wide; 502 m lap; 18 gates. Built like rounded-rectangle."
+    }
+  ]
+}

@@ -27,6 +27,7 @@ import type { VehiclePhysics } from '../sim/config';
 import type { Track } from '../sim/track';
 import { startRacer } from '../sim/world';
 import { createRng, RNG_ALGORITHM, type Rng } from '../utils/rng';
+import { assertTrainingTrack, trackContentHash } from './trackSplits';
 import {
   DEFAULT_EPISODE_LIMITS,
   DEFAULT_FITNESS_CONFIG,
@@ -85,6 +86,10 @@ export interface TrainingVersions {
   readonly fitnessVersion: number;
   readonly trackId: string;
   readonly trackVersion: string;
+  /** The track's content hash (training/trackSplits.ts), so a run names exactly the geometry it trained on. */
+  readonly trackHash: string;
+  /** 'training' for a built-in training track; 'unregistered' for a track outside the split manifest. */
+  readonly trackSplit: 'training' | 'unregistered';
 }
 
 /** A validated configuration together with its derived rules and version references. */
@@ -196,6 +201,8 @@ export function resolveTrainingConfig(input: unknown, timestepSeconds: number): 
 export function createTrainingSetup(input: unknown, environment: TrainingEnvironment): TrainingSetup {
   const { config, rules } = resolveTrainingConfig(input, environment.timestepSeconds);
   if (!environment.track || environment.track.gates.length === 0) throw new RangeError('Training needs a track with gates.');
+  // P2-10: never train on a validation or held-out track, even under another ID (TrackLeakageError).
+  const trackSplit = assertTrainingTrack(environment.track);
   return Object.freeze({
     config,
     environment: Object.freeze({ ...environment }),
@@ -211,6 +218,8 @@ export function createTrainingSetup(input: unknown, environment: TrainingEnviron
       fitnessVersion: FITNESS_VERSION,
       trackId: environment.track.id,
       trackVersion: environment.track.version,
+      trackHash: trackContentHash(environment.track),
+      trackSplit,
     }),
   });
 }
