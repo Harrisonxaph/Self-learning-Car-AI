@@ -134,12 +134,13 @@ export function tracksIn(split: Split, splits: TrackSplits = BUILT_IN_TRACK_SPLI
 }
 
 /**
- * The registered entry for a track, found by ID or by identical geometry, so a renamed copy is still found. A track
- * whose geometry differs at all (moved, scaled or edited) is a different track and is not found.
+ * Every registered entry that matches a track by ID or by identical geometry, in manifest order, so a renamed copy is
+ * still found, including a copy given another registered track's ID. A track whose geometry differs at all (moved,
+ * scaled or edited) only matches by ID.
  */
-export function findRegistered(track: Track, splits: TrackSplits = BUILT_IN_TRACK_SPLITS): SplitTrack | undefined {
+export function findRegistered(track: Track, splits: TrackSplits = BUILT_IN_TRACK_SPLITS): readonly SplitTrack[] {
   const hash = trackGeometryHash(track);
-  return splits.tracks.find((t) => t.id === track.id || t.geometryHash === hash);
+  return splits.tracks.filter((t) => t.id === track.id || t.geometryHash === hash);
 }
 
 function requireSplit(id: string, split: Split, purpose: string, splits: TrackSplits): Track {
@@ -162,18 +163,20 @@ export function validationTrack(id: string, splits: TrackSplits = BUILT_IN_TRACK
 }
 
 /**
- * Checks that a track may be trained on. Throws TrackLeakageError if it is a registered validation or held-out
- * track, found by ID or by identical geometry. Returns the registered split, or 'unregistered' for a track that is
- * not in the manifest (for example a synthetic unit-test track).
+ * Checks that a track may be trained on. Throws TrackLeakageError if any registered entry it matches, by ID or by
+ * identical geometry, is a validation or held-out track; every match is checked, so a held-out circuit cannot pass
+ * under a training track's ID. Returns 'training' when its geometry is a registered training circuit, otherwise
+ * 'unregistered' (for example a synthetic unit-test track, or new geometry under a training ID).
  */
 export function assertTrainingTrack(track: Track, splits: TrackSplits = BUILT_IN_TRACK_SPLITS): 'training' | 'unregistered' {
-  const entry = findRegistered(track, splits);
-  if (!entry) return 'unregistered';
-  if (entry.split !== 'training') {
-    const how = entry.id === track.id ? '' : ` (a copy of "${entry.id}" under the ID "${track.id}")`;
-    throw new TrackLeakageError(`Track "${entry.id}"${how} is a ${entry.split} track; training may only use training tracks.`);
+  const hash = trackGeometryHash(track);
+  const matches = findRegistered(track, splits);
+  const leak = matches.find((t) => t.split !== 'training');
+  if (leak) {
+    const how = leak.geometryHash === hash && leak.id !== track.id ? ` (a copy of "${leak.id}" under the ID "${track.id}")` : '';
+    throw new TrackLeakageError(`Track "${leak.id}"${how} is a ${leak.split} track; training may only use training tracks.`);
   }
-  return 'training';
+  return matches.some((t) => t.geometryHash === hash) ? 'training' : 'unregistered';
 }
 
 /** A score for one model on one track, as produced by an evaluation. */

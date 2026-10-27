@@ -313,8 +313,22 @@ describe('split boundaries', () => {
       const track = BUILT_IN_TRACK_SPLITS.tracks.find((t) => t.id === id)!.track;
       expect(() => createTrainer(DEFAULT_TRAINING_CONFIG, env(track))).toThrow(TrackLeakageError);
       const renamed = loadTrack({ ...clone(track), id: 'practice-loop', name: 'Practice', version: '9' });
-      expect(findRegistered(renamed)?.id).toBe(id);
+      expect(findRegistered(renamed).map((t) => t.id)).toEqual([id]);
       expect(() => createTrainer(DEFAULT_TRAINING_CONFIG, env(renamed))).toThrow(new RegExp(`a copy of "${id}" under the ID "practice-loop"`));
+    });
+
+    it.each(['rounded-rectangle', 'hairpin-chicane'])('rejects the %s circuit copied under the training ID "stadium-oval"', (id) => {
+      const track = BUILT_IN_TRACK_SPLITS.tracks.find((t) => t.id === id)!.track;
+      const disguised = loadTrack({ ...clone(track), id: 'stadium-oval', name: 'Stadium oval', version: '1' });
+      expect(findRegistered(disguised).map((t) => t.id)).toEqual(['stadium-oval', id]); // the ID and the geometry both match
+      expect(() => assertTrainingTrack(disguised)).toThrow(new RegExp(`a copy of "${id}" under the ID "stadium-oval"`));
+      expect(() => createTrainer(DEFAULT_TRAINING_CONFIG, env(disguised))).toThrow(TrackLeakageError);
+    });
+
+    it('does not call new geometry under a training ID "training": it is recorded as unregistered', () => {
+      const moved = loadTrack({ ...clone(stadiumOval), start: { position: { x: -5, y: 40 }, heading: 0 } });
+      expect(moved.id).toBe('stadium-oval');
+      expect(assertTrainingTrack(moved)).toBe('unregistered');
     });
   });
 
