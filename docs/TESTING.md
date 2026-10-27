@@ -123,6 +123,13 @@ Playwright's WebKit is an approximation of iOS Safari, not a replacement. For ea
 - Switch tabs or lock the screen mid-training, then return: the app pauses and resumes without a jump.
 - Low-power check: frame rate and step time on the dashboard stay usable.
 
+Recorded so far (owner-reported, not run by either agent, 2026-10-27, [#12](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/12#issuecomment-6445527559), [#16](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/16#issuecomment-6445530395)), on the production URL `https://self-learning-car-ai.vercel.app/` with the deployed commit unverified:
+
+- iPhone 15, iOS 27.0.1: all four ray-layer checks passed; manual controls and layout worked, training advanced from generation 8 to 9, and rotation and app-switch/resume passed. "The page stays responsive" is not stated separately.
+- iPad Pro 11-inch (3rd generation), iPadOS 26.6.2: the owner confirms all requested training and ray-layer checks passed. The iPad screenshot shows an in-app browser and does not establish standalone Safari testing.
+
+These are usability and operation checks, not evidence of learned driving. The low-power check waits for the dashboard (P3-01).
+
 If no real device is available, say so in the pull request and leave the item as an outstanding manual check. Do not mark it done.
 
 ## Reporting
