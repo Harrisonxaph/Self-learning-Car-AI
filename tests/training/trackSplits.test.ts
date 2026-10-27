@@ -32,6 +32,7 @@ import {
   type FrozenModel,
 } from '../../src/training/trackSplits';
 import { createTrainer, DEFAULT_TRAINING_CONFIG } from '../../src/training/trainer';
+import { sha256Hex } from '../../src/utils/sha256';
 
 const PHYSICS = DEFAULT_VEHICLE_PHYSICS;
 const FILES = { 'stadium-oval.json': stadiumOval, 'rounded-rectangle.json': roundedRectangle, 'hairpin-chicane.json': hairpinChicane };
@@ -356,6 +357,17 @@ describe('split boundaries', () => {
       expect(() => selectByValidation([])).toThrow(RangeError);
       expect(() => selectByValidation([{ modelId: 'a', trackId: 'rounded-rectangle', score: NaN }])).toThrow(RangeError);
     });
+
+    it('takes overflow-safe means of finite scores near the number range limits', () => {
+      const max = Number.MAX_VALUE;
+      const on = (modelId: string, score: number) => ({ modelId, trackId: 'rounded-rectangle', score });
+      expect(selectByValidation([on('lower', 0.75 * max), on('lower', 0.75 * max), on('higher', max)])).toBe('higher');
+      expect(selectByValidation([on('higher', max), on('lower', 0.75 * max), on('lower', 0.75 * max)])).toBe('higher');
+      expect(selectByValidation([on('only', -max), on('only', -max)])).toBe('only');
+      expect(selectByValidation([on('low', -max), on('low', -max), on('high', -0.75 * max), on('high', -0.75 * max)])).toBe('high');
+      expect(selectByValidation([on('top', max), on('top', max), on('top', max), on('next', 0.5 * max)])).toBe('top'); // max / 3 rounds up
+      expect(selectByValidation([on('', 1), on('other', 0)])).toBe('');
+    });
   });
 
   describe('held-out evaluation uses frozen models only', () => {
@@ -393,6 +405,42 @@ describe('split boundaries', () => {
       expect(() => freezeModel([1, NaN])).toThrow(/Parameter 1/);
       expect(() => freezeModel([1], { note: {} as unknown as string })).toThrow(/Provenance "note"/);
       expect(() => freezeModel([1], { x: Infinity })).toThrow(RangeError);
+    });
+
+    it('rejects array-likes without a positive integer length', () => {
+      for (const length of [NaN, -1, 0.5, 1.5, Infinity, 2 ** 53]) {
+        expect(() => freezeModel({ length, 0: 1 } as ArrayLike<number>)).toThrow(/positive integer length/);
+      }
+      expect(freezeModel({ length: 2, 0: 1, 1: 2 }).parameters).toEqual([1, 2]);
+    });
+
+    // A forger who computes the ID the same way freezeModel does: only content validation can catch these.
+    const idFor = (params: readonly unknown[], provenance: Record<string, unknown>) => {
+      const keys = Object.keys(provenance).sort();
+      return `sha256:${sha256Hex(JSON.stringify({ parameters: params, provenance: keys.map((key) => [key, provenance[key]]) }))}`;
+    };
+    const forge = (params: readonly unknown[], provenance: Record<string, unknown>) =>
+      Object.freeze({ id: idFor(params, provenance), parameters: Object.freeze(params), provenance: Object.freeze(provenance) }) as unknown as FrozenModel;
+
+    it('accepts a model forged with a matching ID only when its content is what freezeModel would produce', () => {
+      const params = [...model.parameters];
+      expect(forge(params, { ...model.provenance }).id).toBe(model.id);
+      expect(isFrozenModel(forge(params, { ...model.provenance }))).toBe(true);
+    });
+
+    it('refuses sparse or non-finite parameters and non-primitive provenance even with a matching ID', () => {
+      const sparse = forge(new Array<number>(159), {});
+      const holed = [...model.parameters] as (number | undefined)[];
+      delete holed[7];
+      const nested = forge([...model.parameters], { nested: { mutable: true } });
+      const listed = forge([...model.parameters], { list: [1, 2] });
+      const missing = forge([...model.parameters], { gone: undefined });
+      const nullish = forge([...model.parameters], { none: null });
+      const strings = forge(['1', '2'], {});
+      for (const bad of [sparse, forge(holed, {}), nested, listed, missing, nullish, strings]) {
+        expect(isFrozenModel(bad)).toBe(false);
+        expect(() => heldOutTrack('hairpin-chicane', bad)).toThrow(TrackLeakageError);
+      }
     });
   });
 });

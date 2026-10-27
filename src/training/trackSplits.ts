@@ -187,25 +187,38 @@ export interface TrackScore {
 }
 
 /**
+ * The mean of finite numbers without overflow: each value / scale is in [-1, 1], and rounding is monotonic, so the
+ * scaled mean stays in [-1, 1] and the result in [-scale, scale].
+ */
+const finiteMean = (values: readonly number[]): number => {
+  const scale = values.reduce((most, value) => Math.max(most, Math.abs(value)), 0);
+  if (scale === 0) return 0;
+  return (values.reduce((sum, value) => sum + value / scale, 0) / values.length) * scale;
+};
+
+/**
  * Chooses a model on validation results only: the model with the highest mean score (ties to the model listed
- * first). Throws TrackLeakageError if any result is for a track that is not a validation track, and RangeError for
- * no results or a non-finite score. It never sees held-out results.
+ * first). Means are taken on scores scaled by their largest magnitude, so finite scores always give a finite mean
+ * (a plain sum can overflow and pick the wrong model). Throws TrackLeakageError if any result is for a track that is
+ * not a validation track, and RangeError for no results or a non-finite score. It never sees held-out results.
  */
 export function selectByValidation(results: readonly TrackScore[], splits: TrackSplits = BUILT_IN_TRACK_SPLITS): string {
   if (!Array.isArray(results) || results.length === 0) throw new RangeError('Selection needs at least one validation result.');
-  const totals = new Map<string, { sum: number; count: number }>();
+  const scores = new Map<string, number[]>();
   for (const result of results) {
     validationTrack(result.trackId, splits);
     if (typeof result.score !== 'number' || !Number.isFinite(result.score)) {
       throw new RangeError(`Validation score for "${result.modelId}" on "${result.trackId}" must be finite, got ${String(result.score)}.`);
     }
-    const total = totals.get(result.modelId) ?? { sum: 0, count: 0 };
-    totals.set(result.modelId, { sum: total.sum + result.score, count: total.count + 1 });
+    const list = scores.get(result.modelId);
+    if (list) list.push(result.score);
+    else scores.set(result.modelId, [result.score]);
   }
   let best: string | undefined;
-  let bestMean = -Infinity;
-  for (const [modelId, { sum, count }] of totals) {
-    if (sum / count > bestMean) [best, bestMean] = [modelId, sum / count];
+  let bestMean = 0;
+  for (const [modelId, list] of scores) {
+    const mean = finiteMean(list);
+    if (best === undefined || mean > bestMean) [best, bestMean] = [modelId, mean];
   }
   return best!;
 }
@@ -219,6 +232,10 @@ export interface FrozenModel {
   readonly provenance: Readonly<Record<string, string | number | boolean>>;
 }
 
+const isParameter = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value);
+const isProvenanceValue = (value: unknown): value is string | number | boolean =>
+  typeof value === 'string' || typeof value === 'boolean' || isParameter(value);
+
 const frozenModelId = (parameters: readonly number[], provenance: Readonly<Record<string, unknown>>): string => {
   const keys = Object.keys(provenance).sort();
   const canonical = JSON.stringify({ parameters, provenance: keys.map((key) => [key, provenance[key]]) });
@@ -230,19 +247,19 @@ const frozenModelId = (parameters: readonly number[], provenance: Readonly<Recor
  * number or boolean values) and freezes both. Throws RangeError for anything else.
  */
 export function freezeModel(parameters: ArrayLike<number>, provenance: Readonly<Record<string, string | number | boolean>> = {}): FrozenModel {
-  if (parameters === null || typeof parameters !== 'object' || typeof parameters.length !== 'number' || parameters.length === 0) {
-    throw new RangeError('A frozen model needs a non-empty array of parameters.');
+  if (parameters === null || typeof parameters !== 'object' || !Number.isSafeInteger(parameters.length) || parameters.length <= 0) {
+    throw new RangeError('A frozen model needs a non-empty array of parameters with a positive integer length.');
   }
   const copy: number[] = [];
   for (let i = 0; i < parameters.length; i += 1) {
     const value: unknown = parameters[i];
-    if (typeof value !== 'number' || !Number.isFinite(value)) throw new RangeError(`Parameter ${i} must be finite, got ${String(value)}.`);
+    if (!isParameter(value)) throw new RangeError(`Parameter ${i} must be finite, got ${String(value)}.`);
     copy.push(value);
   }
   if (provenance === null || typeof provenance !== 'object') throw new RangeError('Model provenance must be an object.');
   const facts: Record<string, string | number | boolean> = {};
   for (const [key, value] of Object.entries(provenance)) {
-    if (!['string', 'number', 'boolean'].includes(typeof value) || (typeof value === 'number' && !Number.isFinite(value))) {
+    if (!isProvenanceValue(value)) {
       throw new RangeError(`Provenance "${key}" must be a string, finite number or boolean.`);
     }
     facts[key] = value;
@@ -252,13 +269,17 @@ export function freezeModel(parameters: ArrayLike<number>, provenance: Readonly<
   return Object.freeze({ id: frozenModelId(frozenParameters, frozenProvenance), parameters: frozenParameters, provenance: frozenProvenance });
 }
 
-/** True if `model` came from freezeModel unchanged: frozen throughout, and its ID matches its content. */
+/**
+ * True if `model` came from freezeModel unchanged: frozen throughout, every parameter index holds a finite number,
+ * every provenance value is a string, finite number or boolean, and its ID matches its content.
+ */
 export function isFrozenModel(model: unknown): model is FrozenModel {
   if (model === null || typeof model !== 'object' || !Object.isFrozen(model)) return false;
   const m = model as Partial<FrozenModel>;
   if (!Array.isArray(m.parameters) || !Object.isFrozen(m.parameters) || m.parameters.length === 0) return false;
   if (m.provenance === null || typeof m.provenance !== 'object' || !Object.isFrozen(m.provenance)) return false;
-  if (!m.parameters.every((p) => typeof p === 'number' && Number.isFinite(p))) return false;
+  for (let i = 0; i < m.parameters.length; i += 1) if (!isParameter(m.parameters[i])) return false;
+  if (!Object.values(m.provenance).every(isProvenanceValue)) return false;
   return typeof m.id === 'string' && m.id === frozenModelId(m.parameters, m.provenance);
 }
 
