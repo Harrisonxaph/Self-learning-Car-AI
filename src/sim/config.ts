@@ -1,5 +1,12 @@
 // Simulation settings. Every run and saved model records these, so change them deliberately.
 
+/**
+ * Version of the simulation's behaviour (physics, collision, checkpoints and laps), recorded as
+ * `simulationVersion` in experiment records and saved models. Bump it whenever a change could alter any
+ * simulated result for the same inputs.
+ */
+export const SIMULATION_VERSION = 1;
+
 export interface SimConfig {
   /** Simulated time per tick, in seconds. The simulation only ever advances by this amount. */
   readonly timestepSeconds: number;

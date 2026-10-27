@@ -46,6 +46,12 @@ export default tseslint.config(
   boundary('persistence', ['evolution', 'training', 'render', 'ui'], 'persistence handles saved data only'),
   boundary('render', ['evolution', 'training', 'persistence', 'ui'], 'rendering reads state and never drives the app'),
 
+  // Command-line scripts run in Node (for example scripts/experiment.mjs, P2-07).
+  {
+    files: ['scripts/**/*.mjs'],
+    languageOptions: { globals: { process: 'readonly', console: 'readonly' } },
+  },
+
   {
     files: HEADLESS.map((name) => `src/${name}/**/*.ts`),
     rules: {

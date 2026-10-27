@@ -44,6 +44,12 @@ import {
   type FitnessConfig,
 } from './fitness';
 
+/**
+ * The layout of the trainer's random streams (see "Randomness" above), recorded with every run. Change it whenever
+ * the order or number of draws changes.
+ */
+export const RNG_STREAMS = 'trainer-run-initial-then-3-per-transition-v1';
+
 /** Training settings, named as in a saved model's `training.configuration` (docs/MODEL_FORMAT.md). */
 export interface TrainingConfig extends EvolutionConfig, EpisodeLimits {
   /** Seed for the run generator: an integer from 0 to 4,294,967,295. */
@@ -78,6 +84,8 @@ export interface TrainingEnvironment {
 /** The contract and version identifiers a run depends on, so a champion can be replayed and compared later. */
 export interface TrainingVersions {
   readonly rngAlgorithm: string;
+  /** RNG_STREAMS: how the run generator's draws are used. */
+  readonly rngStreams: string;
   readonly evolutionOperators: string;
   readonly initialisation: string;
   readonly parameterOrder: string;
@@ -210,6 +218,7 @@ export function createTrainingSetup(input: unknown, environment: TrainingEnviron
     rules,
     versions: Object.freeze({
       rngAlgorithm: RNG_ALGORITHM,
+      rngStreams: RNG_STREAMS,
       evolutionOperators: EVOLUTION_OPERATORS,
       initialisation: INITIALISATION.id,
       parameterOrder: PARAMETER_ORDER,

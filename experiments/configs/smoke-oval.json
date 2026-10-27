@@ -1,0 +1,13 @@
+{
+  "format": "self-driving-ai-evolution/experiment-config",
+  "version": 1,
+  "id": "smoke-oval",
+  "description": "Small reproducibility check on the training oval: 2 seeds, 8 cars, 3 generations, 20 s episodes. It shows that a run records and replays; it is not an experiment about learning.",
+  "trackId": "stadium-oval",
+  "seeds": [1, 2],
+  "generations": 3,
+  "training": {
+    "populationSize": 8,
+    "maxEpisodeSeconds": 20
+  }
+}

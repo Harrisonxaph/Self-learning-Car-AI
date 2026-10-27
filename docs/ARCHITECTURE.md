@@ -39,7 +39,7 @@ src/
     fitness.ts            episode fitness and termination rules, anti-exploitation guards (P2-06)
     trainer.ts            population training loop, headless or under the frame loop (P2-05)
     trackSplits.ts        built-in track splits and the training/selection/held-out boundaries (P2-10)
-    experiment.ts         experiment config, seeds, result records
+    experiment.ts         seeded experiments: config, complete JSON records and replay (P2-07)
     stats.ts              per-generation statistics
   persistence/
     modelFormat.ts        types and validation for saved models
@@ -68,7 +68,12 @@ src/
     math.ts               vectors, angles, segment intersection
   data/
     tracks/               built-in training, validation and held-out tracks (JSON) and their split manifest index.json (P2-10)
-tests/                    mirrors src/; e2e/ for Playwright
+scripts/
+  experiment.mjs          `npm run experiment`: runs and replays experiments in Node (P2-07)
+experiments/
+  configs/                experiment configurations, e.g. smoke-oval.json (P2-07)
+  results/                checked-in experiment records (P2-08 onwards)
+tests/                    mirrors src/; e2e/ for Playwright; scripts/ runs the command line
 ```
 
 ## Dependency direction
@@ -112,7 +117,7 @@ Built in P1-03 (`src/utils/rng.ts`).
   - Create generators from the recorded experiment seed. Never keep a generator in a module-level variable, and never use `Math.random` (lint enforces this in headless folders).
   - Pass the generator in as an argument, so tests can supply their own and runs stay reproducible.
   - Give each independent purpose its own generator, for example mutation, crossover and start positions. Seed each from a parent generator with `nextUint32()`, so extra draws in one place do not shift another.
-  - Record the seed and `RNG_ALGORITHM` with every experiment (P2-07). Changing the algorithm means bumping `RNG_ALGORITHM`.
+  - Record the seed and `RNG_ALGORITHM` with every experiment (built in P2-07, together with the trainer's `RNG_STREAMS` layout). Changing the algorithm means bumping `RNG_ALGORITHM`; changing the order or number of the trainer's draws means bumping `RNG_STREAMS`.
 - **Checkpoints:**
   - `getState()` returns a plain-JSON copy: `{ algorithm, words: [a, b, c, counter] }`.
   - `restoreRng(state)` continues exactly where the saved generator stopped. It validates the state, because checkpoint files are untrusted input.
@@ -360,9 +365,10 @@ Seven rays fanned across the car's front (−90°, −60°, −30°, 0°, 30°, 
 - **Recorded:** `record()` returns the resolved configuration, a copy of the vehicle physics, the timestep, the sensor configuration and the per-generation statistics. It also returns the version references a champion replay needs:
   - `RNG_ALGORITHM`, `EVOLUTION_OPERATORS`, `INITIALISATION.id` and `PARAMETER_ORDER`;
   - `INPUT_CONTRACT`, `OUTPUT_CONTRACT` (`steering-throttle-brake-v1`, now in `ai/outputs.ts`) and `FITNESS_VERSION`;
-  - the track's id and version.
+  - `RNG_STREAMS` (`trainer-run-initial-then-3-per-transition-v1`), naming the stream layout below;
+  - the track's id, version, content hash and split.
 
-  These are in memory only. Saving them is P2-07 and P3-05.
+  P2-07's experiment records save them (see "Experiments"); saving champion models is P3-05.
 - **Randomness:** the trainer owns one run generator, `createRng(seed)`. Its first draw seeds the initial-population generator, which fills genomes in index order. Each generation transition takes exactly three more draws, through `createEvolutionRngs`. Episodes use no randomness, so stepping order and drawing cannot change any stream.
 - **Headless:** `runGeneration` and `trainHeadless(config, environment, generations)` run in Node. `npm run demo:train` prints 50 generations with the default configuration, in about 80 s here.
 - **Rendered (`?mode=train`, `ui/trainingPage.ts`):**
@@ -404,6 +410,60 @@ Seven rays fanned across the car's front (−90°, −60°, −30°, 0°, 30°, 
 - **Not included:** an experiment runner (P2-07, P2-08), a general track validator (P4-01) and more circuits (P4-04). The geometry hash is exact, so a moved, scaled or mirrored copy counts as a different circuit; held-out integrity also relies on review and on the experiment protocol. No network has been trained or evaluated on the validation or held-out circuits.
 - **Separation:** `trackSplits.ts` imports only `sim`, `utils` and the track data. A test checks this.
 
+## Experiments
+
+**Seeded experiments, records and replay** (built in P2-07, `src/training/experiment.ts`, `scripts/experiment.mjs`). The plan was documented on [#18](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/18#issuecomment-6439994327) before coding. The protocol is AI_EVALUATION.md §7.
+
+- **Command line:** `npm run experiment -- run <config.json> --out <record.json>` and `npm run experiment -- replay <record.json>`.
+  - `scripts/experiment.mjs` handles only the outside world: arguments, files, git, the engine and the date. It loads `experiment.ts` through Vite's `runnerImport`, so the command line and the tests run the same TypeScript.
+  - Exit codes: 0 for success or an identical replay, 1 for a replay that differs, 2 for invalid, incompatible or unreadable input.
+  - It never overwrites a record without `--force`. A dirty worktree, including untracked files, is warned about and recorded.
+- **Configuration** (`self-driving-ai-evolution/experiment-config` v1): `id`, `description`, `trackId`, `seeds` (1 to 1,000 distinct unsigned 32-bit integers), `generations` (1 to 10,000) and `training`.
+  - `training` may set any `TrainingConfig` field except `seed`, over `DEFAULT_TRAINING_CONFIG`. A field it sets replaces the default whole; nested blocks are never merged.
+  - Unknown fields are rejected (`ExperimentConfigError`).
+  - The track must be a built-in **training** track (`trainingTrack`): the validation and held-out circuits throw `TrackLeakageError`. The trainer's own `assertTrainingTrack` also guards this.
+  - Physics, timestep and sensors are the code's current values and are not configurable.
+- **Runs:** one independent run per seed. Each run creates a fresh trainer (`createTrainer`), shares nothing with other runs, and is identical whatever the other seeds or their order.
+- **Record** (`self-driving-ai-evolution/experiment-record` v1, JSON):
+  - `experiment`, and `recordedAt`, which is the only field replay ignores.
+  - `source`: the git revision, whether the worktree was dirty, and `appVersion`. If git is unavailable, these are null and the reason is recorded.
+  - `engine`: name, version and V8 version.
+  - `contracts`:
+    - `SIMULATION_VERSION` (`sim/config.ts`), `RNG_ALGORITHM` and `RNG_STREAMS`;
+    - `EVOLUTION_OPERATORS`, the initialisation, and the parameter order and count;
+    - the input and output contracts and `FITNESS_VERSION`;
+    - the full timestep, physics and sensors.
+  - `tracks`: the whole split manifest (format, version, entries) with a SHA-256 of it, and the training track's ID, version and content hash.
+  - `configuration`: the seeds, the generations and the complete resolved training configuration.
+  - `budgets`: generations, population, evaluations per run, `maxEpisodeTicks`, `stallTicks`, and `maxSimulatedTicksPerRun` (evaluations × `maxEpisodeTicks`).
+  - `evaluations`: `{ validation: "none", heldOut: "none" }`.
+  - `runs`, one per seed:
+    - every car of every generation, raw: outcome, ticks, gates, lap ticks, crash flag, partial progress and each fitness term;
+    - per-generation statistics;
+    - the simulated ticks used;
+    - the **champion**: the best car of the final generation by training fitness (`best-training-fitness-final-generation`; not a validation-selected model). It is frozen with `freezeModel`, with its `sha256:` ID, all 159 parameters at full precision, provenance (experiment, seed, generation, car, track ID and hash, selection rule) and its episode.
+  - `resultsHash`: a SHA-256 of the canonical (sorted-key) JSON of `runs`.
+- **Reading a record** (`parseExperimentRecord`) checks everything before anything runs.
+  - `ExperimentRecordError` for a malformed or incomplete record:
+    - a wrong format or version;
+    - a missing field (reported as incomplete) or an unknown field;
+    - a wrong type or a non-finite number;
+    - training settings that are not already a complete resolved configuration;
+    - counts, seeds, generation numbers, budgets or used ticks that disagree with the configuration;
+    - a champion whose ID, provenance or episode does not match;
+    - a stale `resultsHash`.
+  - `ExperimentCompatibilityError` if this engine or code cannot replay it: another engine name, version or V8; any different contract, physics, timestep or sensor value; another manifest; another training-track hash; an unknown track.
+  - `TrackLeakageError` if its training track is a validation or held-out track.
+- **Replay** (`replayExperiment`):
+  - re-runs every seed from the record's own resolved configuration, never from defaults or the original configuration file;
+  - compares the canonical JSON of the results, reporting up to 20 differing paths;
+  - evaluates each frozen champion alone (`evaluateGenome`) against its recorded episode.
+
+  A different source revision is reported, not rejected; the comparison decides. Determinism is promised only within one engine (AI_EVALUATION.md §4).
+- **Boundaries:** the runner and command line never call `validationTrack`, `selectByValidation` or `heldOutTrack`, and a test checks this. Validation selection and held-out evaluation stay with P2-08 and later.
+- **Not included:** baselines and controlled studies (P2-08), resumable population checkpoints (P3-07; a record re-runs from the start), saved champion models (P3-05), dashboards, and physics or sensor overrides.
+- **Separation:** `experiment.ts` imports only `ai`, `evolution`, `sensors`, `sim`, `utils` and `training`. Lint forbids rendering, UI, persistence and the DOM.
+
 ## Drivers
 
 Every car is controlled through one `Driver` interface (`decide(observation) → controls`). Implementations: `NeuralDriver`, `RandomDriver`, `RuleBasedDriver` and `HumanDriver`. This makes baselines, replay and human-vs-AI races use the same simulation path.
@@ -438,7 +498,7 @@ Built in P1-08 (`ai/drivers.ts`): the interface, an `Observation` holding the ca
 
 ## Evaluation, replay and recovery boundaries
 
-- P2-10 supplies versioned built-in track splits before the editor. P2-07 records raw episode/generation data and complete resolved configurations; the Phase 3 dashboard reads these records rather than defining metrics independently.
+- P2-10 supplies versioned built-in track splits before the editor. P2-07 (built) records raw episode/generation data and complete resolved configurations; the Phase 3 dashboard reads these records rather than defining metrics independently.
 - P3-08 provides initial saved-model inspection and comparison in Phase 3. P5-05 adds repeated multi-track evaluation, spread and statistical comparisons.
 - ST5 is simultaneous human-versus-AI racing with non-colliding cars, identical physics/start conditions and separate wall-collision/lap results. Car-car contact, overtaking and avoidance stay in R-01/R-02.
 - A champion replay needs its frozen parameters, track version, simulation configuration and initial conditions. It cannot resume a whole evolutionary population.
