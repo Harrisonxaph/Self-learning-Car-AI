@@ -110,6 +110,8 @@ Also record PRNG algorithm/version, simulation version, track content versions, 
 
 **Runner (P2-07):** `npm run experiment -- run <config.json> --out <record.json>` writes a complete record of seeded training runs on one built-in training track. It holds the resolved configuration, seeds, every contract version, physics, sensors, the split manifest and track hash, budgets, raw per-car results for every generation, per-generation statistics, and each run's frozen champion with provenance. `npm run experiment -- replay <record.json>` re-runs it in the same engine and checks every result is identical (ARCHITECTURE.md "Experiments"). The runner trains and records only. Its champion is chosen by training fitness and labelled as such. It runs no validation selection and no held-out evaluation, and its records say so (`evaluations: none`). The baselines, evaluation seeds and statistics for E1–E6 are P2-08 onwards. Records from the example configuration show only that recording and replay work; they are not results.
 
+**Proposed plan for E1 and E2 (P2-08, not authorised; nothing implemented or run):** [experiments/p2-08-plan.md](experiments/p2-08-plan.md). It fixes the agents, seeds and streams, equal evaluation budgets, track boundaries, primary metric, effect threshold (δ = 0.25 lap) and the paired seed-cluster analysis, and separates an exploratory pilot from a preregistered confirmatory study.
+
 | ID | Question | Agents | Tracks | Seeds | Depends on |
 |----|----------|--------|--------|-------|------------|
 | E1 | Do random agents ever finish laps? (sets the floor) | A1, A7, A2 | training | 10 eval seeds × population | P2-08 |
