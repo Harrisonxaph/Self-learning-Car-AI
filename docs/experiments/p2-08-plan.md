@@ -2,6 +2,10 @@
 
 > Status: **proposed plan only.** Nothing here is implemented, and no pilot or confirmatory run has been made. Implementation, the pilot and the confirmatory study each need the owner's explicit authorization ([#19](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/19)) and Codex review. No learning claim is made or implied.
 
+> Revised after Codex's [retrospective review of #91](https://github.com/Harrisonxaph/Self-learning-Car-AI/pull/91#pullrequestreview-5673337394):
+> - A1/A7 episode counts are now consistent on both tracks, and E1 keeps AI_EVALUATION's population-sized cohort.
+> - The exact Wilcoxon convention for zeros and ties is now specified.
+
 This plan turns [AI_EVALUATION.md](../AI_EVALUATION.md) §2, §3, §5, §7 and §8 into concrete settings for P2-08: agents A1, A7, A2, A9, A8 and A5, experiments E1 and E2, on the built-in tracks from P2-10, recorded and replayed with the P2-07 runner. Where AI_EVALUATION leaves a choice open, this plan proposes one and says so; Codex and the owner can change any of it before the confirmatory manifest is frozen.
 
 ## 1. Questions and claims
@@ -32,7 +36,7 @@ Selection rule for every model-based agent: **highest training fitness** (P2-06,
 - **Pilot seeds:** `9001` to `9003`. Pilot results never enter the confirmatory analysis.
 - **A5 and A2/A9:** the P2-07 trainer's documented streams (`RNG_STREAMS = trainer-run-initial-then-3-per-transition-v1`): `run = createRng(seed)`, `initial = createRng(run.nextUint32())`, generation 0 is P genomes drawn from `initial`.
 - **A8:** the same `initial` generator, **continued** for P × G genomes. A8's first P networks are therefore exactly A5's generation 0. This pairs A8 with A5 by seed, makes A9 the best of A8's first block, and means any A5 − A8 difference comes from what happens after generation 0. The stream layout gets its own recorded identifier.
-- **A1 and A7 action seeds:** for agent `a`, training seed `s` and episode `e`, the first 32 bits of `sha256("p2-08|<a>|<s>|<e>")` (`utils/sha256.ts`). They are independent of the trainer's streams, and the derivation is recorded in every record. There are E = 10 episodes per training seed per track; they are averaged within the seed (§7).
+- **A1 and A7 action seeds:** for agent `a`, training seed `s` and episode `e`, the first 32 bits of `sha256("p2-08|<a>|<s>|<e>")` (`utils/sha256.ts`). They are independent of the trainer's streams, and the derivation is recorded in every record. **E1 sample size, as AI_EVALUATION §7 specifies ("10 eval seeds × population"):** A1 and A7 each run **E = P episodes** (50 at the default) per training seed **per track**, on the training and the validation track alike. That is the same population-sized cohort A2 gets from its P generation-0 networks. At the default this is 10 × 50 = 500 episodes per agent per track. The episodes are averaged within the seed (§7). Evaluation counts are not independent samples: the independent n is the number of training seeds (10).
 - **Budget:**
   - The budget unit is the **episode evaluation**, as AI_EVALUATION §2 defines A8. A5 uses P × G evaluations; A8 gets exactly P × G.
   - A5 re-evaluates its elites each generation, and deterministic re-evaluation adds no information. So A5 sees at most P × G − eliteCount × (G − 1) distinct genomes, while A8 sees P × G. This gives A8 a small advantage, which makes the A5 − A8 test conservative. Both counts are recorded.
@@ -47,12 +51,12 @@ Selection rule for every model-based agent: **highest training fitness** (P2-06,
 - **Training:** `stadium-oval` (training split) is the only track any agent trains or is selected on. This uses `trainingTrack` and the trainer's `assertTrainingTrack` from P2-10.
 - **Validation:** `rounded-rectangle` is used only:
   - in the **pilot**, to choose between at most three predeclared configurations (§8), through `selectByValidation`;
-  - in the **confirmatory** study, as a **secondary**, descriptive endpoint: each frozen model and A1/A7 is evaluated once on it. No confirmatory decision uses it.
+  - in the **confirmatory** study, as a **secondary**, descriptive endpoint: each deterministic frozen model (A2's networks, A9, A8, A5) is evaluated once on it, and A1/A7 run their E = P stochastic episodes per training seed on it, as on the training track (§3). No confirmatory decision uses it.
 - **Held-out:** `hairpin-chicane` is **not touched.** No P2-08 code calls `heldOutTrack`, a source test will check that, and no held-out result is produced or looked at. The frozen model IDs from the confirmatory study are recorded so E6 can later evaluate them on the held-out track without retraining.
 
 ## 5. Episode rules and metrics
 
-- **Episodes:** the same recorded P2-06 rules for every agent: 60 s maximum, 5 s stall, 3-lap cap, crash ends the episode. The simulator has one deterministic start pose per track and no start perturbation. So a deterministic agent (A2, A9, A8, A5) has exactly **one** episode per track; repeating it adds no information (AI_EVALUATION §5). Only A1 and A7 have more than one episode per track (E = 10).
+- **Episodes:** the same recorded P2-06 rules for every agent: 60 s maximum, 5 s stall, 3-lap cap, crash ends the episode. The simulator has one deterministic start pose per track and no start perturbation. So a deterministic agent (A2, A9, A8, A5) has exactly **one** episode per track; repeating it adds no information (AI_EVALUATION §5). Only A1 and A7, which are stochastic, have more than one episode per track: E = P per training seed per track (§3). "Evaluated once" below always means a deterministic model's single episode.
 - **Primary metric: ordered progress** = gates credited ÷ gates per lap (`gatesPassed / track.gates.length`, P1-07 credits, including the first crossing of gate 0). It can exceed 1 over several laps.
 - **Secondary metrics** (AI_EVALUATION §3):
   - lap completion (at least one lap);
@@ -70,7 +74,13 @@ Selection rule for every model-based agent: **highest training fitness** (P2-06,
   - the mean of the 10 `d_s`, with a 95% percentile bootstrap interval from 10,000 resamples of the seeds;
   - the bootstrap uses its own sfc32 generator with seed `20261028`, which is recorded;
   - the median and IQR of `d_s`;
-  - an exact two-sided Wilcoxon signed-rank test, reported as a guide only.
+  - an exact two-sided Wilcoxon signed-rank test, reported as a guide only. Discrete gate progress makes zero differences and ties normal, so the convention is fixed in advance:
+    - **zeros:** seeds with `d_s = 0` are dropped (Wilcoxon's original method), leaving m non-zero differences, and m is reported;
+    - **ties:** the absolute non-zero differences are ranked with **midranks** (tied values share the average of their ranks);
+    - **statistic:** W = the sum of the signed midranks;
+    - **exact null:** all 2^m sign assignments of those midranks are enumerated (at most 2^20 ≈ 10^6 for 20 seeds). The two-sided p-value is the fraction with |W| ≥ |W_obs|, compared with a 1e-9 tolerance;
+    - **all zero (m = 0):** p = 1, reported as "no non-zero differences".
+    - The analysis tests check it on synthetic cases: all zero, all positive (p = 2/2^m), a single non-zero difference, tied absolute values, and mixed signs, against hand-computed values. The p-value is descriptive. It never replaces the bootstrap decision rule.
 - **Meaningful effect threshold:** **δ = 0.25 lap**, which is 5 of the oval's 20 gates. It is fixed here, before any pilot, as the smallest improvement worth calling meaningful. The pilot may **raise** δ but never lower it.
 - **Decision rule.** Every condition must hold for the study to support Phase 2 acceptance:
   1. the 95% interval for mean `d_s` lies entirely above 0;
@@ -79,7 +89,7 @@ Selection rule for every model-based agent: **highest training fitness** (P2-06,
   4. A1, A7, A2 and A9 results, lap completion and collisions are all reported.
 
   If any condition fails, the result is reported as negative or inconclusive. Phase 2 then stays unaccepted, and a follow-up is planned. The result is never relabelled.
-- **Secondary contrasts:** A5 − A9, A5 − A2 (seed mean), A5 − A1 and A5 − A7 (seed means of 10 episodes), on the training track, plus every contrast on the validation track. They use the same bootstrap and are described, not tested. They are not used for acceptance or claims.
+- **Secondary contrasts:** A5 − A9, A5 − A2 (seed mean), A5 − A1 and A5 − A7 (seed means of E = P episodes), on the training track, plus every contrast on the validation track. They use the same bootstrap and are described, not tested. They are not used for acceptance or claims.
 - **Wording of results:**
   - "beats random driving" refers to A1/A7;
   - "improves on selection alone" refers to A9;
@@ -88,7 +98,7 @@ Selection rule for every model-based agent: **highest training fitness** (P2-06,
 
 ## 7. Aggregation
 
-- **A1/A7:** the mean over the E = 10 episodes within each training seed. **A2:** the mean over the P generation-0 networks within each seed. These seed-level values enter the cross-seed analysis, never the individual episodes.
+- **A1/A7:** the mean over the E = P episodes within each training seed, per track. **A2:** the mean over the P generation-0 networks within each seed. These seed-level values enter the cross-seed analysis, never the individual episodes.
 - **Paired by seed:** A5, A8, A9 and A2 share the seed's generation 0, and A1/A7 use seed-specific action seeds. Every contrast is paired by training seed.
 
 ## 8. Pilot calibration (separate from the confirmatory study)
@@ -136,7 +146,7 @@ The manifest is reviewed by Codex and approved by the owner **before** any confi
   Each record is covered by a `resultsHash`, rejects malformed, incomplete or incompatible input like P2-07 records, and can be replayed to identical results in the same engine.
 - **Analysis output:** a deterministic analysis command that first replays every record, then writes `analysis.json` and a Markdown report. Re-running it reproduces both byte for byte.
 - **Location:** `experiments/results/p2-08/pilot/` and `experiments/results/p2-08/confirmatory/` (P2-08's test requirement).
-- **Size:** about 0.5 to 1 MB per seed per agent is expected from the P2-07 record of the example run (42 KB for 2 × 3 × 8 cars). The pilot measures the real size. If the confirmatory set would be large (for example over 20 MB), the owner chooses before the confirmatory run between committing it and committing compressed records with their hashes.
+- **Size:** about 0.5 to 1 MB per seed per agent is expected from the P2-07 record of the example run (42 KB for 2 × 3 × 8 cars). A1 and A7 add 2 agents × 2 tracks × P episodes × 10 seeds, which is 2,000 raw episodes at the default. The pilot measures the real size. If the confirmatory set would be large (for example over 20 MB), the owner chooses before the confirmatory run between committing it and committing compressed records with their hashes.
 - **Engine:** one Node version for the whole study, recorded. Records from another engine are rejected on replay (AI_EVALUATION §4).
 
 ## 10. Implementation steps (each needs its own authorization)

@@ -575,11 +575,13 @@ Dependencies are taken from the table above.
   - Experiment output files checked into `experiments/results/`.
 - **Proposed plan (not authorised; nothing implemented or run):** [docs/experiments/p2-08-plan.md](experiments/p2-08-plan.md).
   - Agents A1, A7, A2, A9, A8 and A5, with seeded streams. A8 continues A5's initial-population stream, so its first block is A5's generation 0.
-  - Equal evaluation budgets (P × G episodes).
+  - Equal evaluation budgets (P × G episodes). A1 and A7 run E1's population-sized cohort: P stochastic episodes per training seed on each track. Deterministic models run one episode per track.
   - Training on the oval only. Validation is used for pilot configuration choice and secondary reporting; the held-out track is untouched.
   - The primary metric is ordered progress on the training track, as a paired A5 − A8 difference per training seed with a 95% seed-cluster bootstrap. The meaningful effect threshold is δ = 0.25 lap, which the pilot may raise but not lower.
   - A separate exploratory pilot (seeds 9001–9003) comes before a preregistered confirmatory study (seeds 1001–1010, or 1020 if the pilot requires it). Raw records, replay and the analysis go under `experiments/results/p2-08/`.
+  - The exact Wilcoxon signed-rank test drops zero differences and uses midranks for ties. It is descriptive only.
   - Implementation, the pilot and the confirmatory run each need the owner's authorization.
+  - Revised after Codex's [retrospective review of #91](https://github.com/Harrisonxaph/Self-learning-Car-AI/pull/91#pullrequestreview-5673337394) (Changes required on the plan; the P2-07 record verified).
 
 ### P2-09 — Braking output experiment toggle and braking feasibility check
 
@@ -1064,3 +1066,4 @@ These apply to every phase and are checked in review.
 | 2026-10-27 | P2-07 seeded experiments (configuration, complete JSON records with contracts, track and split hashes, budgets, raw per-car results and frozen champions; same-engine replay; `npm run experiment`) implemented on `feat/p2-07-experiments` and moved to In Review. No experiment has been run. P1-10, P2-01 and P2-05 remain In Review. |
 | 2026-10-27 | P2-01 and P2-05 Complete: owner-reported physical-device checks (not run by either agent), relayed on #12 and #16, on the production URL with the deployed commit unverified. iPhone 15 (iOS 27.0.1): all four sensor-ray checks passed; manual controls and layout worked, training advanced from generation 8 to 9, and rotation and app-switch/resume passed. iPad Pro 11-inch (3rd generation, iPadOS 26.6.2): the owner confirms all requested training and sensor-ray checks passed; its screenshot shows an in-app browser and does not establish standalone Safari testing. These checks show usability and that training runs, not learned driving. P2-07 merged in #89 at `9ea5511` and stays In Review pending its completion record. P1-10 remains In Review. |
 | 2026-10-27 | P2-07 Complete: #89 merged by the owner at `9ea5511` (same tree as the final head `0b2737d`), after Codex's technical approval of `0b2737d` and green CI on the head and the merge (runs 40494094023 and 40499436295, including WebKit); device checks not applicable. Codex's non-blocking P3 (nested unknown configuration keys) stays open. P2-08 plan proposed in `docs/experiments/p2-08-plan.md` (planning only; nothing implemented or run). P1-10 remains In Review. |
+| 2026-10-27 | P2-08 plan revised after Codex's retrospective review of #91 (Changes required on the plan, P2-07 record verified; #91 was merged before that review). A1/A7 episode counts are consistent across tracks, E1 keeps AI_EVALUATION's population-sized cohort (P episodes per training seed per track), and the exact Wilcoxon convention for zeros and ties is fixed. Planning only; P2-08 stays Not Started. |
