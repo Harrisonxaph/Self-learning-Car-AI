@@ -349,6 +349,32 @@ PR D is split into **D1** (`src/training/analysis.ts`: the statistics, the analy
 
   Confirmatory and pilot manifests exist in memory only and are never run. Nothing is written, and no real study output is produced.
 
+### 5.2 D2 implementation notes (written before the D2 code)
+
+D2 adds the `analyse` command to `scripts/study.mjs`. It handles only files and arguments; the analysis is D1's `analyseRecords`, loaded through Vite like `run` and `replay`.
+
+- **Command:** `npm run study -- analyse <manifest.json> <record.json>… --out-dir <dir> [--force]`. It needs at least one record, and `--out-dir` and `--force` may each be given once.
+- **Order:** read every file, check the output paths, then analyse. `analyseRecords` parses the manifest and every record, replays each record, and refuses missing, duplicate and extra seeds. Nothing is written until the analysis has finished.
+- **Outputs:** `<dir>/analysis.json` (`analysisJson`, canonical JSON) and `<dir>/report.md` (`renderReport`). Both are deterministic, so a re-run writes the same bytes.
+- **Safe writing:**
+  - the output folder must already exist and be a folder; it is never created;
+  - if either output already exists, the command refuses without `--force`, before anything runs;
+  - an output may never be one of the input files (manifest or records), even with `--force`. Paths are compared after resolving symbolic links;
+  - each file is written in full through `writeRecordFile` (C2's owned temporary folder, then a hard link or a rename). An interrupted run never leaves a partial file and never deletes an existing one. `analysis.json` is written first, then `report.md`.
+- **Exit codes:**
+  - **0:** both outputs written;
+  - **2:** a usage error; unreadable or invalid input; an incompatible record; a record that does not replay identically (`StudyAnalysisError`); missing, duplicate or extra seeds; or a refused output. Nothing is written in any of these cases.
+
+  There is no exit 1, because the analysis never reports a difference. A record that does not reproduce is invalid input for an analysis, not a result.
+- **Printed summary:** the label, n, `acceptanceEligible`, the decision, the claim (or "none") and the two paths. It repeats that only an acceptance-eligible confirmatory analysis can support the claim, and that validation is descriptive.
+- **Tests** (`tests/scripts/studyAnalyse.test.ts`):
+  - the command runs as its own process on a temporary mechanics manifest with seeds 7371 and 7372. Its records are produced in the test process by `runStudySeed`, the same library code `run` uses;
+  - the written files equal `analysisJson`/`renderReport` of `analyseRecords`, and a forced re-run gives identical bytes;
+  - refusals: existing outputs, a missing folder, an output folder that is a file, an output that is an input (also through a symbolic link), a record that does not replay, a missing, duplicate or extra seed, and usage errors. Each refusal leaves nothing written;
+  - a mechanics analysis prints "not evaluated" and no claim.
+
+  No pilot or confirmatory seed is run, and no manifest, record or analysis is committed.
+
 ## 6. Tests shared by PRs B to D
 
 - **Determinism:** the same manifest and seed give an identical record, also in another order and alongside other seeds.
