@@ -214,6 +214,29 @@ PR C is split into **C1** (`src/training/study.ts`: formats, strict parsing, com
   - `resultsHash`.
 - **Replay:** it re-runs `generateAgents` from the manifest for the record's seed, compares the canonical JSON of `agents` (up to 20 differing paths), and re-evaluates the A9, A8 and A5 models alone on both tracks, comparing the complete episode result (fitness breakdown included) with the recorded one.
 
+### 4.6 C2 implementation notes (written before the C2 code)
+
+C2 is `scripts/study.mjs` and the `study` npm script. Like `scripts/experiment.mjs`, it handles only the outside world (arguments, files, git, the engine and the date) and loads `src/training/study.ts` through Vite, so the command line and the tests run the same TypeScript. It adds no study logic and no analysis.
+
+- **Commands:**
+  - `run <manifest.json> --seed <s> --out <record.json> [--force]`
+  - `replay <manifest.json> <record.json>`
+- **Arguments are strict.** `--seed` is a canonical decimal integer (`7301`, not `+7301`, `07301`, `7301.0` or `1e3`). Each option may be given once. Unknown commands, options and positional arguments are usage errors (exit 2).
+- **Order of checks for `run`; nothing is simulated until all of them pass:**
+  1. read and parse the manifest file;
+  2. validate the manifest (`parseStudyManifest`);
+  3. a `pilot` or `confirmatory` manifest runs only from a clean worktree whose `HEAD` is the manifest's `code.revision`, the commit it was frozen at. Otherwise the run is refused (exit 2), so no such record can name a different or uncommitted program. `mechanics` manifests may run from any worktree, with the existing warning for uncommitted changes;
+  4. check that the manifest lists the seed;
+  5. check the output path (below).
+- **Safe overwrite:**
+  - an existing output is refused without `--force`, before anything runs;
+  - the output may never be the manifest file itself, even with `--force` (compared after resolving symbolic links);
+  - an output that is a directory is refused;
+  - the record is first written in full to a temporary file in the output's directory. It is then moved into place: without `--force` by a hard link, which fails if a file appeared meanwhile, and with `--force` by a rename. An interrupted or failed run therefore never leaves a partial record, and never removes an existing one. The temporary file is always removed.
+- **Exit codes:** 0 for a written record or an identical replay; 1 for a replay that differs (the differing paths and any model that did not reproduce are printed); 2 for usage errors and for invalid, incompatible or unreadable input (`Study*Error`, `TrackLeakageError`, `TrackSplitError`, unreadable or non-JSON files), with nothing written. An unexpected error also exits 2, prefixed "Unexpected error".
+- **Output** says what was recorded (the label, the seed, the ticks and evaluations used, and the start of `resultsHash`) and that it is a raw record: no analysis, and not evidence of learning. A replay at a different source revision is noted, not rejected.
+- **Tests** (`tests/scripts/study.test.ts`) run the command as a separate Node process, exactly as `npm run study` runs it. They use tiny mechanics manifests written to a temporary directory, with 73xx seeds. The pilot/confirmatory revision guard is tested with a manifest that names reserved seeds but is given a seed it does not list. Because the guard comes before the seed check, it must refuse with its own message, and a broken guard can only fail at the seed check. No reserved seed is ever run, and no manifest or record is committed.
+
 ## 5. Analysis and report (PR D)
 
 The input is a manifest and one record per manifest seed. Every record is first parsed and **replayed**, so the analysis never reads a record that does not reproduce. It refuses missing, duplicate or extra seeds.
