@@ -125,12 +125,17 @@ export interface WilcoxonResult {
   readonly note: string | null;
 }
 
-/** Exact two-sided Wilcoxon signed-rank test (zeros dropped, midranks, full enumeration of 2^m sign assignments). */
+/**
+ * Exact two-sided Wilcoxon signed-rank test: zeros dropped, midranks, and the exact null distribution of all 2^m
+ * equally likely sign assignments. That distribution is built by dynamic programming over the sum of the positive
+ * doubled midranks (integers), so it is the same as enumerating every assignment but runs for any seed count a
+ * manifest allows (up to 1,000). Each step halves probabilities, which is exact in binary floating point for the
+ * small m of a real study.
+ */
 export function wilcoxonSignedRank(differences: readonly number[]): WilcoxonResult {
   const nonZero = differences.filter((d) => d !== 0);
   const m = nonZero.length;
   if (m === 0) return { m: 0, w: 0, p: 1, note: 'no non-zero differences' };
-  if (m > 30) throw new RangeError('The exact test enumerates 2^m assignments; m must be at most 30.');
   // Doubled midranks are integers: tied values at 1-based ranks i..j share (i + j).
   const order = nonZero.map((d, i) => ({ abs: Math.abs(d), i })).sort((a, b) => a.abs - b.abs);
   const doubled = new Array<number>(m);
@@ -142,15 +147,25 @@ export function wilcoxonSignedRank(differences: readonly number[]): WilcoxonResu
   }
   const total = sum(doubled);
   const observed = nonZero.reduce((w, d, i) => w + (d > 0 ? doubled[i]! : -doubled[i]!), 0);
-  // W for a sign assignment is 2·(sum of positive doubled ranks) − total; count |W| ≥ |W_obs| over all 2^m.
-  let count = 0;
-  const assignments = 2 ** m;
-  for (let mask = 0; mask < assignments; mask += 1) {
-    let positive = 0;
-    for (let k = 0; k < m; k += 1) if (mask & (1 << k)) positive += doubled[k]!;
-    if (Math.abs(2 * positive - total) >= Math.abs(observed) - 1e-9) count += 1;
+  // probability[s]: the chance that the positive doubled ranks sum to s under the null.
+  let probability = new Float64Array(total + 1);
+  probability[0] = 1;
+  let reach = 0;
+  for (const rank of doubled) {
+    const next = new Float64Array(total + 1);
+    for (let s = 0; s <= reach; s += 1) {
+      const half = probability[s]! / 2;
+      if (half === 0) continue;
+      next[s] = next[s]! + half;
+      next[s + rank] = next[s + rank]! + half;
+    }
+    probability = next;
+    reach += rank;
   }
-  return { m, w: observed / 2, p: count / assignments, note: null };
+  // W (doubled) for a positive sum s is 2s − total; count |2s − total| ≥ |observed|.
+  let p = 0;
+  for (let s = 0; s <= total; s += 1) if (Math.abs(2 * s - total) >= Math.abs(observed)) p += probability[s]!;
+  return { m, w: observed / 2, p: Math.min(1, p), note: null };
 }
 
 // ---------------------------------------------------------------------------------------------------------------

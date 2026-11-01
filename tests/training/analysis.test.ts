@@ -126,6 +126,42 @@ describe('statistics', () => {
   ])('Wilcoxon: %s', (_, d, expected) => {
     expect(wilcoxonSignedRank(d)).toEqual(expected);
   });
+
+  // An independent enumeration of all 2^m sign assignments, with midranks computed directly.
+  const enumerated = (d: number[]): number => {
+    const x = d.filter((v) => v !== 0);
+    const abs = x.map(Math.abs);
+    const ranks = abs.map((a) => {
+      const below = abs.filter((b) => b < a).length;
+      const tied = abs.filter((b) => b === a).length;
+      return below + (tied + 1) / 2;
+    });
+    const w = x.reduce((t, v, i) => t + Math.sign(v) * ranks[i]!, 0);
+    let hits = 0;
+    for (let mask = 0; mask < 2 ** x.length; mask += 1) {
+      const wm = ranks.reduce((t, r, i) => t + (mask & (1 << i) ? r : -r), 0);
+      if (Math.abs(wm) >= Math.abs(w) - 1e-9) hits += 1;
+    }
+    return hits / 2 ** x.length;
+  };
+
+  it('equals a full enumeration of sign assignments on 200 random cases with zeros, ties and mixed signs', () => {
+    const rng = createRng(7351);
+    for (let c = 0; c < 200; c += 1) {
+      const d = Array.from({ length: rng.int(1, 13) }, () => rng.int(-3, 4) * 0.25);
+      if (d.every((v) => v === 0)) continue;
+      expect(wilcoxonSignedRank(d).p).toBe(enumerated(d));
+    }
+  });
+
+  it('handles every seed count a mechanics manifest allows (more than 30 non-zero differences, up to 1,000)', () => {
+    expect(wilcoxonSignedRank(Array<number>(31).fill(0.25))).toEqual({ m: 31, w: 496, p: 2 / 2 ** 31, note: null });
+    const many = Array.from({ length: 1000 }, (_, i) => ((i * 37) % 11) - 5);
+    const result = wilcoxonSignedRank(many);
+    expect(result.m).toBe(many.filter((v) => v !== 0).length);
+    expect(result.p).toBeGreaterThan(0);
+    expect(result.p).toBeLessThanOrEqual(1);
+  });
 });
 
 describe('eligibility, decision and claim', () => {
