@@ -308,13 +308,24 @@ function generationStats(generation: Generation, setup: TrainingSetup): Generati
 }
 
 /**
+ * The trainer's random streams for a seed (RNG_STREAMS): `run = createRng(seed)`, and `initial`, seeded with run's
+ * first draw, which fills generation 0 in index order. The only place these streams are derived, so anything that
+ * must pair with a run's generation 0 (P2-08's A8 random search) uses exactly the trainer's draws. Each call returns
+ * fresh generators, shared with nobody.
+ */
+export function trainerStreams(seed: number): { readonly run: Rng; readonly initial: Rng } {
+  const run = createRng(seed);
+  const initial = createRng(run.nextUint32());
+  return { run, initial };
+}
+
+/**
  * Creates a trainer and starts generation 0. Validates the configuration (RangeError on anything invalid), then
  * seeds the initial population from the run generator.
  */
 export function createTrainer(input: unknown, environment: TrainingEnvironment): Trainer {
   const setup = createTrainingSetup(input, environment);
-  const run: Rng = createRng(setup.config.seed);
-  const initial = createRng(run.nextUint32());
+  const { run, initial } = trainerStreams(setup.config.seed);
   const genomes = Array.from({ length: setup.config.populationSize }, () => initialParameters(initial));
   if (genomes[0]!.length !== PARAMETER_COUNT) throw new RangeError('Initial genomes do not match the network.');
 

@@ -25,7 +25,7 @@
 ## 2. Configuration validation
 
 `BaselineConfig` is `{ training, generations, trackId }`:
-- `training`: every `TrainingConfig` field except `seed`. The trainer's own resolvers validate it, with the seed supplied separately. Unknown fields are rejected at the top level and inside the nested `selection`, `crossover`, `mutation` and `fitness` blocks, by path, using the same rule as P2-07 experiment configs (allowed keys taken from `DEFAULT_TRAINING_CONFIG`).
+- `training`: any `TrainingConfig` fields except `seed`, over `DEFAULT_TRAINING_CONFIG`. As in P2-07, a field that is set replaces the default whole, and nested blocks are never merged. The trainer's own resolvers validate the result, with the seed supplied separately. Unknown fields are rejected at the top level and inside the nested `selection`, `crossover`, `mutation` and `fitness` blocks, by path, using the same rule as P2-07 experiment configs (allowed keys taken from `DEFAULT_TRAINING_CONFIG`).
 - `generations` (G): an integer from 1 to 10,000, the P2-07 limit.
 - `trackId`: resolved with `trainingTrack` and checked again by the trainer's `assertTrainingTrack`. Validation and held-out tracks throw `TrackLeakageError`.
 - `seed`: an unsigned 32-bit integer. The function does not police which seeds a study may use (that is the manifest's job, later). Tests use only mechanics seeds (7xxx), outside the pilot (9001–9003) and confirmatory (1001–1020) sets.
