@@ -1,8 +1,11 @@
-// Command line for P2-08 study seeds (C2, docs/experiments/p2-08-step3-design.md §4.4 and §4.6). Headless; nothing
-// is deployed or served, and nothing is analysed.
+// Command line for P2-08 study seeds (C2 and D2, docs/experiments/p2-08-step3-design.md §4.4, §4.6 and §5.2).
+// Headless; nothing is deployed or served.
 //
 //   npm run study -- run <manifest.json> --seed <s> --out <record.json> [--force]
 //   npm run study -- replay <manifest.json> <record.json>
+//   npm run study -- analyse <manifest.json> <record.json>… --out-dir <dir> [--force]
+//
+// `analyse` replays every record and writes analysis.json and report.md (src/training/analysis.ts); it exits 0 or 2.
 //
 // `run` runs one seed of a manifest and writes its complete record. `replay` checks a record against its manifest,
 // re-runs the seed in this engine and checks that every result is identical. This file only handles the outside
@@ -13,14 +16,15 @@
 // unreadable input, with nothing written. A record is raw results only: not an analysis, and not evidence of learning.
 import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync, realpathSync, statSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { runnerImport } from 'vite';
 import { OutputExistsError, writeRecordFile } from './recordFile.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const USAGE =
-  'Usage:\n  npm run study -- run <manifest.json> --seed <s> --out <record.json> [--force]\n  npm run study -- replay <manifest.json> <record.json>';
+  'Usage:\n  npm run study -- run <manifest.json> --seed <s> --out <record.json> [--force]\n  npm run study -- replay <manifest.json> <record.json>\n' +
+  '  npm run study -- analyse <manifest.json> <record.json>... --out-dir <dir> [--force]';
 const SEED = /^(0|[1-9][0-9]*)$/;
 
 class UsageError extends Error {}
@@ -29,8 +33,8 @@ class ArgumentError extends UsageError {}
 
 function parseArgs(argv) {
   const [command, ...rest] = argv;
-  if (command !== 'run' && command !== 'replay') throw new ArgumentError(`Unknown command ${command ?? '(none)'}.`);
-  const options = { command, files: [], seed: null, out: null, force: false };
+  if (command !== 'run' && command !== 'replay' && command !== 'analyse') throw new ArgumentError(`Unknown command ${command ?? '(none)'}.`);
+  const options = { command, files: [], seed: null, out: null, outDir: null, force: false };
   const once = (name, present) => {
     if (present) throw new ArgumentError(`${name} is given more than once.`);
   };
@@ -48,11 +52,21 @@ function parseArgs(argv) {
       const value = rest[(i += 1)];
       if (value === undefined || value.startsWith('--')) throw new ArgumentError('--out needs a file.');
       options.out = value;
-    } else if (command === 'run' && arg === '--force') {
+    } else if (command === 'analyse' && arg === '--out-dir') {
+      once('--out-dir', options.outDir !== null);
+      const value = rest[(i += 1)];
+      if (value === undefined || value.startsWith('--')) throw new ArgumentError('--out-dir needs a folder.');
+      options.outDir = value;
+    } else if ((command === 'run' || command === 'analyse') && arg === '--force') {
       once('--force', options.force);
       options.force = true;
     } else if (arg.startsWith('--')) throw new ArgumentError(`Unexpected option ${arg}.`);
     else options.files.push(arg);
+  }
+  if (command === 'analyse') {
+    if (options.files.length < 2) throw new ArgumentError('"analyse" needs a manifest file and at least one record file.');
+    if (options.outDir === null) throw new ArgumentError('"analyse" needs --out-dir <dir>.');
+    return options;
   }
   const wanted = command === 'run' ? 1 : 2;
   if (options.files.length !== wanted) {
@@ -119,8 +133,50 @@ function checkOutput(out, manifestPath, force) {
   if (!force) throw new UsageError(`${out} already exists; pass --force to replace it.`);
 }
 
+const OUTPUTS = ['analysis.json', 'report.md'];
+
+// Both outputs are checked before anything is analysed: an existing folder, no input file among the outputs (even
+// with --force, and through symbolic links), and no existing output without --force.
+function checkOutputDir(outDir, inputs, force) {
+  if (!existsSync(outDir) || !statSync(outDir).isDirectory()) throw new UsageError(`The output folder ${outDir} does not exist or is not a folder.`);
+  const inputPaths = new Set(inputs.map(realOrSelf));
+  for (const name of OUTPUTS) {
+    const out = join(outDir, name);
+    if (inputPaths.has(realOrSelf(out))) throw new UsageError(`${out} is one of the input files; choose another output folder.`);
+    if (!existsSync(out)) continue;
+    if (statSync(out).isDirectory()) throw new UsageError(`${out} is a directory.`);
+    if (!force) throw new UsageError(`${out} already exists; pass --force to replace it.`);
+  }
+}
+
+async function analyse(options) {
+  const { module: analysis } = await runnerImport(resolve(ROOT, 'src/training/analysis.ts'));
+  const [manifestPath, ...recordPaths] = options.files.map((f) => resolve(f));
+  const manifestInput = readJson(manifestPath, 'study manifest');
+  const records = recordPaths.map((path) => readJson(path, 'study record'));
+  const outDir = resolve(options.outDir);
+  checkOutputDir(outDir, [manifestPath, ...recordPaths], options.force);
+  const result = analysis.analyseRecords(manifestInput, records, engine());
+  const texts = { 'analysis.json': analysis.analysisJson(result), 'report.md': analysis.renderReport(result) };
+  for (const name of OUTPUTS) {
+    try {
+      writeRecordFile(join(outDir, name), texts[name], options.force);
+    } catch (error) {
+      if (error instanceof OutputExistsError) throw new UsageError(error.message);
+      throw error;
+    }
+  }
+  const { decision } = result;
+  console.log(`Analysis of ${result.studyId} (${result.label}): n = ${result.n} training seed(s), every record replayed identically.`);
+  console.log(`  Acceptance eligible: ${result.acceptanceEligible ? 'yes' : 'no'}. Decision (${decision.rule}): ${decision.result}. Claim: ${decision.claim ?? 'none'}.`);
+  console.log(`Wrote ${join(outDir, 'analysis.json')} and ${join(outDir, 'report.md')}.`);
+  console.log('Only an acceptance-eligible confirmatory analysis can support the claim; validation results are descriptive and no held-out track was used.');
+  return 0;
+}
+
 async function main() {
   const options = parseArgs(process.argv.slice(2));
+  if (options.command === 'analyse') return analyse(options);
   const { module: study } = await runnerImport(resolve(ROOT, 'src/training/study.ts'));
   const manifestPath = resolve(options.files[0]);
   const manifestInput = readJson(manifestPath, 'study manifest');
