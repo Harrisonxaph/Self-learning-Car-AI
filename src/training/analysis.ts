@@ -7,6 +7,7 @@
 import { DEFAULT_SIM_CONFIG } from '../sim/config';
 import { createRng } from '../utils/rng';
 import { canonicalJson, type ExperimentEngine } from './experiment';
+import { trainingTrack, validationTrack } from './trackSplits';
 import {
   AGENT_ORDER,
   CONFIRMATORY_SEED_SETS,
@@ -47,7 +48,8 @@ export class StudyAnalysisError extends Error {
 /** What the analysis needs from one episode. */
 export interface EpisodeSummary {
   readonly outcome: (typeof OUTCOMES)[number];
-  readonly orderedProgress: number;
+  /** Gates credited; ordered progress is gatesPassed ÷ the track's gates per lap. Kept as an integer so contrasts stay exact. */
+  readonly gatesPassed: number;
   readonly crashed: boolean;
   readonly lapTicks: readonly number[];
   readonly fitness: number;
@@ -56,6 +58,8 @@ export interface EpisodeSummary {
 /** One training seed, reduced to what the analysis reads. */
 export interface SeedSummary {
   readonly seed: number;
+  /** Gates per lap on each track. */
+  readonly gates: Readonly<Record<Track, number>>;
   /** The episodes behind each agent's seed-level value, per track: E for A1/A7, P for A2, one for A9/A8/A5. */
   readonly episodes: Readonly<Record<Agent, Readonly<Record<Track, readonly EpisodeSummary[]>>>>;
   /** A5's best and mean training fitness in each recorded generation. */
@@ -173,14 +177,14 @@ export function wilcoxonSignedRank(differences: readonly number[]): WilcoxonResu
 
 const episodeSummary = (episode: Json): EpisodeSummary => ({
   outcome: episode.outcome as EpisodeSummary['outcome'],
-  orderedProgress: episode.orderedProgress as number,
+  gatesPassed: episode.gatesPassed as number,
   crashed: episode.crashed as boolean,
   lapTicks: [...(episode.lapTicks as number[])],
   fitness: (episode.fitness as Json).total as number,
 });
 
-/** Reduces one parsed record to what the analysis reads. The record must already have been parsed (and replayed). */
-export function summariseRecord(record: { readonly seed: number; readonly agents: Json }): SeedSummary {
+/** Reduces one parsed record to what the analysis reads. The record must already have been parsed (and replayed) against this manifest. */
+export function summariseRecord(record: { readonly seed: number; readonly agents: Json }, manifest: StudyManifest): SeedSummary {
   const a = record.agents as Record<string, Json>;
   const list = (episodes: unknown): EpisodeSummary[] => (episodes as Json[]).map(episodeSummary);
   const candidates = a.A2!.candidates as Json[];
@@ -190,6 +194,7 @@ export function summariseRecord(record: { readonly seed: number; readonly agents
   const training = (candidate: Json | undefined): EpisodeSummary => episodeSummary(candidate!.training as Json);
   return {
     seed: record.seed,
+    gates: { training: trainingTrack(manifest.tracks.training.id).gates.length, validation: validationTrack(manifest.tracks.validation.id).gates.length },
     episodes: {
       A1: { training: list(a.A1!.training), validation: list(a.A1!.validation) },
       A7: { training: list(a.A7!.training), validation: list(a.A7!.validation) },
@@ -205,8 +210,11 @@ export function summariseRecord(record: { readonly seed: number; readonly agents
   };
 }
 
+const gatesOf = (seed: SeedSummary, agent: Agent, track: Track): number => sum(seed.episodes[agent][track].map((e) => e.gatesPassed));
+
 /** The seed-level value (§7): the mean ordered progress over the agent's episodes on that track. */
-export const seedProgress = (seed: SeedSummary, agent: Agent, track: Track): number => mean(seed.episodes[agent][track].map((e) => e.orderedProgress));
+export const seedProgress = (seed: SeedSummary, agent: Agent, track: Track): number =>
+  gatesOf(seed, agent, track) / (seed.episodes[agent][track].length * seed.gates[track]);
 
 // ---------------------------------------------------------------------------------------------------------------
 // Analysis
@@ -214,6 +222,11 @@ export const seedProgress = (seed: SeedSummary, agent: Agent, track: Track): num
 export interface ContrastResult {
   readonly contrast: string;
   readonly track: Track;
+  /** Exact per-seed differences in units of 1 ÷ unitsPerLap lap (integers), from which every statistic is computed. */
+  readonly units: readonly number[];
+  /** k × gates per lap, where k is the other agent's episode count per seed. */
+  readonly unitsPerLap: number;
+  /** The per-seed differences in laps (units ÷ unitsPerLap). */
   readonly differences: readonly number[];
   readonly mean: number;
   readonly interval: BootstrapInterval;
@@ -222,19 +235,41 @@ export interface ContrastResult {
   readonly wilcoxon: WilcoxonResult;
 }
 
+/**
+ * A paired contrast A5 − other on one track. The other agent has the same number k of episodes on every seed, so
+ * each seed's difference k·gates(A5) − Σ gates(other) is an exact integer number of units of 1 ÷ (k × gates per lap)
+ * lap. Ranks, sums, the bootstrap and the decision use those integers, so equal gate differences are equal and
+ * 0.25 lap is exactly 0.25 lap (Codex review of 2582fa0).
+ */
 function contrast(manifest: StudyManifest, seeds: readonly SeedSummary[], other: Agent, track: Track): ContrastResult {
-  const differences = seeds.map((s) => seedProgress(s, 'A5', track) - seedProgress(s, other, track));
+  const k = seeds[0]!.episodes[other][track].length;
+  const gates = seeds[0]!.gates[track];
+  for (const s of seeds) {
+    if (s.episodes[other][track].length !== k || s.episodes.A5[track].length !== 1 || s.gates[track] !== gates) {
+      throw new StudyAnalysisError(`Seed ${s.seed} has a different number of ${other} or A5 episodes, or gates, on the ${track} track.`);
+    }
+  }
+  const unitsPerLap = k * gates;
+  const units = seeds.map((s) => k * s.episodes.A5[track][0]!.gatesPassed - gatesOf(s, other, track));
+  const interval = bootstrapMeanInterval(units, manifest.analysis.bootstrap);
+  const [q1, q3] = iqr(units);
   return {
     contrast: `A5 - ${other}`,
     track,
-    differences,
-    mean: mean(differences),
-    interval: bootstrapMeanInterval(differences, manifest.analysis.bootstrap),
-    median: median(differences),
-    iqr: iqr(differences),
-    wilcoxon: wilcoxonSignedRank(differences),
+    units,
+    unitsPerLap,
+    differences: units.map((u) => u / unitsPerLap),
+    mean: sum(units) / (units.length * unitsPerLap),
+    interval: { lower: interval.lower / unitsPerLap, upper: interval.upper / unitsPerLap },
+    median: median(units) / unitsPerLap,
+    iqr: [q1 / unitsPerLap, q3 / unitsPerLap],
+    wilcoxon: wilcoxonSignedRank(units),
   };
 }
+
+/** Whether the mean difference reaches δ: Σ units ≥ δ × n × unitsPerLap, the right side rounded to 1e-9 so a decimal δ compares exactly. */
+export const meanReachesDelta = (c: ContrastResult, delta: number): boolean =>
+  sum(c.units) >= Math.round(delta * c.units.length * c.unitsPerLap * 1e9) / 1e9;
 
 function agentTrackSummary(seeds: readonly SeedSummary[], agent: Agent, track: Track): Json {
   const values = seeds.map((s) => seedProgress(s, agent, track));
@@ -297,7 +332,7 @@ export function analyseSummaries(manifestInput: unknown, summaries: readonly See
   });
   const conditions = {
     intervalAboveZero: primary.interval.lower > 0,
-    meanAtLeastDelta: primary.mean >= manifest.analysis.delta,
+    meanAtLeastDelta: meanReachesDelta(primary, manifest.analysis.delta),
     a5ValidLap,
     resultsReported: reported,
   };
@@ -341,7 +376,7 @@ export function analyseRecords(manifestInput: unknown, records: readonly unknown
     const record = parseStudyRecord(input, manifest, engine);
     const replay = replayStudyRecord(input, manifest, engine);
     if (!replay.identical) throw new StudyAnalysisError(`Record ${i} (seed ${record.seed}) does not replay identically; it is not analysed.`);
-    return summariseRecord(record as unknown as { seed: number; agents: Json });
+    return summariseRecord(record as unknown as { seed: number; agents: Json }, manifest);
   });
   return analyseSummaries(manifest, summaries);
 }

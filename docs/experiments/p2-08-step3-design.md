@@ -315,6 +315,12 @@ PR D is split into **D1** (`src/training/analysis.ts`: the statistics, the analy
   - the mean, and the type 7 quantiles: the median, and the IQR as [Q1, Q3];
   - **the bootstrap,** exactly as §5: `createRng(seed)`, B resamples of n indices drawn with `int(0, n)`, ascending sort, then nearest ranks ⌈B·(1 − level)/2⌉ and ⌈B·(1 + level)/2⌉. The products are rounded to 1e-9 before the ceiling, so 10,000 × 0.025 gives rank 250 and not 251;
   - **the exact Wilcoxon test:** doubled midranks as integers, so W and every sum are exact. The exact null distribution over all 2^m sign assignments is built by dynamic programming over the sum of the positive doubled midranks. That gives the same result as enumerating every assignment, but it works for any seed count a manifest allows, up to 1,000 mechanics seeds. The two-sided p-value is P(|W| ≥ |W_obs|), and m = 0 gives p = 1. (Codex review of `2582fa0`: plain enumeration had to refuse m > 30.)
+- **Exact gate units.** Summaries keep each episode's integer `gatesPassed`. In a contrast A5 − X, X has the same number k of episodes on every seed, so each seed's difference, k·gates(A5) − Σ gates(X), is an exact integer in units of 1 ÷ (k × gates per lap) lap. Ranks, sums, the bootstrap and the decision are computed on those integers and divided only for display:
+  - equal gate differences tie in the Wilcoxon ranks;
+  - the interval-above-zero check is exact;
+  - mean ≥ δ is checked as Σ units ≥ δ × n × units-per-lap, with the right side rounded to 1e-9, so a decimal δ such as 0.25 or 0.3 compares exactly.
+
+  This follows Codex's review of `2582fa0`: subtracting separately normalised progress split tied ranks and made a mean of exactly 0.25 fail δ = 0.25.
 - **Contrasts:**
   - **primary:** A5 − A8 on the training track;
   - **secondary (descriptive only):** A5 − A8 on validation, and A5 − A9, A5 − A2, A5 − A1 and A5 − A7 on both tracks.

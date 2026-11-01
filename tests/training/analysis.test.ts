@@ -57,19 +57,22 @@ const manifest = (label: string, seeds: number[], change: (m: Json) => void = ()
 };
 const CONFIRMATORY_10 = Array.from({ length: 10 }, (_, i) => 1001 + i);
 
-// A synthetic seed: every agent's episodes have the given progress; A5 and A8 on the training track are set apart.
-const episode = (orderedProgress: number, lap = false, crashed = false): EpisodeSummary => ({
+// A synthetic seed on 20-gate tracks: progress is given in laps (multiples of 0.05) and stored as gate counts, as a
+// record stores it. A5 and A8 on the training track are set apart.
+const GATES = 20;
+const episode = (progress: number, lap = false, crashed = false): EpisodeSummary => ({
   outcome: crashed ? 'crashed' : lap ? 'completed' : 'stalled',
-  orderedProgress,
+  gatesPassed: Math.round(progress * GATES),
   crashed,
   lapTicks: lap ? [1800] : [],
-  fitness: orderedProgress * 100,
+  fitness: progress * 100,
 });
 const synthetic = (seed: number, a5: number, a8: number, options: { a5Lap?: boolean; base?: number } = {}): SeedSummary => {
   const base = options.base ?? 0.1;
   const both = (training: EpisodeSummary[], validation: EpisodeSummary[] = training) => ({ training, validation });
   return {
     seed,
+    gates: { training: GATES, validation: GATES },
     episodes: {
       A1: both([episode(base), episode(base + 0.1)]),
       A7: both([episode(base), episode(base)]),
@@ -209,6 +212,31 @@ describe('eligibility, decision and claim', () => {
     expect(acceptanceEligibility(manifest('pilot', [9001]) as never, [9001]).eligible).toBe(false);
   });
 
+  // Codex review of 2582fa0: differences derived from gate counts must stay exact.
+  const gated = (seed: number, a5Gates: number, a8Gates: number): SeedSummary => {
+    const base = synthetic(seed, 0, 0);
+    const one = (g: number): EpisodeSummary => ({ ...episode(0, true), gatesPassed: g });
+    return { ...base, episodes: { ...base.episodes, A5: { training: [one(a5Gates)], validation: [one(a5Gates)] }, A8: { training: [one(a8Gates)], validation: [one(a8Gates)] } } };
+  };
+
+  it('ranks equal gate differences as ties: [7-2, 4-9, -10, -15] gates give p = 0.375', () => {
+    const seeds = [7361, 7362, 7363, 7364];
+    const analysis = summaries(manifest('mechanics', seeds), [gated(7361, 7, 2), gated(7362, 4, 9), gated(7363, 0, 10), gated(7364, 0, 15)]);
+    expect(analysis.primary.units).toEqual([5, -5, -10, -15]);
+    expect(analysis.primary.differences).toEqual([0.25, -0.25, -0.5, -0.75]);
+    expect(analysis.primary.wilcoxon).toEqual({ m: 4, w: -7, p: 0.375, note: null });
+  });
+
+  it('treats a mean of exactly δ = 0.25 lap from gate counts as reaching δ (nine 7-2 and one 27-22)', () => {
+    const seeds = CONFIRMATORY_10.map((s, i) => (i < 9 ? gated(s, 7, 2) : gated(s, 27, 22)));
+    const analysis = summaries(manifest('confirmatory', CONFIRMATORY_10), seeds);
+    expect(analysis.primary.mean).toBe(0.25);
+    expect(analysis.decision.conditions.meanAtLeastDelta).toBe(true);
+    expect(analysis.decision).toMatchObject({ result: 'supported', claim: CLAIM });
+    const above = summaries(manifest('confirmatory', CONFIRMATORY_10, (m) => (m.analysis.delta = 0.3)), seeds);
+    expect(above.decision.conditions.meanAtLeastDelta).toBe(false);
+  });
+
   it('refuses duplicate and extra seeds', () => {
     const m = manifest('mechanics', [7341, 7342]);
     expect(() => summaries(m, [synthetic(7341, 1, 0), synthetic(7341, 1, 0), synthetic(7342, 1, 0)])).toThrow(/more than once/);
@@ -218,17 +246,21 @@ describe('eligibility, decision and claim', () => {
 
 describe('summaries and outputs on synthetic seeds', () => {
   const m = manifest('mechanics', [7341, 7342, 7343]);
-  const seeds = [synthetic(7341, 1, 0.5), synthetic(7342, 0.75, 0.5, { base: 0.2 }), synthetic(7343, 0.5, 0.5)];
+  const seeds = [synthetic(7341, 1, 0.5), synthetic(7342, 0.8, 0.5, { base: 0.2 }), synthetic(7343, 0.5, 0.5)];
   const analysis = summaries(m, seeds);
 
   it('pairs contrasts by seed, aggregates A1/A7/A2 within each seed, and keeps validation descriptive', () => {
-    expect(analysis.primary.differences).toEqual([0.5, 0.25, 0]);
-    expect(analysis.primary.mean).toBe(0.25);
+    expect(analysis.primary.units).toEqual([10, 6, 0]);
+    expect(analysis.primary.unitsPerLap).toBe(20);
+    expect(analysis.primary.differences).toEqual([0.5, 0.3, 0]);
+    expect(analysis.primary.mean).toBe(16 / 60);
     expect(analysis.primary.wilcoxon).toEqual({ m: 2, w: 3, p: 0.5, note: null });
     const validation = analysis.secondary.find((c: Json) => c.contrast === 'A5 - A8' && c.track === 'validation');
-    expect(validation.differences).toEqual([0.25, 0.125, 0]);
+    expect(validation.differences).toEqual([0.25, 0.15, 0]);
     const a1 = analysis.secondary.find((c: Json) => c.contrast === 'A5 - A1' && c.track === 'training');
-    expect(a1.differences.map((d: number) => +d.toFixed(10))).toEqual([0.85, 0.5, 0.35]);
+    // A1 has two episodes per seed, so the unit is 1/40 lap: 34, 22 and 14 units.
+    expect(a1.unitsPerLap).toBe(40);
+    expect(a1.differences).toEqual([0.85, 0.55, 0.35]);
     expect(analysis.agents.A2.training.progress.mean).toBeCloseTo((0.15 + 0.25 + 0.15) / 3, 12);
   });
 
@@ -273,13 +305,17 @@ describe('real mechanics records', () => {
   const record = runStudySeed(m, 7341, CONTEXT);
 
   it('summarises a record: E, P and single episodes, and A5 by generation', () => {
-    const s = summariseRecord(record as never);
+    const s = summariseRecord(record as never, m as never);
     expect(s.episodes.A1.training).toHaveLength(2);
     expect(s.episodes.A2.validation).toHaveLength(3);
     expect(s.episodes.A5.training).toHaveLength(1);
     const a = record.agents as Json;
-    expect(s.episodes.A5.training[0]!.orderedProgress).toBe(a.A5.generations[1][a.A5.index].training.orderedProgress);
-    expect(s.episodes.A8.training[0]!.orderedProgress).toBe(a.A8.samples[a.A8.index].training.orderedProgress);
+    expect(s.gates.training).toBe(20); // the oval's gates per lap (plan §6)
+    const a5Training = a.A5.generations[1][a.A5.index].training;
+    expect(a5Training.orderedProgress).toBe(a5Training.gatesPassed / s.gates.training);
+    expect(a.A5.validation.orderedProgress).toBe(a.A5.validation.gatesPassed / s.gates.validation);
+    expect(s.episodes.A5.training[0]!.gatesPassed).toBe(a.A5.generations[1][a.A5.index].training.gatesPassed);
+    expect(s.episodes.A8.training[0]!.gatesPassed).toBe(a.A8.samples[a.A8.index].training.gatesPassed);
     expect(s.a5Generations).toHaveLength(2);
     expect(s.a5Generations[0]!.best).toBe(Math.max(...a.A5.generations[0].map((c: Json) => c.training.fitness.total)));
   });
