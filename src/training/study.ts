@@ -149,10 +149,21 @@ const int = (value: unknown, path: string, min: number, max: number, fail: Fail)
 const finite = (value: unknown, path: string, fail: Fail): number =>
   typeof value === 'number' && Number.isFinite(value) ? value : fail(`${path} must be a finite number, got ${String(value)}.`);
 const str = (value: unknown, path: string, fail: Fail): string => (typeof value === 'string' ? value : fail(`${path} must be a string.`));
-const arr = (value: unknown, path: string, length: number, fail: Fail): unknown[] => {
+/**
+ * An array with an own, defined element at every index. Array callbacks (map, forEach, reduce) skip holes, so a
+ * sparse array such as `[1, , 2]` or `new Array(1)` would otherwise pass every per-element check unexamined.
+ */
+const dense = (value: unknown, path: string, fail: Fail): unknown[] => {
   if (!Array.isArray(value)) return fail(`${path} must be an array.`);
-  if (value.length !== length) fail(`${path} must have ${length} entries, got ${value.length}.`);
+  for (let i = 0; i < value.length; i += 1) {
+    if (!Object.prototype.hasOwnProperty.call(value, i) || value[i] === undefined) fail(`${path}[${i}] is missing.`);
+  }
   return value;
+};
+const arr = (value: unknown, path: string, length: number, fail: Fail): unknown[] => {
+  const list = dense(value, path, fail);
+  if (list.length !== length) fail(`${path} must have ${length} entries, got ${list.length}.`);
+  return list;
 };
 const same = (value: unknown, expected: unknown, path: string, fail: Fail): void => {
   if (canonicalJson(value) !== canonicalJson(expected)) fail(`${path} must be ${canonicalJson(expected)}, got ${canonicalJson(value)}.`);
@@ -207,8 +218,9 @@ export function parseStudyManifest(input: unknown): StudyManifest {
   if (str(m.description, 'manifest.description', fail).length > 1000) fail('manifest.description must be at most 1000 characters.');
   same(m.agents, AGENT_ORDER, 'manifest.agents', fail);
 
-  if (!Array.isArray(m.seeds) || m.seeds.length === 0) fail('manifest.seeds must be a non-empty array.');
-  const seeds = (m.seeds as unknown[]).map((s, i) => int(s, `manifest.seeds[${i}]`, 0, 0xffffffff, fail));
+  const seedList = dense(m.seeds, 'manifest.seeds', fail);
+  if (seedList.length === 0) fail('manifest.seeds must be a non-empty array.');
+  const seeds = seedList.map((s, i) => int(s, `manifest.seeds[${i}]`, 0, 0xffffffff, fail));
   if (new Set(seeds).size !== seeds.length) fail('manifest.seeds must be distinct.');
   if (label === 'pilot' && !seeds.every((s) => PILOT_SEEDS.includes(s))) fail('a pilot manifest\'s seeds must be a subset of 9001–9003.');
   if (label === 'confirmatory' && !CONFIRMATORY_SEED_SETS.some((set) => canonicalJson(set) === canonicalJson(seeds))) {
@@ -398,8 +410,7 @@ function checkEpisode(value: unknown, path: string, check: EpisodeCheck, fail: F
   if (!OUTCOMES.includes(e.outcome as string)) fail(`${path}.outcome must be one of ${OUTCOMES.join(', ')}.`);
   int(e.ticks, `${path}.ticks`, 1, maxTicks, fail);
   const gatesPassed = int(e.gatesPassed, `${path}.gatesPassed`, 0, Number.MAX_SAFE_INTEGER, fail);
-  if (!Array.isArray(e.lapTicks)) fail(`${path}.lapTicks must be an array.`);
-  (e.lapTicks as unknown[]).forEach((t, i) => int(t, `${path}.lapTicks[${i}]`, 1, maxTicks, fail));
+  dense(e.lapTicks, `${path}.lapTicks`, fail).forEach((t, i) => int(t, `${path}.lapTicks[${i}]`, 1, maxTicks, fail));
   if (typeof e.crashed !== 'boolean') fail(`${path}.crashed must be a boolean.`);
   if (e.outcome === 'crashed' && e.crashed !== true) fail(`${path}.crashed must be true for a crashed outcome.`);
   const partial = finite(e.partialProgress, `${path}.partialProgress`, fail);

@@ -165,6 +165,18 @@ describe('manifest', () => {
     expect(() => parseStudyManifest(m)).toThrow(message);
   });
 
+  it.each([
+    ['a hole between seeds', () => [7301, , 7302], /manifest.seeds\[1\] is missing/], // eslint-disable-line no-sparse-arrays
+    ['a trailing hole', () => [7301, 7302, , ], /manifest.seeds\[2\] is missing/], // eslint-disable-line no-sparse-arrays
+    ['an all-hole array', () => new Array(2), /manifest.seeds\[0\] is missing/],
+    ['an undefined seed', () => [7301, undefined], /manifest.seeds\[1\] is missing/],
+  ])('rejects sparse seeds: %s', (_label, seeds, message) => {
+    const m = withManifest(() => undefined);
+    m.seeds = seeds();
+    expect(() => parseStudyManifest(m)).toThrow(StudyManifestError);
+    expect(() => parseStudyManifest(m)).toThrow(message);
+  });
+
   it('requires a code revision outside mechanics', () => {
     const m = withManifest((x) => {
       x.label = 'pilot';
@@ -263,6 +275,34 @@ describe('record corruption', () => {
   ])('rejects %s (resultsHash recomputed)', (_label, change, message) => {
     expect(() => parseStudyRecord(edit(change), MANIFEST, ENGINE)).toThrow(StudyRecordError);
     expect(() => parseStudyRecord(edit(change), MANIFEST, ENGINE)).toThrow(message);
+  });
+
+  it.each([
+    ['a hole in an A1 episode list, its ticks adjusted', (r: Json) => {
+      const kept = r.agents.A1.training[0];
+      r.agents.A1.training = new Array(E);
+      r.agents.A1.training[0] = kept;
+      r.budgets.ticks.A1.training = kept.ticks;
+    }, /agents.A1.training\[1\] is missing/],
+    ['an all-hole A7 validation list', (r: Json) => {
+      r.agents.A7.validation = new Array(E);
+      r.budgets.ticks.A7.validation = 0;
+    }, /agents.A7.validation\[0\] is missing/],
+    ['a hole in A2\'s candidates', (r: Json) => delete r.agents.A2.candidates[1], /agents.A2.candidates\[1\] is missing/],
+    ['a hole in an A5 generation', (r: Json) => delete r.agents.A5.generations[1][2], /agents.A5.generations\[1\]\[2\] is missing/],
+    ['a hole in A5\'s generations', (r: Json) => delete r.agents.A5.generations[1], /agents.A5.generations\[1\] is missing/],
+    ['a hole in a model\'s parameters', (r: Json) => delete r.agents.A9.model.parameters[5], /agents.A9.model.parameters\[5\] is missing/],
+    ['a hole in lap ticks', (r: Json) => {
+      const episode = r.agents.A1.training[0];
+      episode.lapTicks = new Array(1);
+    }, /agents.A1.training\[0\].lapTicks\[0\] is missing/],
+  ])('rejects sparse record arrays: %s (resultsHash recomputed)', (_label, change, message) => {
+    // Built in memory: holes cannot survive JSON, so this is the direct-library input boundary.
+    const r = clone(RECORD) as Json;
+    change(r);
+    r.resultsHash = `sha256:${sha256Hex(canonicalJson(r.agents))}`;
+    expect(() => parseStudyRecord(r, MANIFEST, ENGINE)).toThrow(StudyRecordError);
+    expect(() => parseStudyRecord(r, MANIFEST, ENGINE)).toThrow(message);
   });
 
   it('rejects a result edited without updating resultsHash', () => {

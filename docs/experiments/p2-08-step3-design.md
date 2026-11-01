@@ -199,6 +199,7 @@ PR C is split into **C1** (`src/training/study.ts`: formats, strict parsing, com
   - `diversity`: `evaluations`, `maxDistinctGenomes` (the bound) and `actualDistinctGenomes`.
 
   They also hold `ticks` per agent and track.
+- **Arrays:** every array in a manifest or record must have an own, defined element at every index. Sparse arrays are rejected by index, because array callbacks skip holes.
 - **Checks on what the record means, beyond its shape:**
   - every count against the manifest;
   - candidate indices, and genome IDs in `sha256:` form;
