@@ -164,7 +164,7 @@ The manifest is reviewed by Codex and approved by the owner **before** any confi
 
 ## 10. Implementation steps (each needs its own authorization)
 
-1. **Prerequisite:** fix #89's open P3: reject unknown keys inside nested configuration blocks. A typo there was dropped silently, which matters once configurations drive a study. **Authorised and implemented on `fix/experiment-nested-config-keys`**, pending Codex review and the owner's merge.
+1. **Prerequisite:** fix #89's open P3: reject unknown keys inside nested configuration blocks. A typo there was dropped silently, which matters once configurations drive a study. **Done in #94** (merged at `d42bb2a` after [Codex technical approval](https://github.com/Harrisonxaph/Self-learning-Car-AI/pull/94#pullrequestreview-5728292609)).
 2. **Drivers and evaluation harness:**
    - `RandomDriver` (A1) and `CorrelatedRandomDriver` (A7) behind the existing `Driver` interface;
    - a headless `evaluateDriver` that uses the same per-tick path as the trainer.

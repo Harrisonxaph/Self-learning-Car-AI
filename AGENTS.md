@@ -117,7 +117,7 @@ Findings and disposition: <open findings or links to verified fixes>
 Owner merge approval: pending; recorded separately by the owner
 ```
 
-Codex PR review is already configured for this repository (observed on PR #52). No new paid service, bot identity or workflow is required. GitHub branch metadata currently reports main as unprotected and the ruleset list is empty; the connector cannot inspect or administer protected-branch settings requiring administration access. If the owner later configures protection, require PRs and available CI checks without making an unattainable same-account approval badge the gate for this workflow. Review comments themselves are a procedural gate, not a GitHub-enforced status check.
+Codex PR review is already configured for this repository (observed on PR #52). No new paid service, bot identity or workflow is required. GitHub branch metadata reported main as unprotected when this was written. Since 2026-11-01 the active ruleset "Protect main" requires pull requests (0 approvals) and both CI jobs, with no bypass (see P1-10 in `docs/ROADMAP.md`). Agents can read the ruleset but cannot administer it. If the owner changes protection, keep requiring PRs and available CI checks without making an unattainable same-account approval badge the gate for this workflow. Review comments themselves are a procedural gate, not a GitHub-enforced status check.
 
 ## Roadmap reconciliation defaults
 

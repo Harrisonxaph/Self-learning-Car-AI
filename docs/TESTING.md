@@ -20,7 +20,7 @@ CI (`.github/workflows/ci.yml`, P1-10) runs all of them with Node from `.nvmrc` 
 - **Lint, typecheck, unit tests and build:** `npm ci`, `npm run lint`, `npm run typecheck`, `npm test`, `npm run build`.
 - **Browser tests:** `npm ci`, `npx playwright install --with-deps chromium webkit`, then `npm run test:e2e` (all six Playwright projects, including the phone and tablet touch projects). If it fails, the Playwright report and traces are uploaded as the `playwright-report` artifact for 14 days.
 
-Any failing command fails the workflow. Actions are pinned to full commit SHAs. CI cannot make a check required; the owner can make the CI jobs required for merging in the repository's branch protection settings.
+Any failing command fails the workflow. Actions are pinned to full commit SHAs. CI cannot make a check required itself. Since 2026-11-01 the owner's active ruleset "Protect main" requires both jobs above to pass before a pull request can merge into `main` (P1-10 in `docs/ROADMAP.md`).
 
 ## Running the tests locally
 
