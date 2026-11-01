@@ -372,7 +372,7 @@ Seven rays fanned across the car's front (−90°, −60°, −30°, 0°, 30°, 
   - the track's id, version, content hash and split.
 
   P2-07's experiment records save them (see "Experiments"); saving champion models is P3-05.
-- **Randomness:** the trainer owns one run generator, `createRng(seed)`. Its first draw seeds the initial-population generator, which fills genomes in index order. Each generation transition takes exactly three more draws, through `createEvolutionRngs`. Episodes use no randomness, so stepping order and drawing cannot change any stream.
+- **Randomness:** the trainer owns one run generator, `createRng(seed)`. Its first draw seeds the initial-population generator, which fills genomes in index order. `trainerStreams(seed)` is the only place these two streams are derived (P2-08's A8 baseline continues the same `initial` stream; see [the baseline design](experiments/p2-08-baselines-design.md)). Each generation transition takes exactly three more draws, through `createEvolutionRngs`. Episodes use no randomness, so stepping order and drawing cannot change any stream.
 - **Headless:** `runGeneration` and `trainHeadless(config, environment, generations)` run in Node. `npm run demo:train` prints 50 generations with the default configuration, in about 80 s here.
 - **Rendered (`?mode=train`, `ui/trainingPage.ts`):**
   - The page's frame loop calls `trainer.step()` once per fixed tick, at most `maxStepsPerFrame` per frame. Drawing (`drawCars`) only reads car state, so results match a headless run; a test drives the loop at several frame rates.
