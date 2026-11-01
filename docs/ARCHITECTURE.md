@@ -497,6 +497,10 @@ Authorised as step 2 of [the P2-08 plan](experiments/p2-08-plan.md) only. This d
 - **Result:** `evaluateDriver(driver, setup)` returns the finished racer and episode, its fitness breakdown, ordered progress (`gatesPassed / gates`) and the number of decisions. It is pure apart from the driver's own state.
 - **Not included:** A2/A8/A9 selection, seed derivation, manifests, records, the study command, statistics, dashboards and persistence (step 3 and later). No pilot or confirmatory run, no held-out track, and no learning claim.
 
+### P2-08 study tooling (step 3)
+
+Designed in [experiments/p2-08-step3-design.md](experiments/p2-08-step3-design.md) before any code: the A2/A9/A8/A5 agents on the trainer's own streams, versioned manifests and per-seed records with same-engine replay, and the deterministic analysis and report. It is tooling only: no pilot or confirmatory run, and no held-out track.
+
 ## Manual driving (P1-08)
 
 - **One simulation path:** every fixed tick, `main.ts` applies a pending restart, asks the driver for controls and calls `stepWorld` (`sim/world.ts`), which steps the car through physics, collision and lap progress (`stepRacer`). Input never changes the world directly, and rendering only reads it.
