@@ -298,6 +298,57 @@ Lap completion, collisions, outcome counts and first-lap times (with sample coun
 
 No real study output exists or is produced.
 
+### 5.1 D1 implementation notes (written before the D1 code)
+
+PR D is split into **D1** (`src/training/analysis.ts`: the statistics, the analysis and the report, as a library) and **D2** (`npm run study -- analyse <manifest.json> <record.json>… --out-dir <dir>`, which reads the files and writes `analysis.json` and `report.md`). D1 adds no command, writes no files and runs no study.
+
+- **Entry point:** `analyseRecords(manifest, records, engine)`.
+  - It parses the manifest, then parses **and replays** every record (C1's `replayStudyRecord`). A record that does not replay identically is refused (`StudyAnalysisError`), so nothing is analysed from a record that does not reproduce.
+  - Records must name exactly the manifest's seeds, once each. Missing, duplicate and extra seeds are refused.
+  - It then calls the pure `analyseSummaries(manifest, summaries)`. The tests drive that function with synthetic per-seed summaries, which is how the statistics are tested on hand-computed data without running anything.
+- **Per-seed summary** (`summariseRecord`), read from a parsed record's `agents` block, per track:
+  - **progress (§7):** A1 and A7 use the mean ordered progress of their E episodes; A2 the mean over its P networks; A9, A8 and A5 their single episode (the selected candidate's training episode, and the frozen model's validation episode);
+  - **episodes:** for each agent and track, the episode list behind those values (E, P or 1), for lap completion, collisions, outcome counts and first-lap times;
+  - **A5's generations:** the best and the mean training fitness of each recorded generation;
+  - **A5's valid lap:** whether A5's frozen model completes at least one lap on the training track.
+- **Statistics,** all deterministic, with the summation order fixed by the seed order:
+  - the mean, and the type 7 quantiles: the median, and the IQR as [Q1, Q3];
+  - **the bootstrap,** exactly as §5: `createRng(seed)`, B resamples of n indices drawn with `int(0, n)`, ascending sort, then nearest ranks ⌈B·(1 − level)/2⌉ and ⌈B·(1 + level)/2⌉. The products are rounded to 1e-9 before the ceiling, so 10,000 × 0.025 gives rank 250 and not 251;
+  - **the exact Wilcoxon test:** doubled midranks as integers, so W and every sum are exact. The exact null distribution over all 2^m sign assignments is built by dynamic programming over the sum of the positive doubled midranks. That gives the same result as enumerating every assignment, but it works for any seed count a manifest allows, up to 1,000 mechanics seeds. The two-sided p-value is P(|W| ≥ |W_obs|), and m = 0 gives p = 1. (Codex review of `2582fa0`: plain enumeration had to refuse m > 30.)
+- **Exact gate units.** Summaries keep each episode's integer `gatesPassed`. In a contrast A5 − X, X has the same number k of episodes on every seed, so each seed's difference, k·gates(A5) − Σ gates(X), is an exact integer in units of 1 ÷ (k × gates per lap) lap. Ranks, sums, the bootstrap and the decision are computed on those integers and divided only for display:
+  - equal gate differences tie in the Wilcoxon ranks;
+  - the interval-above-zero check is exact;
+  - mean ≥ δ is checked as Σ units ≥ δ × n × units-per-lap, with the right side rounded to 1e-9, so a decimal δ such as 0.25 or 0.3 compares exactly.
+
+  This follows Codex's review of `2582fa0`: subtracting separately normalised progress split tied ranks and made a mean of exactly 0.25 fail δ = 0.25.
+- **Contrasts:**
+  - **primary:** A5 − A8 on the training track;
+  - **secondary (descriptive only):** A5 − A8 on validation, and A5 − A9, A5 − A2, A5 − A1 and A5 − A7 on both tracks.
+
+  Each contrast reports its per-seed differences, mean, bootstrap interval, median, IQR and Wilcoxon result.
+- **Per-agent and track summary across seeds:**
+  - progress: the mean, median and IQR of the seed-level values;
+  - lap completion and collision rates, with their episode counts;
+  - outcome counts;
+  - first-lap time: the mean over the episodes that have a lap, with that count. It is `null` when no episode has a lap, never zero;
+  - mean fitness.
+- **A5 across generations:** for each generation, the median and IQR across seeds of the best and of the mean training fitness. This is descriptive only.
+- **Eligibility, decision and claim:** as in §5.
+  - The decision is `supported`, `negative or inconclusive`, or `not evaluated: <label> analysis is acceptance-ineligible`.
+  - The claim phrase "outperforms equal-budget random search" appears only when the decision is `supported`.
+  - Condition 4 checks that the analysis holds every agent's results, lap completion and collisions on the training track.
+- **Outputs:** `analysis` is a plain JSON object (format `self-driving-ai-evolution/p2-08-analysis`, version 1). `renderReport(analysis)` returns `report.md` text with fixed number formatting and no dates or timings. Both start with the label, n, `acceptanceEligible` and the decision. The secondary contrasts sit under a "Descriptive results (not tested, no claims)" heading.
+- **Pilot helper:** `selectByValidation(candidates)` takes each candidate's A5 validation gate counts and the track's gates per lap. It returns the candidate with the highest mean progress, with the first listed (C0) winning ties. Means are compared exactly by cross-multiplying integers, so equal gate totals tie (Codex review of `9df24d4`: normalised floats such as 6/14 against 6/14 split in the last bit). It only reads the values it is given.
+- **Tests** (`tests/training/analysis.test.ts`):
+  - the statistics on hand-computed cases, and the bootstrap against an independent re-implementation;
+  - every Wilcoxon case and decision branch in §5;
+  - eligibility, and the claim phrase, on synthetic mechanics, pilot and confirmatory summaries;
+  - the summaries of a real tiny mechanics record (seeds 73xx, P = 3, G = 2, E = 2);
+  - `analyseRecords` refusing a record that does not replay, and missing, duplicate or extra seeds;
+  - byte-identical outputs.
+
+  Confirmatory and pilot manifests exist in memory only and are never run. Nothing is written, and no real study output is produced.
+
 ## 6. Tests shared by PRs B to D
 
 - **Determinism:** the same manifest and seed give an identical record, also in another order and alongside other seeds.
