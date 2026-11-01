@@ -20,6 +20,7 @@ import {
   trainerStreams,
   type TrainingConfig,
   type TrainingEnvironment,
+  type Generation,
   type TrainingSetup,
 } from './trainer';
 
@@ -188,18 +189,37 @@ const sumTicks = (candidates: readonly Candidate[]): number => candidates.reduce
 /**
  * Generates A2, A9 and A8 for one training seed. Deterministic: the same config and seed always give the same
  * result, alone or next to other seeds, and the config is never written. Throws as resolveBaselineConfig does.
+ * Standalone: it runs the evolutionary run's generation 0 itself (one trainer generation). An A5 run that already
+ * evaluated generation 0 passes its cars to baselinesFromGeneration0 instead, so generation 0 is evaluated once.
  */
 export function generateBaselines(config: BaselineConfig, seed: number): Baselines {
-  const { setup, environment, generations: G } = resolveBaselineConfig(config, seed);
+  const resolved = resolveBaselineConfig(config, seed);
+  // A2: the evolutionary run's own generation 0, evaluated by the trainer itself.
+  const trainer = createTrainer({ ...resolved.setup.config }, resolved.environment);
+  trainer.runGeneration();
+  return baselinesFromGeneration0(resolved, seed, trainer.finished()!);
+}
+
+/**
+ * Builds A2, A9 and A8 from a run's already-evaluated generation 0 (the trainer's finished generation 0 for the same
+ * setup and seed), without evaluating generation 0 again. Throws RangeError if `generation0` is not generation 0 of
+ * that setup's population, or does not hold the trainer's own initial genomes for `seed`.
+ */
+export function baselinesFromGeneration0(
+  resolved: { setup: TrainingSetup; environment: TrainingEnvironment; generations: number },
+  seed: number,
+  generation0Run: Generation,
+): Baselines {
+  const { setup, environment, generations: G } = resolved;
   const P = setup.config.populationSize;
   const gates = environment.track.gates.length;
   const result = (episode: Episode) => episodeResult(episode, setup.config.fitness, setup.rules, gates);
   const track = { id: setup.versions.trackId, contentHash: setup.versions.trackHash };
-
-  // A2: the evolutionary run's own generation 0, evaluated by the trainer itself.
-  const trainer = createTrainer({ ...setup.config }, environment);
-  trainer.runGeneration();
-  const generation0 = trainer.finished()!.cars;
+  if (setup.config.seed !== seed) throw new RangeError('Generation 0 must come from a run with the same seed.');
+  if (generation0Run.index !== 0 || generation0Run.cars.length !== P || generation0Run.cars.some((car) => car.episode.outcome === null)) {
+    throw new RangeError('Baselines need the run\'s finished generation 0, one car per population member.');
+  }
+  const generation0 = generation0Run.cars;
   const a2: Candidate[] = generation0.map((car, index) => Object.freeze({ index, genomeId: genomeId(car.genome), training: result(car.episode) }));
 
   // A9: the best of generation 0, copied and frozen.
@@ -219,7 +239,10 @@ export function generateBaselines(config: BaselineConfig, seed: number): Baselin
   for (let i = 0; i < P * G; i += 1) {
     const genome = initialParameters(initial);
     if (genome.length !== PARAMETER_COUNT) throw new RangeError('A8 genomes do not match the network.');
-    const candidate = Object.freeze({ index: i, genomeId: genomeId(genome), training: result(evaluateGenome(genome, setup).episode) });
+    const id = genomeId(genome);
+    // A8's first P samples are generation 0 by construction; a caller's generation 0 must be the same genomes.
+    if (i < P && id !== a2[i]!.genomeId) throw new RangeError(`Generation 0 car ${i} is not the trainer's initial genome for seed ${seed}.`);
+    const candidate = Object.freeze({ index: i, genomeId: id, training: result(evaluateGenome(genome, setup).episode) });
     samples.push(candidate);
     // Strictly greater: the earliest sample wins ties (SELECTION_RULE).
     if (bestGenome === null || candidate.training.fitness.total > samples[bestIndex]!.training.fitness.total) {

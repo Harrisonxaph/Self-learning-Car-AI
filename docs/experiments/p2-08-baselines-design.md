@@ -4,7 +4,7 @@
 
 ## 1. What this PR builds
 
-`src/training/baselines.ts`, with `generateBaselines(config, seed)` for one training seed:
+`src/training/baselines.ts`, with `generateBaselines(config, seed)` for one training seed. B2 later split out `baselinesFromGeneration0`, which builds the same result from a run's already-evaluated generation 0, so a combined A5 run does not evaluate generation 0 twice. The standalone behaviour is unchanged:
 
 | Agent | Definition | Training-track evaluations |
 |-------|------------|---------------------------|

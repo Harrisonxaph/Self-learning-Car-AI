@@ -82,7 +82,24 @@ Notes on the table:
   - A1, A7 and A2's descriptive episodes.
 
   Nothing selects on validation in PR B1 or B2.
-- **Held-out:** never touched. No code in `baselines.ts`, `study.ts`, `studyAnalysis.ts` or `scripts/study.mjs` calls `heldOutTrack` or `tracksIn`. A code-only source test checks this, and a runtime test checks that a manifest naming the held-out track is rejected.
+- **Held-out:** never touched. No code in `baselines.ts`, `agents.ts`, `study.ts`, `studyAnalysis.ts` or `scripts/study.mjs` calls `heldOutTrack` or `tracksIn`. A code-only source test checks this, and a runtime test checks that a manifest naming the held-out track is rejected.
+
+### 2.5 B2 implementation notes (written before the B2 code)
+
+- **Module:** `src/training/agents.ts`, not `baselines.ts`. `baselines.ts` (B1) is kept training-track only, and its source test forbids `validationTrack`. `agents.ts` is the one module allowed to call `validationTrack`. It still never calls `heldOutTrack`, `tracksIn` or `selectByValidation`, and a code-only source test checks this.
+- **API:** `generateAgents(config, seed)`, where `config` is #99's `BaselineConfig` plus:
+  - `validationTrackId`: must resolve with `validationTrack`;
+  - `episodesPerTrack` (E): an integer from 1 to 10,000;
+  - `holdTicks`: A7's hold, an integer of at least 1. The default is 30, and the step 2 driver constant is reused.
+
+  Unknown fields are rejected by path, and eliteCount must be at least 1 (§2.2). E = P is enforced by the manifest (PR C), not here, so mechanics tests can use a small E.
+- **Composition:** one `createTrainer` run for G generations is A5. Its generation 0 is evaluated **once**, and A2, A9 and A8 are built from those finished cars by B1's `baselinesFromGeneration0`. This is the same construction `generateBaselines` uses on its own, so B1's standalone results are unchanged. It adds:
+  - **A5:** every car of every generation is kept in population order (`A5.generations[g][i]`). The champion is `selectBest` over the final generation, and must equal the trainer's own `championIndex` (otherwise an error). It is frozen with provenance: agent, seed, generation G − 1, index, `best-training-fitness-final-generation`, track ID and hash. A2 is A5's generation 0 itself, not a second run: a test counts one trainer and G generations per combined run. `baselinesFromGeneration0` rejects anything other than the run's finished generation 0 for the same seed, including another seed's initial genomes.
+  - **Genome diversity:** `evaluations = P × G` and `maxDistinctGenomes` (from B1's budgets), and `actualDistinctGenomes` (distinct genome IDs over all A5 cars), kept separate.
+  - **A1/A7:** E episodes per track, with `actionSeed('A1' | 'A7', s, e)`, the same seed on both tracks. Each episode creates a fresh driver from its own seed and runs `evaluateDriver` on that track's `createEvaluationSetup`, which uses the training configuration's own episode limits and fitness.
+  - **Validation (descriptive):** each of A2's P networks, and the frozen A9, A8 and A5 models, evaluated once each with `createNetworkDriver(parameters, { brakeEnabled })`. These results are reported only. Nothing reads them to select.
+  - **Ticks:** per agent and track.
+- **Not in B2:** manifests, records, replay, the study command and the analysis (PRs C and D).
 
 ## 3. Episode result shape
 
