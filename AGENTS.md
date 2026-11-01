@@ -62,7 +62,7 @@ Until then, use `Not Started`, `In Progress`, `Blocked` or `In Review`. Never de
 
 - Unit and integration tests live under `tests/`, mirroring `src/` (for example `src/sim/physics.ts` → `tests/sim/physics.test.ts`). Browser tests go in `tests/e2e/`. No tests next to source files.
 - Physics and evolution must have determinism tests: same seed and configuration give identical results.
-- Before submitting, run `npm run lint`, `npm run typecheck`, `npm test`, `npm run build` and `npm run test:e2e` once those scripts exist (see `docs/TESTING.md`).
+- Before submitting a PR for review, run `npm run lint`, `npm run typecheck`, `npm test`, `npm run build` and `npm run test:e2e` once those scripts exist (see `docs/TESTING.md`). Later commits on the same PR follow the verification contract in "Usage-efficient development workflow" below. Every required CI job still runs on every PR head.
 
 ## Persistence
 
@@ -118,6 +118,50 @@ Owner merge approval: pending; recorded separately by the owner
 ```
 
 Codex PR review is already configured for this repository (observed on PR #52). No new paid service, bot identity or workflow is required. GitHub branch metadata reported main as unprotected when this was written. Since 2026-11-01 the active ruleset "Protect main" requires pull requests (0 approvals) and both CI jobs, with no bypass (see P1-10 in `docs/ROADMAP.md`). Agents can read the ruleset but cannot administer it. If the owner changes protection, keep requiring PRs and available CI checks without making an unattainable same-account approval badge the gate for this workflow. Review comments themselves are a procedural gate, not a GitHub-enforced status check.
+
+## Usage-efficient development workflow
+
+This applies to all approved project work: every phase from 1 to 6, including Phase 1 regression and maintenance work, and cross-cutting quality, documentation and workflow tasks. Research items (Phase 6 R-items) still need their own implementation authorisation first. It saves agent usage. It adds no new gate and removes none. Where it seems to conflict with another rule in this file or in `docs/`, the stricter rule wins. It never relaxes the scientific evaluation (`docs/AI_EVALUATION.md`), security, accessibility, CI, independent-review or owner-approval requirements.
+
+Work every task through six stages: **INSPECT → PLAN → IMPLEMENT → VERIFY → REVIEW → RECORD.**
+
+1. **INSPECT.** Read only what the task needs:
+   - the task's roadmap entry and acceptance criteria;
+   - the source files it changes, and their direct dependencies and dependants;
+   - the tests that cover those files;
+   - the docs sections it names.
+
+   Do not survey the whole repository or re-read unchanged files without a reason. Check first for existing code, tests, fixtures and documentation to reuse.
+2. **PLAN.** State the bounded scope in a few lines: what changes, what does not, and which tests prove it. Where the roadmap or the owner asks for a design note first, commit it before the code. Anything outside the approved scope goes back to the owner as a question, not into the PR.
+3. **IMPLEMENT.** Change only what the approved scope needs:
+   - reuse existing modules, helpers, fixtures and test patterns rather than adding parallel ones;
+   - no drive-by refactors, renames or formatting changes;
+   - no speculative features.
+4. **VERIFY.** One contract applies, and it is the one §Tests refers to:
+   - **While developing:** run targeted checks for what you changed.
+   - **First submission for review:** run every check required by §Tests and `docs/TESTING.md` on that head, and report the actual results.
+   - **Later commits on the same PR:** rerun locally whatever the change can affect, chosen by impact rather than by file:
+     - the changed modules' tests;
+     - the tests of every module that depends on them, and the integration, determinism and contract tests covering that path;
+     - lint, typecheck and build.
+
+     Rerun the full suite when the impact is broad or unclear, for example a change to shared simulation, RNG, training or format code, or to configuration and dependencies. A documentation-only commit needs no application rerun; record it as not applicable. Name what you reran, and why that is enough.
+   - **Every PR head proposed for merge:** every required CI job passes on that exact head. The relevant review and the required device evidence for that head are recorded before the owner is asked to merge. A local rerun never replaces a required CI job, test layer or acceptance criterion.
+   - **After merge:** check the required CI on the resulting `main` commit, and record the result where the work is tracked. A failure there is fixed before further work builds on it.
+5. **REVIEW.** Request Codex review at the full head SHA, as in the shared-account workflow above.
+   - **Batch the corrections.** Fix every finding in one review round, in one focused commit or a small set of commits. Run the checks once for that batch, reply once per finding, then request re-review once.
+   - **At most three correction cycles per PR.** A correction cycle is one push answering a review. If the fourth review still requires changes, stop. Post a short blocker report on the PR, saying what is still open, why it keeps recurring and the options, and ask the owner how to proceed. Do not keep iterating.
+   - **No relaxed standards.** The limit never lowers the bar for approval. Independent Codex review and explicit owner merge approval are still required.
+6. **RECORD.** Update only the records the change affects: the roadmap status or changelog row, `docs/TESTING.md` when tests change, and design notes when behaviour changes. Make these updates in the same PR as the change, and avoid preventable follow-up PRs for wording, status or evidence that could have gone in it.
+
+   A focused follow-up is appropriate when the original PR can no longer be updated, for example after it is merged or closed. That covers:
+   - evidence that becomes available later, such as post-merge CI, a retrospective review or device results;
+   - a factual error discovered in the docs;
+   - required review or completion records.
+
+   Such a follow-up keeps the actual chronology. It never backdates an approval and never infers a test that was not run.
+
+**Communication.** Keep PR descriptions, review replies and status reports short and factual. Cover what changed, why, the actual checks run with their results, what was not run and why, open items, and the full head SHA. Link rather than repeat earlier evidence. Concise never means omitting a limitation, an unavailable environment, a failed check or a scientific caveat.
 
 ## Roadmap reconciliation defaults
 
