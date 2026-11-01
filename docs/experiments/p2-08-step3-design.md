@@ -55,7 +55,7 @@ Every agent drives through the shared episode path from step 2 (`stepEpisode`: `
 | A5 | the final generation's best by training fitness, frozen (P2-07's `best-training-fitness-final-generation`) | P × G training evaluations | 1 |
 
 Notes on the table:
-- **E (the A1/A7 episodes per training seed per track):** E = P by default, recorded in the manifest.
+- **E (the A1/A7 episodes per training seed per track):** recorded in the manifest. Pilot and confirmatory manifests must have **E = P** (plan §3 and §7, AI_EVALUATION §7). Only mechanics manifests may set a smaller E, for fast tests (§4.1).
 - **Frozen models:** `freezeModel(parameters, provenance)`. The provenance names the agent, seed, index or generation, selection rule, stream and training-track hash.
 - **A5 champion check:** with at least one elite, the final champion's fitness is the highest over all generations. A test checks this. If the manifest allowed 0 elites, the check would be recorded rather than asserted, so the manifest requires eliteCount ≥ 1.
 
@@ -109,6 +109,7 @@ A1 and A7 episodes also carry their action seed. A first-lap time is derived lat
 - `trainingTrack` and `validationTrack` must resolve to a training and a validation track. The held-out track, or any copy of it, is refused (`TrackLeakageError`).
 - δ must be at least 0.25 (the pilot may only raise it).
 - eliteCount must be at least 1.
+- `pilot` and `confirmatory` manifests must have E equal to the population size P. A `mechanics` manifest may set E independently.
 
 **Pilot and confirmatory separation, enforced on the seeds:**
 - `pilot`: a non-empty subset of 9001–9003.
@@ -158,6 +159,8 @@ The input is a manifest and one record per manifest seed. Every record is first 
 
 Lap completion, collisions, outcome counts and first-lap times (with sample counts) are summarised per agent and track.
 
+**A5 across generations** (plan §5, AI_EVALUATION §3 and §8): for each generation g, each seed's best and mean training fitness is taken from its recorded generation g. The records keep A5's episodes per generation, in population order. These values are summarised across seeds by the median and IQR (type 7). The report shows them as a table by generation. It is descriptive only: rising fitness is a training signal, never evidence of learning.
+
 **Primary contrast:** `d_s = progress(A5, s) − progress(A8, s)` on the training track. The seed is the unit.
 - **Mean and 95% percentile bootstrap:**
   - B = 10,000 resamples of the n seeds, with replacement;
@@ -178,22 +181,22 @@ Lap completion, collisions, outcome counts and first-lap times (with sample coun
   4. A1, A7, A2 and A9, lap completion and collisions are all present in the report.
 
   Otherwise the result is "negative or inconclusive". It is never relabelled.
-- **Secondary contrasts:** A5 − A9, A5 − A2, A5 − A1 and A5 − A7, on both tracks, with the same bootstrap. They are described only, and never used for the decision.
+- **Secondary contrasts:** A5 − A8 on the **validation** track, and A5 − A9, A5 − A2, A5 − A1 and A5 − A7 on both tracks. Each is a paired per-seed difference, with the same seed-level bootstrap. They are described only, and never used for the decision or for any claim.
 - **Pilot helper:** choosing a configuration (plan §8.4) by `selectByValidation` on validation progress means, with ties going to C0. It only reads validation episodes, and nothing is chosen in this PR.
 
 **Outputs:** `analysis.json` (canonical JSON) and `report.md`.
 - Both are deterministic: re-running reproduces them byte for byte. The report has no dates or timings.
 - The report's wording follows plan §6:
-  - "beats random driving" refers to A1/A7;
-  - "improves on selection alone" refers to A9;
-  - "outperforms equal-budget random search" refers to A8 and is the only acceptance claim;
-  - each is stated only when the decision rule supports it, and never as general driving ability.
+  - the decision rule produces exactly one claim: "outperforms equal-budget random search" (A5 − A8 on the training track), and only when all four conditions hold. Otherwise the report says "negative or inconclusive". The other conditions require the remaining results to be reported, not that A5 beat them;
+  - the A1/A7, A9, A2 and validation contrasts are reported as numbers (mean, interval, median and IQR), under a heading that says they are descriptive. The report never turns them into claims such as "beats random driving" or "improves on selection alone", because the decision rule does not test them;
+  - nothing is ever stated as general driving ability.
 
 **Tests use synthetic data only:**
 - hand-computed paired differences, means, medians and IQRs;
 - bootstrap bounds against an independent re-implementation, and determinism from the seed;
 - Wilcoxon cases: all zero (p = 1), all positive (p = 2/2^m), a single non-zero difference, tied absolute values and mixed signs, against hand-computed values;
-- every decision-rule branch;
+- every decision-rule branch, and that only the A5 − A8 claim phrase can appear, and only when all four conditions hold;
+- the A5 per-generation median and IQR, and the validation A5 − A8 contrast, on synthetic records;
 - byte-identical reports.
 
 No real study output exists or is produced.
