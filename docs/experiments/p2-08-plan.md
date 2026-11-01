@@ -5,6 +5,7 @@
 > Revised after Codex's [retrospective review of #91](https://github.com/Harrisonxaph/Self-learning-Car-AI/pull/91#pullrequestreview-5673337394):
 > - A1/A7 episode counts are now consistent on both tracks, and E1 keeps AI_EVALUATION's population-sized cohort.
 > - The exact Wilcoxon convention for zeros and ties is now specified.
+> - Per-agent evaluation budgets are collected in one table (§3).
 
 This plan turns [AI_EVALUATION.md](../AI_EVALUATION.md) §2, §3, §5, §7 and §8 into concrete settings for P2-08: agents A1, A7, A2, A9, A8 and A5, experiments E1 and E2, on the built-in tracks from P2-10, recorded and replayed with the P2-07 runner. Where AI_EVALUATION leaves a choice open, this plan proposes one and says so; Codex and the owner can change any of it before the confirmatory manifest is frozen.
 
@@ -36,11 +37,23 @@ Selection rule for every model-based agent: **highest training fitness** (P2-06,
 - **Pilot seeds:** `9001` to `9003`. Pilot results never enter the confirmatory analysis.
 - **A5 and A2/A9:** the P2-07 trainer's documented streams (`RNG_STREAMS = trainer-run-initial-then-3-per-transition-v1`): `run = createRng(seed)`, `initial = createRng(run.nextUint32())`, generation 0 is P genomes drawn from `initial`.
 - **A8:** the same `initial` generator, **continued** for P × G genomes. A8's first P networks are therefore exactly A5's generation 0. This pairs A8 with A5 by seed, makes A9 the best of A8's first block, and means any A5 − A8 difference comes from what happens after generation 0. The stream layout gets its own recorded identifier.
-- **A1 and A7 action seeds:** for agent `a`, training seed `s` and episode `e`, the first 32 bits of `sha256("p2-08|<a>|<s>|<e>")` (`utils/sha256.ts`). They are independent of the trainer's streams, and the derivation is recorded in every record. **E1 sample size, as AI_EVALUATION §7 specifies ("10 eval seeds × population"):** A1 and A7 each run **E = P episodes** (50 at the default) per training seed **per track**, on the training and the validation track alike. That is the same population-sized cohort A2 gets from its P generation-0 networks. At the default this is 10 × 50 = 500 episodes per agent per track. The episodes are averaged within the seed (§7). Evaluation counts are not independent samples: the independent n is the number of training seeds (10).
+- **A1 and A7 action seeds:** for agent `a`, training seed `s` and episode `e`, the first 32 bits of `sha256("p2-08|<a>|<s>|<e>")` (`utils/sha256.ts`). They are independent of the trainer's streams, and the derivation is recorded in every record. The track is not part of the seed: episode e uses the same action seed on the training and the validation track (common random numbers across tracks), and each record names its track separately. **E1 sample size, as AI_EVALUATION §7 specifies ("10 eval seeds × population"):** A1 and A7 each run **E = P episodes** (50 at the default) per training seed **per track**, on the training and the validation track alike. That is the same population-sized cohort A2 gets from its P generation-0 networks. At the default this is 10 × 50 = 500 episodes per agent per track. The episodes are averaged within the seed (§7). Evaluation counts are not independent samples: the independent n is the number of training seeds (10).
 - **Budget:**
   - The budget unit is the **episode evaluation**, as AI_EVALUATION §2 defines A8. A5 uses P × G evaluations; A8 gets exactly P × G.
   - A5 re-evaluates its elites each generation, and deterministic re-evaluation adds no information. So A5 sees at most P × G − eliteCount × (G − 1) distinct genomes, while A8 sees P × G. This gives A8 a small advantage, which makes the A5 − A8 test conservative. Both counts are recorded.
   - The simulated car-ticks used by each agent are recorded as a secondary budget. They are not equalised, because episodes end at different times.
+  - **Evaluation budget per training seed, in one place** (the defaults P = 50 and G = 50; multiply by 10 seeds, or 20 if the pilot requires it):
+
+    | Agent | Training track | Validation track | Seeds and streams | Aggregated within the seed as |
+    |-------|----------------|------------------|-------------------|-------------------------------|
+    | A1 | P stochastic episodes (50) | P stochastic episodes (50) | action seeds `sha256("p2-08\|A1\|<s>\|<e>")`, e = 0 … P − 1 | mean per track |
+    | A7 | P stochastic episodes (50) | P stochastic episodes (50) | action seeds `sha256("p2-08\|A7\|<s>\|<e>")`, e = 0 … P − 1 | mean per track |
+    | A2 | P networks × 1 episode (50); these are A5's generation 0, so no extra training-track run | P networks × 1 episode (50) | trainer `initial` stream | mean per track |
+    | A9 | 1 episode, taken from generation 0 (no extra run) | 1 episode | trainer `initial` stream | single value |
+    | A8 | P × G samples × 1 episode (2,500); the selected model's episode is one of them | 1 episode (selected model) | `initial` stream continued | single value |
+    | A5 | P × G training evaluations (2,500); the frozen champion's episode is one of them | 1 episode (frozen champion) | trainer `run` and `initial` streams | single value |
+
+    Deterministic models are never re-run for extra samples, because a repeat gives the same episode. Every count above is an evaluation count, not an independent sample: the independent n is the number of training seeds.
 - **Default configuration (to be confirmed by the pilot, §8):** the MODEL_FORMAT/P2-05 defaults:
   - P = 50 cars, 2 elites, tournament 3, uniform crossover 0.7, mutation 0.1/0.2, braking on;
   - 60 s episodes, 5 s stall, 3-lap cap;
