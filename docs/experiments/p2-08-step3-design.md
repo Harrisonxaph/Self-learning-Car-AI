@@ -65,11 +65,12 @@ Notes on the table:
 ### 2.3 Budgets (recorded per seed)
 
 - **A5 and A8:** exactly P × G training evaluations each.
-- **A5's distinct genomes:** two separate numbers, both recorded, and neither is an evaluation count:
-  - `maxDistinctGenomes = P × G − eliteCount × (G − 1)`, an **upper bound** (the field #99 already reports). Duplicate offspring can make the real count smaller: with crossover and mutation off, P = 3, G = 3 and one elite give a bound of 7 but at most 3 distinct genomes;
-  - `actualDistinctGenomes`: the measured count of distinct genome hashes over every car of every generation.
+- **Genome diversity:** record these separately:
+  - `maxDistinctGenomes = P × G − eliteCount × (G − 1)`: the **upper bound** after subtracting guaranteed elite re-evaluations (the same field name #99 already reports);
+  - `actualDistinctGenomes`: the number of unique genome hashes actually observed across all evaluated generations;
+  - `evaluations = P × G`: every episode evaluation, including repeated genomes.
 
-  The evaluation count stays P × G.
+  Duplicate offspring can make the actual distinct count lower than the bound. For example, with P = 3, G = 3 and one elite, there are 9 evaluations and an upper bound of 7 distinct genomes, but potentially only 3 actual distinct genomes if all offspring copy existing genomes.
 - **Simulated car-ticks:** recorded for every agent and track. They are not equalised.
 - **Counts:** a test checks that A8's evaluation count equals A5's.
 
