@@ -207,10 +207,11 @@ PR C is split into **C1** (`src/training/study.ts`: formats, strict parsing, com
   - each model's genome ID equals its candidate's, its frozen ID is recomputed with `freezeModel`, and its provenance equals the expected values;
   - every action seed recomputed;
   - ordered progress = gates ÷ the track's gates;
+  - every fitness term recomputed with `scoreEpisode` from the episode's own gates, partial progress, laps and crash flag, under the manifest's fitness and rules; partial progress within 0 to 0.99; a crashed outcome carries the crash flag;
   - episode ticks ≤ `maxEpisodeTicks`;
   - every budget and tick sum recomputed;
   - `resultsHash`.
-- **Replay:** it re-runs `generateAgents` from the manifest for the record's seed, compares the canonical JSON of `agents` (up to 20 differing paths), and re-evaluates the A9, A8 and A5 models alone on both tracks against their recorded episodes.
+- **Replay:** it re-runs `generateAgents` from the manifest for the record's seed, compares the canonical JSON of `agents` (up to 20 differing paths), and re-evaluates the A9, A8 and A5 models alone on both tracks, comparing the complete episode result (fitness breakdown included) with the recorded one.
 
 ## 5. Analysis and report (PR D)
 

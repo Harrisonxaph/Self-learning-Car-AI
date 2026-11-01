@@ -10,7 +10,7 @@ import { RANDOM_ACTION_ALGORITHM } from '../ai/randomDrivers';
 import { createNetworkDriver } from '../ai/drivers';
 import { sha256Hex } from '../utils/sha256';
 import { A5_SELECTION, ACTION_SEED_DERIVATION, actionSeed, generateAgents, MAX_EPISODES_PER_TRACK, type AgentConfig, type Agents } from './agents';
-import { A8_STREAM, genomeId, MAX_BASELINE_GENERATIONS, resolveBaselineConfig, selectBest, SELECTION_RULE, type TrainingSettings } from './baselines';
+import { A8_STREAM, episodeResult, genomeId, MAX_BASELINE_GENERATIONS, resolveBaselineConfig, selectBest, SELECTION_RULE, type TrainingSettings } from './baselines';
 import { createEvaluationSetup, evaluateDriver } from './evaluation';
 import {
   canonicalJson,
@@ -21,7 +21,7 @@ import {
   type ExperimentEngine,
   type ExperimentSource,
 } from './experiment';
-import { FITNESS_VERSION } from './fitness';
+import { FITNESS_VERSION, PARTIAL_PROGRESS_CAP, scoreEpisode, type Episode, type EpisodeRules, type FitnessConfig } from './fitness';
 import { freezeModel, trackContentHash, trainingTrack, validationTrack } from './trackSplits';
 import { DEFAULT_TRAINING_CONFIG, RNG_STREAMS } from './trainer';
 
@@ -384,7 +384,16 @@ const OUTCOMES = ['completed', 'crashed', 'stalled', 'timeout'];
 const EPISODE_KEYS = ['outcome', 'ticks', 'gatesPassed', 'lapTicks', 'crashed', 'partialProgress', 'fitness', 'orderedProgress'];
 const FITNESS_KEYS = ['checkpoints', 'partialProgress', 'laps', 'lapTimeBonus', 'collisionPenalty', 'total'];
 
-function checkEpisode(value: unknown, path: string, maxTicks: number, gates: number, fail: Fail, extra: readonly string[] = []): Json {
+/** What checking an episode needs: the tick limit, the track's gates and the manifest's scoring. */
+interface EpisodeCheck {
+  readonly maxTicks: number;
+  readonly gates: number;
+  readonly fitness: FitnessConfig;
+  readonly rules: EpisodeRules;
+}
+
+function checkEpisode(value: unknown, path: string, check: EpisodeCheck, fail: Fail, extra: readonly string[] = []): Json {
+  const { maxTicks, gates } = check;
   const e = exact(value, path, [...EPISODE_KEYS, ...extra], fail);
   if (!OUTCOMES.includes(e.outcome as string)) fail(`${path}.outcome must be one of ${OUTCOMES.join(', ')}.`);
   int(e.ticks, `${path}.ticks`, 1, maxTicks, fail);
@@ -392,18 +401,29 @@ function checkEpisode(value: unknown, path: string, maxTicks: number, gates: num
   if (!Array.isArray(e.lapTicks)) fail(`${path}.lapTicks must be an array.`);
   (e.lapTicks as unknown[]).forEach((t, i) => int(t, `${path}.lapTicks[${i}]`, 1, maxTicks, fail));
   if (typeof e.crashed !== 'boolean') fail(`${path}.crashed must be a boolean.`);
-  finite(e.partialProgress, `${path}.partialProgress`, fail);
+  if (e.outcome === 'crashed' && e.crashed !== true) fail(`${path}.crashed must be true for a crashed outcome.`);
+  const partial = finite(e.partialProgress, `${path}.partialProgress`, fail);
+  if (partial < 0 || partial > PARTIAL_PROGRESS_CAP) fail(`${path}.partialProgress must be from 0 to ${PARTIAL_PROGRESS_CAP}.`);
   const f = exact(e.fitness, `${path}.fitness`, FITNESS_KEYS, fail);
   for (const key of FITNESS_KEYS) finite(f[key], `${path}.fitness.${key}`, fail);
+  // Every fitness term must be what the manifest's scoring gives for this episode's own raw values.
+  const scored = scoreEpisode(
+    { gatesPassed, partialProgress: partial, lapTicks: e.lapTicks as number[], crashed: e.crashed as boolean } as unknown as Episode,
+    check.fitness,
+    check.rules,
+  );
+  for (const key of FITNESS_KEYS) {
+    if (f[key] !== scored[key as keyof typeof scored]) fail(`${path}.fitness.${key} is not the score of this episode (${String(f[key])}, expected ${String(scored[key as keyof typeof scored])}).`);
+  }
   if (finite(e.orderedProgress, `${path}.orderedProgress`, fail) !== gatesPassed / gates) fail(`${path}.orderedProgress must be gatesPassed ÷ ${gates}.`);
   return e;
 }
 
-function checkCandidate(value: unknown, path: string, index: number, maxTicks: number, gates: number, fail: Fail): Json {
+function checkCandidate(value: unknown, path: string, index: number, check: EpisodeCheck, fail: Fail): Json {
   const c = exact(value, path, ['index', 'genomeId', 'training'], fail);
   if (c.index !== index) fail(`${path}.index must be ${index}.`);
   if (typeof c.genomeId !== 'string' || !HASH.test(c.genomeId)) fail(`${path}.genomeId must be a sha256: hash.`);
-  checkEpisode(c.training, `${path}.training`, maxTicks, gates, fail);
+  checkEpisode(c.training, `${path}.training`, check, fail);
   return c;
 }
 
@@ -451,8 +471,13 @@ export function parseStudyRecord(input: unknown, manifestInput: unknown, engine:
   const P = manifest.configuration.training.populationSize;
   const G = manifest.configuration.generations;
   const E = manifest.configuration.episodesPerTrack;
-  const maxTicks = maxEpisodeTicksFor(manifest, seed);
-  const gates = { training: trainingTrack(manifest.tracks.training.id).gates.length, validation: validationTrack(manifest.tracks.validation.id).gates.length };
+  const { setup } = resolveBaselineConfig({ training: manifest.configuration.training, generations: G, trackId: manifest.tracks.training.id }, seed);
+  const maxTicks = setup.rules.maxEpisodeTicks;
+  const scoring = { maxTicks, fitness: setup.config.fitness, rules: setup.rules };
+  const checks = {
+    training: { ...scoring, gates: trainingTrack(manifest.tracks.training.id).gates.length },
+    validation: { ...scoring, gates: validationTrack(manifest.tracks.validation.id).gates.length },
+  };
   const a = exact(r.agents, 'record.agents', [...AGENT_ORDER], fail);
 
   // A1, A7: E episodes per track with the derived action seeds.
@@ -461,7 +486,7 @@ export function parseStudyRecord(input: unknown, manifestInput: unknown, engine:
     if (agent === 'A7' && block.holdTicks !== manifest.configuration.holdTicks) fail(`agents.A7.holdTicks must be ${manifest.configuration.holdTicks}.`);
     for (const track of ['training', 'validation'] as const) {
       arr(block[track], `agents.${agent}.${track}`, E, fail).forEach((e, i) => {
-        const ep = checkEpisode(e, `agents.${agent}.${track}[${i}]`, maxTicks, gates[track], fail, ['actionSeed']);
+        const ep = checkEpisode(e, `agents.${agent}.${track}[${i}]`, checks[track], fail, ['actionSeed']);
         if (ep.actionSeed !== actionSeed(agent, seed, i)) fail(`agents.${agent}.${track}[${i}].actionSeed is not the derived action seed.`);
       });
     }
@@ -469,8 +494,8 @@ export function parseStudyRecord(input: unknown, manifestInput: unknown, engine:
 
   // A2: generation 0, and its validation episodes.
   const a2 = exact(a.A2, 'agents.A2', ['candidates', 'validation'], fail);
-  const a2c = arr(a2.candidates, 'agents.A2.candidates', P, fail).map((c, i) => checkCandidate(c, `agents.A2.candidates[${i}]`, i, maxTicks, gates.training, fail));
-  const a2v = arr(a2.validation, 'agents.A2.validation', P, fail).map((e, i) => checkEpisode(e, `agents.A2.validation[${i}]`, maxTicks, gates.validation, fail));
+  const a2c = arr(a2.candidates, 'agents.A2.candidates', P, fail).map((c, i) => checkCandidate(c, `agents.A2.candidates[${i}]`, i, checks.training, fail));
+  const a2v = arr(a2.validation, 'agents.A2.validation', P, fail).map((e, i) => checkEpisode(e, `agents.A2.validation[${i}]`, checks.validation, fail));
   const tracks = manifest.tracks.training;
 
   // A9: the best of A2 by training fitness.
@@ -480,24 +505,24 @@ export function parseStudyRecord(input: unknown, manifestInput: unknown, engine:
   checkModel(a9.model, 'agents.A9.model', a2c[a9i]!.genomeId as string, {
     agent: 'A9', seed, generation: 0, index: a9i, selection: SELECTION_RULE, trackId: tracks.id, trackContentHash: tracks.contentHash,
   }, fail);
-  checkEpisode(a9.validation, 'agents.A9.validation', maxTicks, gates.validation, fail);
+  checkEpisode(a9.validation, 'agents.A9.validation', checks.validation, fail);
 
   // A8: P × G samples whose first P are A2, and the best of them.
   const a8 = exact(a.A8, 'agents.A8', ['stream', 'samples', 'index', 'model', 'validation'], fail);
   same(a8.stream, A8_STREAM, 'agents.A8.stream', fail);
-  const a8s = arr(a8.samples, 'agents.A8.samples', P * G, fail).map((c, i) => checkCandidate(c, `agents.A8.samples[${i}]`, i, maxTicks, gates.training, fail));
+  const a8s = arr(a8.samples, 'agents.A8.samples', P * G, fail).map((c, i) => checkCandidate(c, `agents.A8.samples[${i}]`, i, checks.training, fail));
   for (let i = 0; i < P; i += 1) same(a8s[i], a2c[i], `agents.A8.samples[${i}] (must equal A2)`, fail);
   if (a8.index !== selectBest(totals(a8s))) fail('agents.A8.index is not the best sample by training fitness (earliest on ties).');
   const a8i = a8.index as number;
   checkModel(a8.model, 'agents.A8.model', a8s[a8i]!.genomeId as string, {
     agent: 'A8', seed, index: a8i, stream: A8_STREAM, selection: SELECTION_RULE, trackId: tracks.id, trackContentHash: tracks.contentHash,
   }, fail);
-  checkEpisode(a8.validation, 'agents.A8.validation', maxTicks, gates.validation, fail);
+  checkEpisode(a8.validation, 'agents.A8.validation', checks.validation, fail);
 
   // A5: G generations of P cars, generation 0 = A2, champion = final generation's best.
   const a5 = exact(a.A5, 'agents.A5', ['generations', 'generation', 'index', 'selection', 'model', 'validation'], fail);
   const gens = arr(a5.generations, 'agents.A5.generations', G, fail).map((gen, g) =>
-    arr(gen, `agents.A5.generations[${g}]`, P, fail).map((c, i) => checkCandidate(c, `agents.A5.generations[${g}][${i}]`, i, maxTicks, gates.training, fail)),
+    arr(gen, `agents.A5.generations[${g}]`, P, fail).map((c, i) => checkCandidate(c, `agents.A5.generations[${g}][${i}]`, i, checks.training, fail)),
   );
   same(gens[0], a2c, 'agents.A5.generations[0] (must equal A2)', fail);
   if (a5.generation !== G - 1) fail(`agents.A5.generation must be ${G - 1}.`);
@@ -507,7 +532,7 @@ export function parseStudyRecord(input: unknown, manifestInput: unknown, engine:
   checkModel(a5.model, 'agents.A5.model', gens[G - 1]![a5i]!.genomeId as string, {
     agent: 'A5', seed, generation: G - 1, index: a5i, selection: A5_SELECTION, trackId: tracks.id, trackContentHash: tracks.contentHash,
   }, fail);
-  checkEpisode(a5.validation, 'agents.A5.validation', maxTicks, gates.validation, fail);
+  checkEpisode(a5.validation, 'agents.A5.validation', checks.validation, fail);
 
   // Budgets: planned, actual and diversity kept apart, every value recomputed.
   const eliteCount = manifest.configuration.training.eliteCount;
@@ -555,10 +580,12 @@ export function replayStudyRecord(input: unknown, manifestInput: unknown, engine
   const a = record.agents as Record<string, Json>;
   const replayModel = (agent: 'A9' | 'A8' | 'A5', training: unknown): boolean => {
     const parameters = (a[agent]!.model as Json).parameters as number[];
+    // The complete episode result, fitness breakdown included, must match the recorded one.
     const check = (track: 'training' | 'validation', recorded: unknown) => {
-      const { episode } = evaluateDriver(createNetworkDriver(parameters, { brakeEnabled: config.brakeEnabled }), setups[track]);
-      const e = recorded as Json;
-      return episode.tick === e.ticks && episode.outcome === e.outcome && episode.gatesPassed === e.gatesPassed && canonicalJson(episode.lapTicks) === canonicalJson(e.lapTicks);
+      const setup = setups[track];
+      const { episode } = evaluateDriver(createNetworkDriver(parameters, { brakeEnabled: config.brakeEnabled }), setup);
+      const replayed = episodeResult(episode, setup.config.fitness, setup.rules, setup.environment.track.gates.length);
+      return canonicalJson(replayed) === canonicalJson(recorded);
     };
     return check('training', training) && check('validation', a[agent]!.validation);
   };

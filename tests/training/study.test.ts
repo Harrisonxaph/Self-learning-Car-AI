@@ -6,6 +6,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { resolveBaselineConfig } from '../../src/training/baselines';
+import { scoreEpisode, type Episode } from '../../src/training/fitness';
 import { canonicalJson } from '../../src/training/experiment';
 import {
   AGENT_ORDER,
@@ -65,6 +66,16 @@ const RECORD = runStudySeed(MANIFEST, 7301, CONTEXT);
 const P = 3;
 const G = 2;
 const E = 2;
+// A consistent edit: another outcome, which no fitness term depends on (crashed stays as recorded).
+const otherOutcome = (episode: Json) => {
+  episode.outcome = episode.outcome === 'stalled' ? 'timeout' : 'stalled';
+};
+// Re-scores an edited episode with the manifest's own fitness, so the edit stays internally consistent.
+const SCORING = resolveBaselineConfig({ training: MANIFEST.configuration.training, generations: 2, trackId: 'stadium-oval' }, 7301).setup;
+const rescore = (episode: Json) => {
+  const b = scoreEpisode(episode as unknown as Episode, SCORING.config.fitness, SCORING.rules);
+  episode.fitness = { checkpoints: b.checkpoints, partialProgress: b.partialProgress, laps: b.laps, lapTimeBonus: b.lapTimeBonus, collisionPenalty: b.collisionPenalty, total: b.total };
+};
 const withManifest = (change: (m: Json) => void): Json => {
   const m = clone(MANIFEST) as Json;
   change(m);
@@ -243,6 +254,11 @@ describe('record corruption', () => {
     ['another diversity count', (r: Json) => (r.budgets.diversity.actualDistinctGenomes += 1), /record.budgets/],
     ['wrong ticks', (r: Json) => (r.budgets.ticks.A1.validation += 1), /record.budgets/],
     ['other evaluations', (r: Json) => (r.evaluations.heldOut = 'evaluated'), /record.evaluations/],
+    ['a fitness total the episode cannot give', (r: Json) => (r.agents.A2.validation[0].fitness.total = 999999), /fitness.total is not the score of this episode/],
+    ['a fitness term the episode cannot give', (r: Json) => (r.agents.A8.samples[A8_LATE].training.fitness.checkpoints += 1), /fitness.checkpoints is not the score/],
+    ['partial progress changed without its fitness', (r: Json) => (r.agents.A1.training[0].partialProgress = 0.5), /is not the score of this episode/],
+    ['partial progress above the cap', (r: Json) => (r.agents.A1.training[0].partialProgress = 1), /partialProgress must be from 0 to 0.99/],
+    ['a crashed outcome without the crash flag', (r: Json) => Object.assign(r.agents.A1.validation[0], { outcome: 'crashed', crashed: false }), /crashed must be true/],
     ['a seed outside the manifest', (r: Json) => (r.seed = 7399), /not one of the manifest's seeds/],
   ])('rejects %s (resultsHash recomputed)', (_label, change, message) => {
     expect(() => parseStudyRecord(edit(change), MANIFEST, ENGINE)).toThrow(StudyRecordError);
@@ -250,7 +266,7 @@ describe('record corruption', () => {
   });
 
   it('rejects a result edited without updating resultsHash', () => {
-    const r = edit((x) => (x.agents.A8.samples[A8_LATE].training.partialProgress += 0.01), false);
+    const r = edit((x) => otherOutcome(x.agents.A8.samples[A8_LATE].training), false);
     expect(() => parseStudyRecord(r, MANIFEST, ENGINE)).toThrow(/resultsHash does not match/);
   });
 
@@ -281,20 +297,26 @@ describe('replay', () => {
   });
 
   it('detects a consistently edited result that passes parsing, naming its path', () => {
-    const edited = edit((r) => (r.agents.A8.samples[P + 1].training.partialProgress += 0.01));
+    const edited = edit((r) => otherOutcome(r.agents.A8.samples[P + 1].training));
     expect(() => parseStudyRecord(edited, MANIFEST, ENGINE)).not.toThrow();
     const result = replayStudyRecord(edited, MANIFEST, ENGINE);
     expect(result.identical).toBe(false);
-    expect(result.differences.join('\n')).toContain(`agents.A8.samples[${P + 1}].training.partialProgress`);
+    expect(result.differences.join('\n')).toContain(`agents.A8.samples[${P + 1}].training.outcome`);
   });
 
-  it('detects a consistently edited validation episode of a frozen model', () => {
+  it.each(['A9', 'A8', 'A5'] as const)('a consistently edited %s validation episode fails that model\'s own replay, not only the full comparison', (agent) => {
+    // The crash flag and its re-scored fitness change; ticks, outcome, gates and laps stay as recorded.
     const edited = edit((r) => {
-      r.agents.A5.validation.partialProgress += 0.01;
+      const episode = r.agents[agent].validation;
+      episode.crashed = !episode.crashed;
+      if (episode.outcome === 'crashed') episode.outcome = 'timeout';
+      rescore(episode);
     });
+    expect(() => parseStudyRecord(edited, MANIFEST, ENGINE)).not.toThrow();
     const result = replayStudyRecord(edited, MANIFEST, ENGINE);
+    expect(result.modelsReplayed[agent]).toBe(false);
     expect(result.identical).toBe(false);
-    expect(result.differences.join('\n')).toContain('agents.A5.validation.partialProgress');
+    expect(result.differences.join('\n')).toContain(`agents.${agent}.validation.crashed`);
   });
 
   it('reports whether the source revision is the same, without rejecting a different one', () => {
