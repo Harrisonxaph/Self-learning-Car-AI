@@ -119,6 +119,37 @@ Owner merge approval: pending; recorded separately by the owner
 
 Codex PR review is already configured for this repository (observed on PR #52). No new paid service, bot identity or workflow is required. GitHub branch metadata reported main as unprotected when this was written. Since 2026-11-01 the active ruleset "Protect main" requires pull requests (0 approvals) and both CI jobs, with no bypass (see P1-10 in `docs/ROADMAP.md`). Agents can read the ruleset but cannot administer it. If the owner changes protection, keep requiring PRs and available CI checks without making an unattainable same-account approval badge the gate for this workflow. Review comments themselves are a procedural gate, not a GitHub-enforced status check.
 
+## Usage-efficient development workflow
+
+This applies to every approved task in Phases 2 to 5 and to any separately approved research (Phase 6 R-items). It saves agent usage. It adds no new gate and removes none. Where it seems to conflict with another rule in this file or in `docs/`, the stricter rule wins. It never relaxes the scientific evaluation (`docs/AI_EVALUATION.md`), security, accessibility, CI, independent-review or owner-approval requirements.
+
+Work every task through six stages: **INSPECT → PLAN → IMPLEMENT → VERIFY → REVIEW → RECORD.**
+
+1. **INSPECT.** Read only what the task needs:
+   - the task's roadmap entry and acceptance criteria;
+   - the source files it changes, and their direct dependencies and dependants;
+   - the tests that cover those files;
+   - the docs sections it names.
+
+   Do not survey the whole repository or re-read unchanged files without a reason. Check first for existing code, tests, fixtures and documentation to reuse.
+2. **PLAN.** State the bounded scope in a few lines: what changes, what does not, and which tests prove it. Where the roadmap or the owner asks for a design note first, commit it before the code. Anything outside the approved scope goes back to the owner as a question, not into the PR.
+3. **IMPLEMENT.** Change only what the approved scope needs:
+   - reuse existing modules, helpers, fixtures and test patterns rather than adding parallel ones;
+   - no drive-by refactors, renames or formatting changes;
+   - no speculative features.
+4. **VERIFY.**
+   - **While developing:** run targeted checks only, meaning the tests for the changed modules plus lint and typecheck as needed.
+   - **On the head submitted for review:** run every required check once (§Tests, `docs/TESTING.md`), and report the actual results.
+   - **On later heads:** rerun the full suite only where the change could affect it. A fix confined to one module reruns that module's tests, lint, typecheck and build, and says so. A documentation-only commit needs no application test rerun, recorded as not applicable.
+   - **Before merging:** the merged head must still have all required CI checks and any required device checks passing.
+5. **REVIEW.** Request Codex review at the full head SHA, as in the shared-account workflow above.
+   - **Batch the corrections.** Fix every finding in one review round, in one focused commit or a small set of commits. Run the checks once for that batch, reply once per finding, then request re-review once.
+   - **At most three correction cycles per PR.** A correction cycle is one push answering a review. If the fourth review still requires changes, stop. Post a short blocker report on the PR, saying what is still open, why it keeps recurring and the options, and ask the owner how to proceed. Do not keep iterating.
+   - **No relaxed standards.** The limit never lowers the bar for approval. Independent Codex review and explicit owner merge approval are still required.
+6. **RECORD.** Update only the records the change affects: the roadmap status or changelog row, `docs/TESTING.md` when tests change, and design notes when behaviour changes. Make these updates in the same PR as the change. Do not open documentation-only follow-up PRs for wording, status or evidence that could have gone in the original PR. A separate documentation PR is for owner-requested or policy changes.
+
+**Communication.** Keep PR descriptions, review replies and status reports short and factual. Cover what changed, why, the actual checks run with their results, what was not run and why, open items, and the full head SHA. Link rather than repeat earlier evidence. Concise never means omitting a limitation, an unavailable environment, a failed check or a scientific caveat.
+
 ## Roadmap reconciliation defaults
 
 - The owner's detailed project request is the initial master specification. Preserve useful existing work and verify code, tests and PR history before changing statuses.
