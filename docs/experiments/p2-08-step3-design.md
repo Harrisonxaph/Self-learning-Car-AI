@@ -358,7 +358,7 @@ D2 adds the `analyse` command to `scripts/study.mjs`. It handles only files and 
 - **Outputs:** `<dir>/analysis.json` (`analysisJson`, canonical JSON) and `<dir>/report.md` (`renderReport`). Both are deterministic, so a re-run writes the same bytes.
 - **Safe writing:**
   - the output folder must already exist and be a folder; it is never created;
-  - if either output already exists, the command refuses without `--force`, before anything runs;
+  - if either output already exists, the command refuses without `--force`, before anything runs. Existence is checked on the folder entry itself (`lstat`), so a dangling symbolic link counts as existing. With `--force`, the link itself is replaced and its target is never written (Codex review of `6f863a6`). `run`'s `--out` check uses the same rule;
   - an output may never be one of the input files (manifest or records), even with `--force`. Paths are compared after resolving symbolic links;
   - each file is written in full through `writeRecordFile` (C2's owned temporary folder, then a hard link or a rename). An interrupted run never leaves a partial file and never deletes an existing one. `analysis.json` is written first, then `report.md`.
 - **Exit codes:**

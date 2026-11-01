@@ -15,7 +15,7 @@
 // Exit codes: 0 a written record (or an identical replay), 1 a replay that differs, 2 invalid, incompatible or
 // unreadable input, with nothing written. A record is raw results only: not an analysis, and not evidence of learning.
 import { execFileSync } from 'node:child_process';
-import { existsSync, readFileSync, realpathSync, statSync } from 'node:fs';
+import { existsSync, lstatSync, readFileSync, realpathSync, statSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { runnerImport } from 'vite';
@@ -125,11 +125,23 @@ const realOrSelf = (path) => {
   }
 };
 
+// The folder entry itself, not what a symbolic link points to: a dangling link is an existing entry (Codex review of
+// 6f863a6). Returns null when there is no entry at all.
+function entry(path) {
+  try {
+    return lstatSync(path);
+  } catch (error) {
+    if (error.code === 'ENOENT') return null;
+    throw error;
+  }
+}
+
 function checkOutput(out, manifestPath, force) {
   if (realOrSelf(out) === realOrSelf(manifestPath)) throw new UsageError(`${out} is the manifest itself; choose another output file.`);
   if (!existsSync(dirname(out)) || !statSync(dirname(out)).isDirectory()) throw new UsageError(`The folder for ${out} does not exist.`);
-  if (!existsSync(out)) return;
-  if (statSync(out).isDirectory()) throw new UsageError(`${out} is a directory; --out needs a file.`);
+  const existing = entry(out);
+  if (existing === null) return;
+  if (existing.isDirectory()) throw new UsageError(`${out} is a directory; --out needs a file.`);
   if (!force) throw new UsageError(`${out} already exists; pass --force to replace it.`);
 }
 
@@ -143,9 +155,10 @@ function checkOutputDir(outDir, inputs, force) {
   for (const name of OUTPUTS) {
     const out = join(outDir, name);
     if (inputPaths.has(realOrSelf(out))) throw new UsageError(`${out} is one of the input files; choose another output folder.`);
-    if (!existsSync(out)) continue;
-    if (statSync(out).isDirectory()) throw new UsageError(`${out} is a directory.`);
-    if (!force) throw new UsageError(`${out} already exists; pass --force to replace it.`);
+    const existing = entry(out);
+    if (existing === null) continue;
+    if (existing.isDirectory()) throw new UsageError(`${out} is a directory.`);
+    if (!force) throw new UsageError(`${out} already exists${existing.isSymbolicLink() ? ' as a symbolic link' : ''}; pass --force to replace it.`);
   }
 }
 

@@ -3,7 +3,7 @@
 // produced here by runStudySeed, the library code `run` uses. No pilot or confirmatory seed is run, nothing is
 // committed, and nothing here is a study result or evidence of learning.
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
@@ -88,6 +88,23 @@ describe('study analyse', () => {
       expect(run.err).toContain('report.md already exists; pass --force');
       expect(readdirSync(out)).toEqual(['report.md']);
       expect(readFileSync(join(out, 'report.md'), 'utf8')).toBe('keep me');
+    });
+
+    it('refuses a dangling symbolic link at an output before writing either file, and --force replaces the link itself (Codex review of 6f863a6)', () => {
+      const out = folder('dangling');
+      const target = join(DIR, 'nothing-here.md');
+      symlinkSync(target, join(out, 'report.md'));
+      const run = cli(MANIFEST_FILE, ...RECORD_FILES, '--out-dir', out);
+      expect(run.code).toBe(2);
+      expect(run.err).toContain('report.md already exists as a symbolic link; pass --force');
+      expect(readdirSync(out)).toEqual(['report.md']);
+      expect(existsSync(target)).toBe(false);
+
+      const forced = cli(MANIFEST_FILE, ...RECORD_FILES, '--out-dir', out, '--force');
+      expect(forced.code).toBe(0);
+      expect(lstatSync(join(out, 'report.md')).isSymbolicLink()).toBe(false);
+      expect(readFileSync(join(out, 'report.md'), 'utf8')).toBe(renderReport(EXPECTED));
+      expect(existsSync(target)).toBe(false);
     });
 
     it('refuses a missing output folder, or one that is a file', () => {
