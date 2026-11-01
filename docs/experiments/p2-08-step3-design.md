@@ -9,9 +9,12 @@ Each PR is reviewed by Codex at its full head SHA, and each one is opened only a
 | PR | Contents | Code |
 |----|----------|------|
 | A | This design (docs only) | none |
-| B | Agents: A2 cohort, A9 champion, A8 random search and A5 champion, plus frozen-model evaluation on the training and validation tracks | `src/training/baselines.ts` |
+| B1 | **Done in #99** (merged at `aea1fdb`): A2 (the run's generation 0), A9 (its best), A8 (P × G samples on the continued stream), the shared selection rule, frozen selected models, training-track scoring and P × G accounting including elite re-evaluations. Its own design is [p2-08-baselines-design.md](p2-08-baselines-design.md) | `trainerStreams` in `trainer.ts`; `generateBaselines` in `src/training/baselines.ts` |
+| B2 | The rest of the agents: A5's full run and frozen champion; A1/A7 study episodes (action seeds); frozen-model and A2 evaluation on the validation track (descriptive) | `src/training/baselines.ts` |
 | C | Manifest and per-seed record formats, validation, same-engine replay, and `npm run study -- run \| replay` | `src/training/study.ts`, `scripts/study.mjs` |
 | D | Deterministic analysis and Markdown report, and `npm run study -- analyse` | `src/training/studyAnalysis.ts` |
+
+Where §2 describes A2, A9 and A8, #99's implementation and its design are authoritative. In #99, `generateBaselines` takes `{ training, generations, trackId }`, and A2 is evaluated by the trainer's own generation 0. B2 extends it without changing A2, A9 or A8.
 
 **Not included:**
 - the pilot or confirmatory manifests and runs, and any results;
@@ -22,7 +25,7 @@ Each PR is reviewed by Codex at its full head SHA, and each one is opened only a
 
 The only manifests committed are **mechanics** manifests for tests (§4).
 
-## 2. Agents (PR B)
+## 2. Agents (PRs B1 and B2)
 
 Every agent drives through the shared episode path from step 2 (`stepEpisode`: `buildInputs` → controls → `stepRacer` → `recordTick`). Training cars use the trainer, and every other agent uses `evaluateDriver`. Physics, sensors, start pose and episode rules are the same for every agent.
 
@@ -31,7 +34,7 @@ Every agent drives through the shared episode path from step 2 (`stepEpisode`: `
 - **Training seed `s`:** owned by the trainer, which keeps its documented streams (`RNG_STREAMS = trainer-run-initial-then-3-per-transition-v1`):
   - `run = createRng(s)`;
   - `initial = createRng(run.nextUint32())`.
-- **One source for these streams:** a new `trainerStreams(seed)` in `trainer.ts` returns `{ run, initial }`, and `createTrainer` uses it. A8 calls the same function, so the two can never drift apart. A test checks that the trainer's results are unchanged, using the step 2 pinned hashes.
+- **One source for these streams:** `trainerStreams(seed)` in `trainer.ts` (built in #99) returns `{ run, initial }`, and `createTrainer` uses it. A8 calls the same function, so the two can never drift apart. A test checks that the trainer's results are unchanged, using the step 2 pinned hashes.
 - **A2 and A9:** generation 0 is the first P draws of `initialParameters(initial)`. Nothing else is drawn.
 - **A8 (`A8_STREAM = 'p2-08-a8-continue-initial-v1'`):** a fresh `trainerStreams(s).initial`, continued for P × G genomes in order. A8's sample `i < P` is therefore exactly A5's generation-0 genome `i`.
 - **A1 and A7 action seeds (`ACTION_SEED_DERIVATION = 'p2-08-sha256-first-32-bits-v1'`):**
@@ -73,7 +76,7 @@ Notes on the table:
   - the frozen models' single episodes;
   - A1, A7 and A2's descriptive episodes.
 
-  Nothing selects on validation in PR B.
+  Nothing selects on validation in PR B1 or B2.
 - **Held-out:** never touched. No code in `baselines.ts`, `study.ts`, `studyAnalysis.ts` or `scripts/study.mjs` calls `heldOutTrack` or `tracksIn`. A code-only source test checks this, and a runtime test checks that a manifest naming the held-out track is rejected.
 
 ## 3. Episode result shape
