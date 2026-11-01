@@ -360,6 +360,73 @@ describe('configuration rejection', () => {
     expect(() => resolveExperimentConfig(value)).toThrow(ExperimentConfigError);
   });
 
+  describe('unknown fields inside nested training blocks', () => {
+    const { selection, crossover, mutation, fitness } = DEFAULT_TRAINING_CONFIG;
+    // Each block with one misspelt or extra field. Before the fix the resolvers dropped these silently.
+    const typos: [string, Record<string, unknown>, string][] = [
+      ['an extra selection field', { selection: { ...selection, sise: 4 } }, 'training.selection.sise'],
+      ['a misspelt selection field', { selection: { type: 'tournament', sizee: 3, size: 3 } }, 'training.selection.sizee'],
+      ['an extra crossover field', { crossover: { ...crossover, rat: 0.5 } }, 'training.crossover.rat'],
+      ['an extra mutation field', { mutation: { rate: 0.1, scale: 0.2, extra: 1 } }, 'training.mutation.extra'],
+      ['a misspelt mutation field', { mutation: { rate: 0.1, scale: 0.2, sclae: 0.5 } }, 'training.mutation.sclae'],
+      ['a wrongly cased fitness weight', { fitness: { ...fitness, lapweight: 9000 } }, 'training.fitness.lapweight'],
+      ['an unknown fitness field', { fitness: { ...fitness, speedBonus: 1 } }, 'training.fitness.speedBonus'],
+    ];
+    it.each(typos)('rejects %s, naming the field', (_, training, path) => {
+      const config = { ...CONFIG, training: { ...CONFIG.training, ...training } };
+      expect(() => resolveExperimentConfig(config)).toThrow(ExperimentConfigError);
+      expect(() => resolveExperimentConfig(config)).toThrow(`unknown training field "${path}"`);
+      expect(() => runExperiment(config, CONTEXT)).toThrow(`unknown training field "${path}"`);
+    });
+
+    it('rejects a misspelling that replaces a required field, as an unknown field', () => {
+      const config = { ...CONFIG, training: { mutation: { rate: 0.1, scal: 0.2 } } };
+      expect(() => resolveExperimentConfig(config)).toThrow('unknown training field "training.mutation.scal"; "mutation" takes rate, scale.');
+    });
+
+    it('rejects an unknown nested key that arrives through JSON, including "__proto__"', () => {
+      const json = JSON.stringify({ ...CONFIG, training: { mutation: { rate: 0.1, scale: 0.2 } } }).replace('"scale":0.2', '"scale":0.2,"__proto__":{"x":1}');
+      expect(() => resolveExperimentConfig(JSON.parse(json))).toThrow('unknown training field "training.mutation.__proto__"');
+    });
+
+    it('accepts every block with exactly its own fields, in any key order, with the same result', () => {
+      const blocks = {
+        selection: { size: 2, type: 'tournament' },
+        crossover: { rate: 0.5, type: 'uniform' },
+        mutation: { scale: 0.3, rate: 0.2 },
+        fitness: { ...fitness, lapWeight: 4000 },
+      };
+      const reordered = Object.fromEntries(Object.entries(blocks).map(([k, v]) => [k, Object.fromEntries(Object.entries(v).reverse())]));
+      const plan = resolveExperimentConfig({ ...CONFIG, training: { ...CONFIG.training, ...blocks } });
+      expect(plan.training.selection).toEqual({ type: 'tournament', size: 2 });
+      expect(plan.training.crossover).toEqual({ type: 'uniform', rate: 0.5 });
+      expect(plan.training.mutation).toEqual({ rate: 0.2, scale: 0.3 });
+      expect(plan.training.fitness).toEqual({ ...fitness, lapWeight: 4000 });
+      expect(resolveExperimentConfig({ ...CONFIG, training: { ...CONFIG.training, ...reordered } })).toEqual(plan);
+    });
+
+    it('still accepts the defaults, omitted blocks and the shipped example configuration', () => {
+      const { seed, ...defaults } = DEFAULT_TRAINING_CONFIG;
+      void seed;
+      expect(resolveExperimentConfig({ ...CONFIG, training: undefined }).training).toEqual(defaults);
+      expect(resolveExperimentConfig({ ...CONFIG, training: { ...defaults } }).training).toEqual(defaults);
+      expect(resolveExperimentConfig({ ...CONFIG, training: { selection, crossover, mutation, fitness } }).training).toEqual(defaults);
+      const example = JSON.parse(readFileSync(join(__dirname, '../../experiments/configs/smoke-oval.json'), 'utf8'));
+      expect(() => resolveExperimentConfig(example)).not.toThrow();
+    });
+
+    it('leaves non-object blocks to the trainer\'s own validation, as before', () => {
+      expect(() => resolveExperimentConfig({ ...CONFIG, training: { mutation: 5 } })).toThrow(/"training": Evolution config "mutation" must be an object/);
+      expect(() => resolveExperimentConfig({ ...CONFIG, training: { fitness: null } })).toThrow(/"training": Fitness config must be an object/);
+    });
+
+    it('leaves records and replay unchanged: a record with valid nested blocks replays identically', () => {
+      const record = runExperiment({ ...CONFIG, id: 'nested-ok', seeds: [3], training: { ...CONFIG.training, mutation: { rate: 0.2, scale: 0.3 } } }, CONTEXT);
+      expect(record.configuration.training.mutation).toEqual({ rate: 0.2, scale: 0.3 });
+      expect(replayExperiment(JSON.parse(JSON.stringify(record)), ENGINE).identical).toBe(true);
+    });
+  });
+
   it('fills unset training fields from the defaults, whole blocks at a time', () => {
     const plan = resolveExperimentConfig({ ...CONFIG, training: { mutation: { rate: 0.5, scale: 0.1 } } });
     expect(plan.training.mutation).toEqual({ rate: 0.5, scale: 0.1 });
