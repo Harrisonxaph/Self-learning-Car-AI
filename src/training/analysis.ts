@@ -381,12 +381,25 @@ export function analyseRecords(manifestInput: unknown, records: readonly unknown
   return analyseSummaries(manifest, summaries);
 }
 
-/** The pilot's configuration choice (plan §8.4): the highest mean A5 validation progress; the first listed (C0) wins ties. */
-export function selectByValidation(candidates: readonly { readonly id: string; readonly a5ValidationProgress: readonly number[] }[]): string {
+/**
+ * The pilot's configuration choice (plan §8.4): the highest mean A5 validation progress, with the first listed (C0)
+ * winning ties. Each candidate gives its A5 models' validation gate counts and the track's gates per lap; means are
+ * compared exactly by cross-multiplying integers (Σa × n_b against Σb × n_a), so equal gate totals tie (Codex review
+ * of 9df24d4).
+ */
+export function selectByValidation(candidates: readonly { readonly id: string; readonly a5ValidationGates: readonly number[]; readonly gatesPerLap: number }[]): string {
   if (candidates.length === 0) throw new RangeError('selectByValidation needs at least one candidate.');
+  const gatesPerLap = candidates[0]!.gatesPerLap;
+  for (const c of candidates) {
+    if (c.a5ValidationGates.length === 0) throw new RangeError(`Candidate ${c.id} has no validation episodes.`);
+    if (c.gatesPerLap !== gatesPerLap) throw new RangeError('Every candidate must be scored on the same validation track.');
+    if (!c.a5ValidationGates.every((g) => Number.isSafeInteger(g) && g >= 0)) throw new RangeError(`Candidate ${c.id} has a gate count that is not a whole number.`);
+  }
   let best = 0;
   for (let i = 1; i < candidates.length; i += 1) {
-    if (mean(candidates[i]!.a5ValidationProgress) > mean(candidates[best]!.a5ValidationProgress)) best = i;
+    const a = candidates[i]!.a5ValidationGates;
+    const b = candidates[best]!.a5ValidationGates;
+    if (sum(a) * b.length > sum(b) * a.length) best = i;
   }
   return candidates[best]!.id;
 }

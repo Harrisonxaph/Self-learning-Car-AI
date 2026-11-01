@@ -338,7 +338,7 @@ PR D is split into **D1** (`src/training/analysis.ts`: the statistics, the analy
   - The claim phrase "outperforms equal-budget random search" appears only when the decision is `supported`.
   - Condition 4 checks that the analysis holds every agent's results, lap completion and collisions on the training track.
 - **Outputs:** `analysis` is a plain JSON object (format `self-driving-ai-evolution/p2-08-analysis`, version 1). `renderReport(analysis)` returns `report.md` text with fixed number formatting and no dates or timings. Both start with the label, n, `acceptanceEligible` and the decision. The secondary contrasts sit under a "Descriptive results (not tested, no claims)" heading.
-- **Pilot helper:** `selectByValidation(candidates)` returns the candidate with the highest mean A5 validation progress, the first listed (C0) on ties. It only reads the values it is given.
+- **Pilot helper:** `selectByValidation(candidates)` takes each candidate's A5 validation gate counts and the track's gates per lap. It returns the candidate with the highest mean progress, with the first listed (C0) winning ties. Means are compared exactly by cross-multiplying integers, so equal gate totals tie (Codex review of `9df24d4`: normalised floats such as 6/14 against 6/14 split in the last bit). It only reads the values it is given.
 - **Tests** (`tests/training/analysis.test.ts`):
   - the statistics on hand-computed cases, and the bootstrap against an independent re-implementation;
   - every Wilcoxon case and decision branch in §5;

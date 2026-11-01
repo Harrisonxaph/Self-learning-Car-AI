@@ -292,9 +292,25 @@ describe('summaries and outputs on synthetic seeds', () => {
 });
 
 describe('selectByValidation', () => {
+  const candidate = (id: string, a5ValidationGates: number[]) => ({ id, a5ValidationGates, gatesPerLap: 14 });
+
   it('picks the highest mean validation progress, with the first listed (C0) winning ties', () => {
-    expect(selectByValidation([{ id: 'C0', a5ValidationProgress: [0.5, 0.5] }, { id: 'C1', a5ValidationProgress: [0.6, 0.6] }])).toBe('C1');
-    expect(selectByValidation([{ id: 'C0', a5ValidationProgress: [0.5] }, { id: 'C1', a5ValidationProgress: [0.25, 0.75] }, { id: 'C2', a5ValidationProgress: [0.4] }])).toBe('C0');
+    expect(selectByValidation([candidate('C0', [7, 7]), candidate('C1', [8, 8])])).toBe('C1');
+    expect(selectByValidation([candidate('C0', [7]), candidate('C1', [4, 10]), candidate('C2', [6])])).toBe('C0');
+  });
+
+  it('ties equal gate totals exactly: C0 [0, 0, 6] and C1 [1, 0, 5] on the 14-gate track choose C0 (Codex review of 9df24d4)', () => {
+    // As normalised floats these means differ in the last bit (0.14285714285714285 against 0.14285714285714288).
+    expect(selectByValidation([candidate('C0', [0, 0, 6]), candidate('C1', [1, 0, 5])])).toBe('C0');
+    expect(selectByValidation([candidate('C0', [0, 0, 6]), candidate('C1', [1, 0, 6])])).toBe('C1');
+    // Different episode counts compare by mean, not by total.
+    expect(selectByValidation([candidate('C0', [3, 3]), candidate('C1', [2, 2, 2, 2])])).toBe('C0');
+  });
+
+  it('refuses candidates on different tracks, without episodes, or with non-integer gate counts', () => {
+    expect(() => selectByValidation([candidate('C0', [1]), { id: 'C1', a5ValidationGates: [1], gatesPerLap: 20 }])).toThrow(/same validation track/);
+    expect(() => selectByValidation([candidate('C0', [])])).toThrow(/no validation episodes/);
+    expect(() => selectByValidation([candidate('C0', [0.5])])).toThrow(/whole number/);
   });
 });
 
