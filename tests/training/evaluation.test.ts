@@ -253,11 +253,19 @@ describe('evaluation configuration', () => {
   it.each([
     ['an unknown field', { seed: 3 }, /Unknown evaluation config field "seed"/],
     ['a typo', { maxLap: 2 }, /Unknown evaluation config field "maxLap"/],
+    ['a misspelt fitness weight', { fitness: { ...DEFAULT_FITNESS_CONFIG, lapWieght: 42 } }, /Unknown evaluation config field "fitness\.lapWieght"/],
+    ['an extra fitness field', { fitness: { ...DEFAULT_FITNESS_CONFIG, bonus: 1 } }, /"fitness\.bonus"/],
+    ['a fitness block that is not an object', { fitness: 3 }, /Fitness config must be an object/],
     ['a bad limit', { maxEpisodeSeconds: 0 }, /maxEpisodeSeconds/],
     ['bad fitness', { fitness: { ...DEFAULT_FITNESS_CONFIG, version: 2 } }, /version/],
     ['an array', [], /must be an object/],
   ])('rejects %s', (_label, config, message) => {
     expect(() => createEvaluationSetup(config, env(OVAL))).toThrow(message);
+  });
+
+  it('accepts a complete fitness block in any key order, with changed weights', () => {
+    const reversed = Object.fromEntries(Object.entries({ ...DEFAULT_FITNESS_CONFIG, lapWeight: 7 }).reverse());
+    expect(createEvaluationSetup({ fitness: reversed }, env(OVAL)).config.fitness).toEqual({ ...DEFAULT_FITNESS_CONFIG, lapWeight: 7 });
   });
 
   it('records the track and its split', () => {

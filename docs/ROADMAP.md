@@ -579,7 +579,7 @@ Dependencies are taken from the table above.
 - **Test requirements:**
   - Unit: baseline drivers deterministic.
   - Experiment output files checked into `experiments/results/`.
-- **Proposed plan (not authorised; nothing implemented or run):** [docs/experiments/p2-08-plan.md](experiments/p2-08-plan.md).
+- **Plan:** [docs/experiments/p2-08-plan.md](experiments/p2-08-plan.md). Step 1 is done (#94) and step 2 is implemented and in review (below). Steps 3 to 5 are not authorised, and no study has been run.
   - Agents A1, A7, A2, A9, A8 and A5, with seeded streams. A8 continues A5's initial-population stream, so its first block is A5's generation 0.
   - Equal evaluation budgets (P × G episodes). A1 and A7 run E1's population-sized cohort: P stochastic episodes per training seed on each track. Deterministic models run one episode per track.
   - Training on the oval only. Validation is used for pilot configuration choice and secondary reporting; the held-out track is untouched.

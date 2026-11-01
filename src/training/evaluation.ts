@@ -40,6 +40,7 @@ export interface EvaluationConfig extends EpisodeLimits {
 export const DEFAULT_EVALUATION_CONFIG: EvaluationConfig = Object.freeze({ ...DEFAULT_EPISODE_LIMITS, fitness: DEFAULT_FITNESS_CONFIG });
 
 const CONFIG_KEYS: readonly string[] = Object.keys(DEFAULT_EVALUATION_CONFIG);
+const FITNESS_KEYS: readonly string[] = Object.keys(DEFAULT_FITNESS_CONFIG);
 
 export interface EvaluationEnvironment {
   readonly track: Track;
@@ -65,7 +66,8 @@ export interface EvaluationSetup {
 
 /**
  * Checks an evaluation configuration (any field left out takes DEFAULT_EVALUATION_CONFIG's value) against an
- * environment. Throws RangeError for an unknown field, anything the episode-limit or fitness resolvers reject, or a
+ * environment. Throws RangeError for an unknown field, at the top level or inside `fitness` (named by its path, for
+ * example `fitness.lapWieght`), anything the episode-limit or fitness resolvers reject, or a
  * track without gates, and TrackLeakageError for a held-out track.
  */
 export function createEvaluationSetup(input: unknown, environment: EvaluationEnvironment): EvaluationSetup {
@@ -74,6 +76,14 @@ export function createEvaluationSetup(input: unknown, environment: EvaluationEnv
     if (!CONFIG_KEYS.includes(key)) throw new RangeError(`Unknown evaluation config field "${key}"; allowed: ${CONFIG_KEYS.join(', ')}.`);
   }
   const merged = { ...DEFAULT_EVALUATION_CONFIG, ...(input as Partial<EvaluationConfig>) };
+  // A misspelt weight would otherwise be dropped silently by resolveFitnessConfig. A non-object block is left to it.
+  if (merged.fitness !== null && typeof merged.fitness === 'object') {
+    for (const key of Object.keys(merged.fitness)) {
+      if (!FITNESS_KEYS.includes(key)) {
+        throw new RangeError(`Unknown evaluation config field "fitness.${key}"; allowed: ${FITNESS_KEYS.join(', ')}.`);
+      }
+    }
+  }
   const rules = resolveEpisodeRules(merged, environment.timestepSeconds);
   const fitness = resolveFitnessConfig(merged.fitness);
   if (!environment.track || environment.track.gates.length === 0) throw new RangeError('Evaluation needs a track with gates.');
