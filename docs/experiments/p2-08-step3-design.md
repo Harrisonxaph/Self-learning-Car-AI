@@ -65,7 +65,11 @@ Notes on the table:
 ### 2.3 Budgets (recorded per seed)
 
 - **A5 and A8:** exactly P × G training evaluations each.
-- **A5's distinct genomes:** `P × G − eliteCount × (G − 1)`, recorded. The real count of distinct genomes is also recorded, by hashing each genome.
+- **A5's distinct genomes:** two separate numbers, both recorded, and neither is an evaluation count:
+  - `maxDistinctGenomes = P × G − eliteCount × (G − 1)`, an **upper bound** (the field #99 already reports). Duplicate offspring can make the real count smaller: with crossover and mutation off, P = 3, G = 3 and one elite give a bound of 7 but at most 3 distinct genomes;
+  - `actualDistinctGenomes`: the measured count of distinct genome hashes over every car of every generation.
+
+  The evaluation count stays P × G.
 - **Simulated car-ticks:** recorded for every agent and track. They are not equalised.
 - **Counts:** a test checks that A8's evaluation count equals A5's.
 
@@ -177,20 +181,27 @@ Lap completion, collisions, outcome counts and first-lap times (with sample coun
   - all 2^m sign assignments are enumerated, using doubled ranks as integers so sums are exact;
   - two-sided p = #{|W| ≥ |W_obs|} / 2^m, compared with a 1e-9 tolerance;
   - m = 0 gives p = 1 and "no non-zero differences".
-- **Decision rule (`p2-08-decision-v1`), with every condition required:**
+- **Acceptance eligibility, checked before the decision rule.** `acceptanceEligible` is true only when:
+  - the manifest's `label` is `confirmatory`;
+  - its seeds are exactly 1001–1010 or exactly 1001–1020;
+  - there is one replayed record for every one of those seeds, so the independent n is 10 or 20.
+
+  The plan makes the pilot exploratory, never counted towards acceptance, and Phase 2 needs at least 10 independent training seeds. A `mechanics` or `pilot` analysis is therefore always **acceptance-ineligible**. It still computes every descriptive statistic, including `d_s`, the interval and the Wilcoxon test. Its decision is `"not evaluated: <label> analysis is acceptance-ineligible"`, never a claim.
+- **Decision rule (`p2-08-decision-v1`).** It is applied only when `acceptanceEligible` is true, and every condition is required:
   1. the CI lower bound > 0;
   2. mean `d_s` ≥ δ;
   3. at least one A5 frozen model completes a valid lap on the training track;
   4. A1, A7, A2 and A9, lap completion and collisions are all present in the report.
 
   Otherwise the result is "negative or inconclusive". It is never relabelled.
+- **What `analysis.json` and `report.md` both state at the top:** the manifest label, the independent n (the number of training seeds), `acceptanceEligible`, and the decision, with the reason it is "not evaluated" when the analysis is ineligible.
 - **Secondary contrasts:** A5 − A8 on the **validation** track, and A5 − A9, A5 − A2, A5 − A1 and A5 − A7 on both tracks. Each is a paired per-seed difference, with the same seed-level bootstrap. They are described only, and never used for the decision or for any claim.
 - **Pilot helper:** choosing a configuration (plan §8.4) by `selectByValidation` on validation progress means, with ties going to C0. It only reads validation episodes, and nothing is chosen in this PR.
 
 **Outputs:** `analysis.json` (canonical JSON) and `report.md`.
 - Both are deterministic: re-running reproduces them byte for byte. The report has no dates or timings.
 - The report's wording follows plan §6:
-  - the decision rule produces exactly one claim: "outperforms equal-budget random search" (A5 − A8 on the training track), and only when all four conditions hold. Otherwise the report says "negative or inconclusive". The other conditions require the remaining results to be reported, not that A5 beat them;
+  - the decision rule produces exactly one claim: "outperforms equal-budget random search" (A5 − A8 on the training track), and only for an acceptance-eligible confirmatory analysis in which all four conditions hold. A mechanics or pilot analysis never produces it, whatever its numbers. Otherwise the report says "negative or inconclusive". The other conditions require the remaining results to be reported, not that A5 beat them;
   - the A1/A7, A9, A2 and validation contrasts are reported as numbers (mean, interval, median and IQR), under a heading that says they are descriptive. The report never turns them into claims such as "beats random driving" or "improves on selection alone", because the decision rule does not test them;
   - nothing is ever stated as general driving ability.
 
@@ -199,6 +210,7 @@ Lap completion, collisions, outcome counts and first-lap times (with sample coun
 - bootstrap bounds against an independent re-implementation, and determinism from the seed;
 - Wilcoxon cases: all zero (p = 1), all positive (p = 2/2^m), a single non-zero difference, tied absolute values and mixed signs, against hand-computed values;
 - every decision-rule branch, and that only the A5 − A8 claim phrase can appear, and only when all four conditions hold;
+- eligibility: synthetic mechanics (n = 1, d = [1]) and pilot (n = 3, d = [1, 1, 1]) inputs that pass all four numerical conditions report `acceptanceEligible: false`, "not evaluated" and no claim, in both outputs. So do a confirmatory manifest with a missing seed and one with the wrong seed set. A complete 10-seed synthetic confirmatory cohort is the only case that can emit the claim;
 - the A5 per-generation median and IQR, and the validation A5 − A8 contrast, on synthetic records;
 - byte-identical reports.
 
