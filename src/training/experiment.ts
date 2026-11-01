@@ -342,6 +342,18 @@ const isPlainObject = (value: unknown): value is Record<string, unknown> =>
   value !== null && typeof value === 'object' && !Array.isArray(value);
 
 const TRAINING_KEYS = Object.freeze(Object.keys(DEFAULT_TRAINING_CONFIG).filter((key) => key !== 'seed'));
+/**
+ * The fields allowed inside each nested training block (selection, crossover, mutation, fitness), taken from the
+ * defaults so they always match what the resolvers read. The resolvers ignore anything else, so a typo inside a
+ * block would otherwise be dropped silently.
+ */
+const NESTED_TRAINING_KEYS: Readonly<Record<string, readonly string[]>> = Object.freeze(
+  Object.fromEntries(
+    Object.entries(DEFAULT_TRAINING_CONFIG)
+      .filter(([, value]) => isPlainObject(value))
+      .map(([key, value]) => [key, Object.freeze(Object.keys(value as object))]),
+  ),
+);
 const ID_PATTERN = /^[a-z0-9][a-z0-9-]{0,63}$/;
 
 const isSeed = (value: unknown): value is number => typeof value === 'number' && Number.isInteger(value) && value >= 0 && value <= 0xffffffff;
@@ -360,8 +372,9 @@ const withoutSeed = (config: TrainingConfig): TrainingSettings => {
 /**
  * Checks an experiment configuration and resolves it. `training` may set any training field except `seed`; each
  * field it sets replaces the default whole (nested blocks are never merged). Throws ExperimentConfigError for a
- * wrong format or version, an unknown or missing field, a bad ID, seed list or generation count, or settings the
- * trainer rejects; TrackLeakageError for a validation or held-out track.
+ * wrong format or version, an unknown or missing field (including an unknown field inside the selection,
+ * crossover, mutation or fitness block), a bad ID, seed list or generation count, or settings the trainer rejects;
+ * TrackLeakageError for a validation or held-out track.
  */
 export function resolveExperimentConfig(input: unknown): ExperimentPlan {
   const fail = (message: string): never => {
@@ -392,6 +405,13 @@ export function resolveExperimentConfig(input: unknown): ExperimentPlan {
   for (const key of Object.keys(overrides as object)) {
     if (key === 'seed') fail('"training.seed" is not allowed; list the seeds in "seeds".');
     if (!TRAINING_KEYS.includes(key)) fail(`unknown training field "training.${key}".`);
+    const block = (overrides as Record<string, unknown>)[key];
+    const nested = NESTED_TRAINING_KEYS[key];
+    if (nested && isPlainObject(block)) {
+      for (const field of Object.keys(block)) {
+        if (!nested.includes(field)) fail(`unknown training field "training.${key}.${field}"; "${key}" takes ${nested.join(', ')}.`);
+      }
+    }
   }
   if (!isBuiltIn(c.trackId as string)) fail(`"trackId": no built-in track "${String(c.trackId)}".`);
   const environment = environmentFor(c.trackId as string);

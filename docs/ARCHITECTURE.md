@@ -420,7 +420,7 @@ Seven rays fanned across the car's front (−90°, −60°, −30°, 0°, 30°, 
   - It never overwrites a record without `--force`. A dirty worktree, including untracked files, is warned about and recorded.
 - **Configuration** (`self-driving-ai-evolution/experiment-config` v1): `id`, `description`, `trackId`, `seeds` (1 to 1,000 distinct unsigned 32-bit integers), `generations` (1 to 10,000) and `training`.
   - `training` may set any `TrainingConfig` field except `seed`, over `DEFAULT_TRAINING_CONFIG`. A field it sets replaces the default whole; nested blocks are never merged.
-  - Unknown fields are rejected (`ExperimentConfigError`).
+  - Unknown fields are rejected (`ExperimentConfigError`): at the top level, in `training`, and inside the nested `selection`, `crossover`, `mutation` and `fitness` blocks. The error names the full path, for example `training.mutation.sclae`. The allowed nested fields are taken from `DEFAULT_TRAINING_CONFIG`. A block that is not an object is still rejected by the trainer's own resolvers, as before. Records are unaffected: they store the resolved configuration, and a record with an extra nested key was already rejected on replay as not a complete resolved configuration.
   - The track must be a built-in **training** track (`trainingTrack`): the validation and held-out circuits throw `TrackLeakageError`. The trainer's own `assertTrainingTrack` also guards this.
   - Physics, timestep and sensors are the code's current values and are not configurable.
 - **Runs:** one independent run per seed. Each run creates a fresh trainer (`createTrainer`), shares nothing with other runs, and is identical whatever the other seeds or their order.
