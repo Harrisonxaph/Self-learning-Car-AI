@@ -2,7 +2,8 @@
 // per-generation statistics, and builds the next generation. Headless: it never draws or touches the DOM, so
 // the same code runs in Node (tests, `npm run demo:train`) and, one tick at a time, under the page's frame loop.
 //
-// One simulation path. Each running car, each fixed tick, uses only the existing modules:
+// One simulation path. Each running car, each fixed tick, goes through stepEpisode (training/episodeStep.ts),
+// which the headless driver evaluation shares:
 //   buildInputs (ai/inputs.ts) → runNetwork (ai/network.ts) → stepRacer (sim/checkpoints.ts: physics, swept
 //   collision, gates) → recordTick (training/fitness.ts).
 // At the end of a generation, scoreEpisode gives each car's fitness and nextGeneration (evolution/population.ts)
@@ -16,27 +17,25 @@
 // Randomness. The trainer owns one run generator, createRng(seed). Its first draw seeds the initial-population
 // generator (genomes in index order); each generation transition takes exactly three more draws, through
 // createEvolutionRngs. Episodes use no randomness, so stepping order and drawing cannot change any stream.
-import { buildInputs, INPUT_CONTRACT } from '../ai/inputs';
+import { INPUT_CONTRACT } from '../ai/inputs';
 import { INITIALISATION, initialParameters, PARAMETER_COUNT, PARAMETER_ORDER, runNetwork } from '../ai/network';
 import { OUTPUT_CONTRACT } from '../ai/outputs';
 import { createEvolutionRngs, EVOLUTION_OPERATORS, nextGeneration, resolveEvolutionConfig, type EvolutionConfig } from '../evolution/population';
 import { rankByFitness } from '../evolution/selection';
 import { DEFAULT_SENSOR_CONFIG, type SensorConfig } from '../sensors/rays';
-import { stepRacer, type Racer } from '../sim/checkpoints';
+import type { Racer } from '../sim/checkpoints';
 import type { VehiclePhysics } from '../sim/config';
 import type { Track } from '../sim/track';
-import { startRacer } from '../sim/world';
 import { createRng, RNG_ALGORITHM, type Rng } from '../utils/rng';
+import { startEpisodeState, stepEpisode } from './episodeStep';
 import { assertTrainingTrack, trackContentHash } from './trackSplits';
 import {
   DEFAULT_EPISODE_LIMITS,
   DEFAULT_FITNESS_CONFIG,
   FITNESS_VERSION,
-  recordTick,
   resolveEpisodeRules,
   resolveFitnessConfig,
   scoreEpisode,
-  startEpisode,
   type Episode,
   type EpisodeLimits,
   type EpisodeOutcome,
@@ -235,9 +234,7 @@ export function createTrainingSetup(input: unknown, environment: TrainingEnviron
 
 /** A fresh car for `genome`: the track's start pose at rest, uncrashed, with fresh lap progress and episode. */
 export function startCar(genome: Float64Array, setup: TrainingSetup): TrainingCar {
-  const { track, physics } = setup.environment;
-  const racer = startRacer(track, physics);
-  return { genome, racer, episode: startEpisode(racer, track) };
+  return { genome, ...startEpisodeState(setup) };
 }
 
 /**
@@ -246,11 +243,10 @@ export function startCar(genome: Float64Array, setup: TrainingSetup): TrainingCa
  */
 export function stepCar(car: TrainingCar, setup: TrainingSetup): TrainingCar {
   if (car.episode.outcome !== null) return car;
-  const { track, physics, timestepSeconds } = setup.environment;
-  const inputs = buildInputs(car.racer, track, physics, setup.sensors);
-  const controls = runNetwork(car.genome, inputs, { brakeEnabled: setup.config.brakeEnabled });
-  const racer = stepRacer(car.racer, controls, track, physics, timestepSeconds);
-  return { genome: car.genome, racer, episode: recordTick(car.episode, racer, track, setup.rules) };
+  const { genome } = car;
+  const brake = { brakeEnabled: setup.config.brakeEnabled };
+  const { racer, episode } = stepEpisode(car, (inputs) => runNetwork(genome, inputs, brake), setup);
+  return { genome, racer, episode };
 }
 
 /** A new generation: one fresh car per genome, in order, at tick 0. */

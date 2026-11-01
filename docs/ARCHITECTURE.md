@@ -255,7 +255,7 @@ Seven rays fanned across the car's front (−90°, −60°, −30°, 0°, 30°, 
   - It advances the generator by exactly 159 draws, so a seed reproduces the same network.
   - `range` is used rather than `gaussian` because its arithmetic is exact in every JavaScript engine.
   - P2-07 records this id in the training configuration. A2 (untrained) and A8/A9 (random-search) baselines use the same distribution.
-- **Separation:** inference imports only `sim` types and `utils/rng`, never evolution or training. Lint enforces this, and a test checks the imports. The network drives cars only through the P2-05 trainer (see "Training loop"); there is no neural `Driver` object yet.
+- **Separation:** inference imports only `sim` types and `utils/rng`, never evolution or training. Lint enforces this, and a test checks the imports. Training cars run the network through the P2-05 trainer (see "Training loop"). `createNetworkDriver` (P2-08 step 2) wraps the same `runNetwork` call as a `Driver` for headless evaluation (see "Baseline drivers and headless evaluation").
 
 ## Evolution
 
