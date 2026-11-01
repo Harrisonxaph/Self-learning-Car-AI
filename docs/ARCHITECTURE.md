@@ -28,7 +28,8 @@ src/
     network.ts            feedforward net (9-12-3), forward pass, seeded initialisation (P2-03)
     inputs.ts             builds the 9-value input vector (P2-02)
     outputs.ts            maps raw outputs → steering, throttle, brake; brake mask (P2-03)
-    drivers.ts            Driver interface; human driver built (P1-08); neural, random, rule-based later
+    drivers.ts            Driver interface; human driver (P1-08); network driver (P2-08 step 2)
+    randomDrivers.ts      seeded random-action (A1) and correlated random-action (A7) drivers (P2-08 step 2)
   evolution/              genomes and genetic operators, no DOM
     genome.ts             flat Float64Array of weights and biases; checks and copies (P2-04)
     selection.ts          fitness ranking and tournament selection (P2-04)
@@ -40,6 +41,8 @@ src/
     trainer.ts            population training loop, headless or under the frame loop (P2-05)
     trackSplits.ts        built-in track splits and the training/selection/held-out boundaries (P2-10)
     experiment.ts         seeded experiments: config, complete JSON records and replay (P2-07)
+    episodeStep.ts        one car's episode tick: inputs → controls → stepRacer → recordTick (shared, P2-08 step 2)
+    evaluation.ts         headless evaluateDriver on a training or validation track (P2-08 step 2)
     stats.ts              per-generation statistics
   persistence/
     modelFormat.ts        types and validation for saved models
@@ -252,7 +255,7 @@ Seven rays fanned across the car's front (−90°, −60°, −30°, 0°, 30°, 
   - It advances the generator by exactly 159 draws, so a seed reproduces the same network.
   - `range` is used rather than `gaussian` because its arithmetic is exact in every JavaScript engine.
   - P2-07 records this id in the training configuration. A2 (untrained) and A8/A9 (random-search) baselines use the same distribution.
-- **Separation:** inference imports only `sim` types and `utils/rng`, never evolution or training. Lint enforces this, and a test checks the imports. The network drives cars only through the P2-05 trainer (see "Training loop"); there is no neural `Driver` object yet.
+- **Separation:** inference imports only `sim` types and `utils/rng`, never evolution or training. Lint enforces this, and a test checks the imports. Training cars run the network through the P2-05 trainer (see "Training loop"). `createNetworkDriver` (P2-08 step 2) wraps the same `runNetwork` call as a `Driver` for headless evaluation (see "Baseline drivers and headless evaluation").
 
 ## Evolution
 
@@ -468,7 +471,31 @@ Seven rays fanned across the car's front (−90°, −60°, −30°, 0°, 30°, 
 
 Every car is controlled through one `Driver` interface (`decide(observation) → controls`). Implementations: `NeuralDriver`, `RandomDriver`, `RuleBasedDriver` and `HumanDriver`. This makes baselines, replay and human-vs-AI races use the same simulation path.
 
-Built in P1-08 (`ai/drivers.ts`): the interface, an `Observation` holding the car (sensors join in Phase 2), and the human driver. `controlsFromInput` maps held buttons to controls: full steering towards the held side (both sides cancel), full throttle, full brake, in any combination; the physics limits the wheel angle at speed.
+Built in P1-08 (`ai/drivers.ts`): the interface, an `Observation` holding the car, and the human driver. `controlsFromInput` maps held buttons to controls: full steering towards the held side (both sides cancel), full throttle, full brake, in any combination; the physics limits the wheel angle at speed.
+
+### Baseline drivers and headless evaluation (P2-08 step 2)
+
+Authorised as step 2 of [the P2-08 plan](experiments/p2-08-plan.md) only. This design was written and committed before the code. It adds drivers and an evaluation function; it adds no A2/A8/A9 selection, manifests, study runner, statistics, dashboard or persistence, and runs no study.
+
+- **Observation:** gains an optional `inputs`, the nine network inputs (`buildInputs`, `INPUT_CONTRACT`) for the car's current state. The evaluation harness always supplies them, so every driver it runs sees the same observation a network sees. The human driver ignores them, and `main.ts` is unchanged.
+- **Episode drivers:** an `EpisodeDriver` is a `Driver` with `reset()`, which returns it to exactly the state it was created in. `evaluateDriver` calls `reset()` before the first tick, so an instance evaluated twice gives the same episode, and nothing from an earlier episode leaks into the next. `decide` is called exactly once per running tick, so a count of `decide` calls is a count of fixed ticks.
+- **Random-action drivers** (`ai/randomDrivers.ts`):
+  - **A1** `createRandomDriver(seed)`: a new action every tick.
+  - **A7** `createCorrelatedRandomDriver(seed, holdTicks = 30)`: each action is held for exactly `holdTicks` ticks (30 = 0.5 s at 1/60 s). Decisions 0 to 29 use the first sample, decision 30 draws the second, and so on. After `reset()` the next decision draws a fresh first sample from the restarted generator.
+  - **Sampling** (`RANDOM_ACTION_ALGORITHM = 'uniform-steer-throttle-brake-v1'`): each sample takes exactly three draws, in this order: steering = `range(-1, 1)`, throttle = `next()` and brake = `next()`, so steering is in [−1, 1) and throttle and brake in [0, 1). Changing the order or ranges needs a new identifier.
+  - **Generator ownership:** each driver creates its own generator, `createRng(seed)`, and never exposes or accepts one. Two drivers therefore never share a stream, and a driver never draws from a trainer's streams. The seed must be an unsigned 32-bit integer. How the study derives seeds (`sha256("p2-08|<agent>|<seed>|<episode>")`) belongs to step 3 and is not built here.
+  - **Recorded configuration:** each random driver exposes a frozen `config`: `{ agent: 'A1' | 'A7', algorithm, seed, holdTicks }` (A1 has `holdTicks` 1). It is enough to rebuild the driver exactly.
+  - Random drivers ignore the observation. Their actions are the same whatever the car does.
+- **Network driver:** `createNetworkDriver(parameters, { brakeEnabled })` copies and checks the 159 parameters and calls `runNetwork` on `observation.inputs`; it throws if the inputs are missing. It holds no other state, so `reset()` does nothing. It lets step 3 evaluate frozen models through the same harness.
+- **Shared stepping** (`training/episodeStep.ts`): one function, `stepEpisode(state, decide, context)`, runs one fixed tick for one car: `buildInputs` → `decide` → `stepRacer` (physics, swept collision, gates) → `recordTick` (termination). A finished episode is returned unchanged. The trainer's `startCar`/`stepCar` and `evaluateDriver` both call it; only the source of the controls differs (`runNetwork` on the genome for training cars, `driver.decide` for evaluation). Physics, collision, checkpoints, termination and fitness are not duplicated. A test pins the trainer's results and every tick of four network episodes to hashes recorded on `main` at `ee4b269`, before the refactor.
+- **Deterministic initialisation:** each episode starts from `startRacer` (the track's one start pose, at rest, tick 0) and `startEpisode`, exactly as a training car does. There is no start perturbation and no randomness outside the driver.
+- **Evaluation setup** (`training/evaluation.ts`): `createEvaluationSetup(config, environment)` takes only the episode limits and fitness weights (`maxEpisodeSeconds`, `stallSeconds`, `maxLaps`, `fitness`, defaulting to the trainer's), validated by the same resolvers. It rejects unknown fields at the top level and inside `fitness`, naming the path (for example `fitness.lapWieght`), because `resolveFitnessConfig` alone would drop a misspelt weight silently. It records the track's ID, version, content hash and split.
+- **Training versus evaluation boundaries:**
+  - `assertEvaluationTrack` (`trackSplits.ts`) accepts a training or validation track, or an unregistered one (synthetic test tracks), and throws `TrackLeakageError` if the track matches a held-out entry by ID or by geometry. Held-out evaluation stays with E6 (`heldOutTrack`, frozen models only).
+  - Validation may be evaluated but can never be trained on. Evaluation imports nothing from `evolution`, returns episodes and fitness only, and feeds no population. The trainer keeps its own `assertTrainingTrack`, so a validation environment cannot become a training environment, and an `EvaluationSetup` naming a validation track does not type-check where a `TrainingSetup` is expected.
+  - No code here calls `validationTrack`, `selectByValidation` or `heldOutTrack`; tests check the source.
+- **Result:** `evaluateDriver(driver, setup)` returns the finished racer and episode, its fitness breakdown, ordered progress (`gatesPassed / gates`) and the number of decisions. It is pure apart from the driver's own state.
+- **Not included:** A2/A8/A9 selection, seed derivation, manifests, records, the study command, statistics, dashboards and persistence (step 3 and later). No pilot or confirmatory run, no held-out track, and no learning claim.
 
 ## Manual driving (P1-08)
 

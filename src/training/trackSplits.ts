@@ -179,6 +179,25 @@ export function assertTrainingTrack(track: Track, splits: TrackSplits = BUILT_IN
   return matches.some((t) => t.geometryHash === hash) ? 'training' : 'unregistered';
 }
 
+/**
+ * Checks that a track may be evaluated on (P2-08 step 2): a training or validation track, or an unregistered one.
+ * Throws TrackLeakageError if any registered entry it matches, by ID or by identical geometry, is a held-out track:
+ * held-out circuits are evaluated only through heldOutTrack with a frozen model. Returns the split of the
+ * registered circuit with the same geometry, or 'unregistered' if there is none. Evaluating is not training: the
+ * trainer still requires assertTrainingTrack.
+ */
+export function assertEvaluationTrack(track: Track, splits: TrackSplits = BUILT_IN_TRACK_SPLITS): 'training' | 'validation' | 'unregistered' {
+  const hash = trackGeometryHash(track);
+  const matches = findRegistered(track, splits);
+  const leak = matches.find((t) => t.split === 'held-out');
+  if (leak) {
+    const how = leak.geometryHash === hash && leak.id !== track.id ? ` (a copy of "${leak.id}" under the ID "${track.id}")` : '';
+    throw new TrackLeakageError(`Track "${leak.id}"${how} is a held-out track; driver evaluation may only use training or validation tracks.`);
+  }
+  const same = matches.find((t) => t.geometryHash === hash);
+  return same ? (same.split as 'training' | 'validation') : 'unregistered';
+}
+
 /** A score for one model on one track, as produced by an evaluation. */
 export interface TrackScore {
   readonly modelId: string;

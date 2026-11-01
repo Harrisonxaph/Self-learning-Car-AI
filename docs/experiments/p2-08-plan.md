@@ -1,6 +1,6 @@
 # P2-08 plan: random baselines and the controlled improvement study (E1, E2)
 
-> Status: **proposed plan only.** Nothing here is implemented, and no pilot or confirmatory run has been made. Implementation, the pilot and the confirmatory study each need the owner's explicit authorization ([#19](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/19)) and Codex review. No learning claim is made or implied.
+> Status: **plan; step 1 done, step 2 implemented and in review, steps 3 to 5 not authorised.** Step 1 (the nested-key prerequisite) is done in #94. Step 2 (A1/A7 drivers and `evaluateDriver`) was authorised on its own and is implemented on `feat/p2-08-baseline-drivers` (#96). Steps 3 to 5 (baselines and study runner, pilot, confirmatory run) are not implemented, and no pilot or confirmatory run has been made. Each still needs the owner's explicit authorization ([#19](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/19)) and Codex review. No learning claim is made or implied.
 
 > Revised after Codex's [retrospective review of #91](https://github.com/Harrisonxaph/Self-learning-Car-AI/pull/91#pullrequestreview-5673337394):
 > - A1/A7 episode counts are now consistent on both tracks, and E1 keeps AI_EVALUATION's population-sized cohort.
@@ -165,7 +165,7 @@ The manifest is reviewed by Codex and approved by the owner **before** any confi
 ## 10. Implementation steps (each needs its own authorization)
 
 1. **Prerequisite:** fix #89's open P3: reject unknown keys inside nested configuration blocks. A typo there was dropped silently, which matters once configurations drive a study. **Done in #94** (merged at `d42bb2a` after [Codex technical approval](https://github.com/Harrisonxaph/Self-learning-Car-AI/pull/94#pullrequestreview-5728292609)).
-2. **Drivers and evaluation harness:**
+2. **Drivers and evaluation harness:** authorised on its own and in progress on `feat/p2-08-baseline-drivers` (design in [ARCHITECTURE.md, "Baseline drivers and headless evaluation"](../ARCHITECTURE.md#baseline-drivers-and-headless-evaluation-p2-08-step-2)). Steps 3 to 5 are not authorised.
    - `RandomDriver` (A1) and `CorrelatedRandomDriver` (A7) behind the existing `Driver` interface;
    - a headless `evaluateDriver` that uses the same per-tick path as the trainer.
 3. **Baselines and study runner:**
