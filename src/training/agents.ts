@@ -10,8 +10,8 @@ import { createNetworkDriver } from '../ai/drivers';
 import { CORRELATED_HOLD_TICKS, createCorrelatedRandomDriver, createRandomDriver } from '../ai/randomDrivers';
 import { sha256Hex } from '../utils/sha256';
 import {
+  baselinesFromGeneration0,
   episodeResult,
-  generateBaselines,
   genomeId,
   resolveBaselineConfig,
   selectBest,
@@ -105,8 +105,7 @@ function resolveAgentConfig(input: unknown, seed: number) {
     throw new RangeError(`Agent config "holdTicks" must be an integer of at least 1, got ${String(holdTicks)}.`);
   }
   if (typeof validationTrackId !== 'string') throw new RangeError('Agent config "validationTrackId" must be a string.');
-  const baseline = rest as unknown as BaselineConfig;
-  const { setup, environment, generations } = resolveBaselineConfig(baseline, seed);
+  const { setup, environment, generations } = resolveBaselineConfig(rest as unknown as BaselineConfig, seed);
   if (setup.config.eliteCount < 1) throw new RangeError('P2-08 needs eliteCount of at least 1, so A5\'s final champion is its best ever.');
   const { maxEpisodeSeconds, stallSeconds, maxLaps, fitness } = setup.config;
   const limits = { maxEpisodeSeconds, stallSeconds, maxLaps, fitness };
@@ -115,7 +114,7 @@ function resolveAgentConfig(input: unknown, seed: number) {
     training: createEvaluationSetup(limits, environment),
     validation: createEvaluationSetup(limits, { track: validationTrack(validationTrackId), physics, timestepSeconds }),
   };
-  return { baseline, setup, environment, generations, evaluation, episodesPerTrack, holdTicks };
+  return { resolved: { setup, environment, generations }, setup, environment, generations, evaluation, episodesPerTrack, holdTicks };
 }
 
 const sumTicks = (episodes: readonly EpisodeResult[]): number => episodes.reduce((total, e) => total + e.ticks, 0);
@@ -139,8 +138,7 @@ function randomEpisodes(agent: 'A1' | 'A7', seed: number, count: number, holdTic
  * validation episodes. Deterministic for a given config and seed. Throws as resolveAgentConfig does.
  */
 export function generateAgents(config: AgentConfig, seed: number): Agents {
-  const { baseline, setup, environment, generations: G, evaluation, episodesPerTrack: E, holdTicks } = resolveAgentConfig(config, seed);
-  const baselines = generateBaselines(baseline, seed);
+  const { resolved, setup, environment, generations: G, evaluation, episodesPerTrack: E, holdTicks } = resolveAgentConfig(config, seed);
   const gates = environment.track.gates.length;
   const brakeEnabled = setup.config.brakeEnabled;
   const tracks = {
@@ -148,8 +146,10 @@ export function generateAgents(config: AgentConfig, seed: number): Agents {
     validation: Object.freeze({ id: evaluation.validation.versions.trackId, contentHash: evaluation.validation.versions.trackHash }),
   };
 
-  // A5: the full evolutionary run, every car of every generation kept.
+  // A5: the full evolutionary run, every car of every generation kept. Its generation 0 is evaluated once and is
+  // also A2: the baselines (A2, A9, A8) are built from it rather than from a second generation-0 run.
   const trainer = createTrainer({ ...setup.config }, environment);
+  let baselines: Baselines | null = null;
   const generations: EpisodeResult[][] = [];
   const genomeIds: string[][] = [];
   let generation0: Float64Array[] = [];
@@ -158,7 +158,10 @@ export function generateAgents(config: AgentConfig, seed: number): Agents {
   for (let g = 0; g < G; g += 1) {
     const stats = trainer.runGeneration();
     const cars = trainer.finished()!.cars;
-    if (g === 0) generation0 = cars.map((car) => Float64Array.from(car.genome));
+    if (g === 0) {
+      generation0 = cars.map((car) => Float64Array.from(car.genome));
+      baselines = baselinesFromGeneration0(resolved, seed, trainer.finished()!);
+    }
     generations.push(cars.map((car) => episodeResult(car.episode, setup.config.fitness, setup.rules, gates)));
     genomeIds.push(cars.map((car) => genomeId(car.genome)));
     finalChampion = stats.champion;
@@ -172,27 +175,23 @@ export function generateAgents(config: AgentConfig, seed: number): Agents {
   });
   const a5Validation = evaluateNetwork(model.parameters, brakeEnabled, evaluation.validation);
   const actualDistinctGenomes = new Set(genomeIds.flat()).size;
-  // A2 is A5's generation 0: B1 ran the same trainer's generation 0, so both must agree exactly.
-  const a2Ids = baselines.A2.candidates.map((c) => c.genomeId);
-  if (genomeIds[0]!.some((id, i) => id !== a2Ids[i]) || a2Ids.length !== genomeIds[0]!.length) {
-    throw new Error('A5 generation 0 does not match B1\'s A2.');
-  }
+  const base = baselines!;
 
   // Descriptive validation episodes for A2, A9 and A8 (never used to select).
   const a2Validation = generation0.map((genome) => evaluateNetwork(genome, brakeEnabled, evaluation.validation));
-  const a9Validation = evaluateNetwork(baselines.A9.model.parameters, brakeEnabled, evaluation.validation);
-  const a8Validation = evaluateNetwork(baselines.A8.selected.model.parameters, brakeEnabled, evaluation.validation);
+  const a9Validation = evaluateNetwork(base.A9.model.parameters, brakeEnabled, evaluation.validation);
+  const a8Validation = evaluateNetwork(base.A8.selected.model.parameters, brakeEnabled, evaluation.validation);
 
   // A1 and A7: E episodes per track, the same action seeds on both tracks.
   const A1 = { training: randomEpisodes('A1', seed, E, holdTicks, evaluation.training), validation: randomEpisodes('A1', seed, E, holdTicks, evaluation.validation) };
   const A7 = { training: randomEpisodes('A7', seed, E, holdTicks, evaluation.training), validation: randomEpisodes('A7', seed, E, holdTicks, evaluation.validation) };
 
-  const a2Training = baselines.A2.candidates.map((c) => c.training);
-  const a9Training = baselines.A2.candidates[baselines.A9.index]!.training;
+  const a2Training = base.A2.candidates.map((c) => c.training);
+  const a9Training = base.A2.candidates[base.A9.index]!.training;
   return Object.freeze({
     seed,
     tracks: Object.freeze(tracks),
-    baselines,
+    baselines: base,
     A5: Object.freeze({
       generations: Object.freeze(generations.map((g) => Object.freeze(g))),
       genomeIds: Object.freeze(genomeIds.map((g) => Object.freeze(g))),
@@ -201,20 +200,20 @@ export function generateAgents(config: AgentConfig, seed: number): Agents {
       selection: A5_SELECTION,
       model,
       episodes: Object.freeze({ training: final[index]!, validation: a5Validation }),
-      evaluations: baselines.budgets.evolution.evaluations,
-      maxDistinctGenomes: baselines.budgets.evolution.maxDistinctGenomes,
+      evaluations: base.budgets.evolution.evaluations,
+      maxDistinctGenomes: base.budgets.evolution.maxDistinctGenomes,
       actualDistinctGenomes,
     }),
     A1: Object.freeze({ training: Object.freeze(A1.training), validation: Object.freeze(A1.validation) }),
     A7: Object.freeze({ training: Object.freeze(A7.training), validation: Object.freeze(A7.validation), holdTicks }),
     validation: Object.freeze({ A2: Object.freeze(a2Validation), A9: a9Validation, A8: a8Validation }),
     ticks: Object.freeze({
-      A1: { training: sumTicks(A1.training), validation: sumTicks(A1.validation) },
-      A7: { training: sumTicks(A7.training), validation: sumTicks(A7.validation) },
-      A2: { training: sumTicks(a2Training), validation: sumTicks(a2Validation) },
-      A9: { training: a9Training.ticks, validation: a9Validation.ticks },
-      A8: { training: baselines.budgets.ticks.A8, validation: a8Validation.ticks },
-      A5: { training: generations.reduce((t, g) => t + sumTicks(g), 0), validation: a5Validation.ticks },
+      A1: Object.freeze({ training: sumTicks(A1.training), validation: sumTicks(A1.validation) }),
+      A7: Object.freeze({ training: sumTicks(A7.training), validation: sumTicks(A7.validation) }),
+      A2: Object.freeze({ training: sumTicks(a2Training), validation: sumTicks(a2Validation) }),
+      A9: Object.freeze({ training: a9Training.ticks, validation: a9Validation.ticks }),
+      A8: Object.freeze({ training: base.budgets.ticks.A8, validation: a8Validation.ticks }),
+      A5: Object.freeze({ training: generations.reduce((t, g) => t + sumTicks(g), 0), validation: a5Validation.ticks }),
     }),
   });
 }

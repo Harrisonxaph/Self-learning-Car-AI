@@ -9,7 +9,7 @@ import { describe, expect, it } from 'vitest';
 import { createNetworkDriver } from '../../src/ai/drivers';
 import { createCorrelatedRandomDriver, createRandomDriver } from '../../src/ai/randomDrivers';
 import { A5_SELECTION, actionSeed, generateAgents, type AgentConfig } from '../../src/training/agents';
-import { generateBaselines, genomeId, selectBest, type EpisodeResult } from '../../src/training/baselines';
+import { baselinesFromGeneration0, generateBaselines, genomeId, resolveBaselineConfig, selectBest, type EpisodeResult } from '../../src/training/baselines';
 import { createEvaluationSetup, evaluateDriver } from '../../src/training/evaluation';
 import { canonicalJson } from '../../src/training/experiment';
 import { BUILT_IN_TRACK_SPLITS, isFrozenModel, TrackLeakageError } from '../../src/training/trackSplits';
@@ -181,6 +181,40 @@ describe('ticks, determinism and immutability', () => {
     expect(Object.isFrozen(RESULT.A1.training)).toBe(true);
     expect(Object.isFrozen(RESULT.A5.generations[0])).toBe(true);
     expect(Object.isFrozen(RESULT.validation)).toBe(true);
+  });
+
+  it('freezes every per-agent tick object, so accounting cannot be changed', () => {
+    for (const agent of ['A1', 'A7', 'A2', 'A9', 'A8', 'A5'] as const) {
+      const ticks = RESULT.ticks[agent];
+      expect(Object.isFrozen(ticks)).toBe(true);
+      const before = ticks.training;
+      expect(() => {
+        (ticks as { training: number }).training = -1;
+      }).toThrow(TypeError);
+      expect(RESULT.ticks[agent].training).toBe(before);
+    }
+  });
+});
+
+describe('baselinesFromGeneration0', () => {
+  const resolved = resolveBaselineConfig({ training: TRAINING, generations: G, trackId: 'stadium-oval' }, SEED);
+  const run = (seed: number, generations: number) => {
+    const trainer = createTrainer({ ...DEFAULT_TRAINING_CONFIG, ...TRAINING, seed }, env('stadium-oval'));
+    for (let g = 0; g < generations; g += 1) trainer.runGeneration();
+    return trainer;
+  };
+
+  it('equals standalone B1 when given the run\'s generation 0', () => {
+    expect(canonicalJson(baselinesFromGeneration0(resolved, SEED, run(SEED, 1).finished()!))).toBe(canonicalJson(BASELINES));
+  });
+
+  it.each([
+    ['a later generation', () => run(SEED, 2).finished()!, SEED, /finished generation 0/],
+    ['an unfinished generation 0', () => run(SEED, 0).generation(), SEED, /finished generation 0/],
+    ['another seed\'s generation 0', () => run(7209, 1).finished()!, SEED, /initial genome/],
+    ['a seed that does not match the setup', () => run(SEED, 1).finished()!, 7209, /same seed/],
+  ])('rejects %s', (_label, generation, seed, message) => {
+    expect(() => baselinesFromGeneration0(resolved, seed, generation())).toThrow(message);
   });
 });
 
