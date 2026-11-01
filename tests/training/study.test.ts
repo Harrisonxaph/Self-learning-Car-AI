@@ -177,6 +177,13 @@ describe('manifest', () => {
     expect(() => parseStudyManifest(m)).toThrow(message);
   });
 
+  it('rejects a hole in any manifest array, such as a trailing hole in the agent list', () => {
+    const m = withManifest((x) => {
+      x.agents.length += 1;
+    });
+    expect(() => parseStudyManifest(m)).toThrow(/manifest.agents\[6\] is missing/);
+  });
+
   it('requires a code revision outside mechanics', () => {
     const m = withManifest((x) => {
       x.label = 'pilot';
@@ -303,6 +310,30 @@ describe('record corruption', () => {
     r.resultsHash = `sha256:${sha256Hex(canonicalJson(r.agents))}`;
     expect(() => parseStudyRecord(r, MANIFEST, ENGINE)).toThrow(StudyRecordError);
     expect(() => parseStudyRecord(r, MANIFEST, ENGINE)).toThrow(message);
+  });
+
+  it('rejects a trailing hole in a nested contract array before any replay runs', () => {
+    const r = clone(RECORD) as Json;
+    r.contracts.sensors.anglesDegrees.length += 1;
+    expect(() => parseStudyRecord(r, MANIFEST, ENGINE)).toThrow(StudyRecordError);
+    expect(() => parseStudyRecord(r, MANIFEST, ENGINE)).toThrow(/record.contracts.sensors.anglesDegrees\[7\] is missing/);
+    expect(() => replayStudyRecord(r, MANIFEST, ENGINE)).toThrow(/anglesDegrees\[7\] is missing/);
+  });
+
+  it.each([
+    ['a changed sensor angle', (r: Json) => (r.contracts.sensors.anglesDegrees[0] += 1)],
+    ['an extra sensor angle', (r: Json) => r.contracts.sensors.anglesDegrees.push(0)],
+    ['a missing sensor angle', (r: Json) => r.contracts.sensors.anglesDegrees.pop()],
+  ])('reports %s in the contracts as incompatible', (_label, change) => {
+    const r = clone(RECORD) as Json;
+    change(r);
+    expect(() => parseStudyRecord(r, MANIFEST, ENGINE)).toThrow(StudyCompatibilityError);
+  });
+
+  it('rejects holes anywhere else in a record, such as the source or engine blocks', () => {
+    const r = clone(RECORD) as Json;
+    r.engine = { ...r.engine, extra: [1, , 2] }; // eslint-disable-line no-sparse-arrays
+    expect(() => parseStudyRecord(r, MANIFEST, ENGINE)).toThrow(/record.engine.extra\[1\] is missing/);
   });
 
   it('rejects a result edited without updating resultsHash', () => {

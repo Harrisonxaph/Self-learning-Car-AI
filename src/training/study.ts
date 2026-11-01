@@ -160,6 +160,17 @@ const dense = (value: unknown, path: string, fail: Fail): unknown[] => {
   }
   return value;
 };
+/**
+ * Every array anywhere inside `value` must be dense (an own, defined element at each index). Checked over the whole
+ * manifest or record first, so no later comparison (including ones that only visit enumerable keys) can see a hole.
+ */
+function denseEverywhere(value: unknown, path: string, fail: Fail): void {
+  if (Array.isArray(value)) {
+    dense(value, path, fail).forEach((item, i) => denseEverywhere(item, `${path}[${i}]`, fail));
+  } else if (isPlainObject(value)) {
+    for (const [key, item] of Object.entries(value)) denseEverywhere(item, `${path}.${key}`, fail);
+  }
+}
 const arr = (value: unknown, path: string, length: number, fail: Fail): unknown[] => {
   const list = dense(value, path, fail);
   if (list.length !== length) fail(`${path} must have ${length} entries, got ${list.length}.`);
@@ -209,6 +220,7 @@ export function parseStudyManifest(input: unknown): StudyManifest {
   const fail: Fail = (message) => {
     throw new StudyManifestError(`Study manifest: ${message}`);
   };
+  denseEverywhere(input, 'manifest', fail);
   const m = exact(input, 'manifest', MANIFEST_KEYS, fail);
   same(m.format, STUDY_MANIFEST_FORMAT, 'manifest.format', fail);
   same(m.version, STUDY_VERSION, 'manifest.version', fail);
@@ -463,6 +475,7 @@ export function parseStudyRecord(input: unknown, manifestInput: unknown, engine:
   const incompatible: Fail = (message) => {
     throw new StudyCompatibilityError(`Study record is incompatible: ${message}`);
   };
+  denseEverywhere(input, 'record', fail);
   const r = exact(input, 'record', RECORD_KEYS, fail);
   same(r.format, STUDY_RECORD_FORMAT, 'record.format', fail);
   same(r.version, STUDY_VERSION, 'record.version', fail);
@@ -476,7 +489,10 @@ export function parseStudyRecord(input: unknown, manifestInput: unknown, engine:
     if (recordedEngine[key] !== engine[key]) incompatible(`engine ${key} ${String(recordedEngine[key])} differs from this engine's ${engine[key]}; results are only reproducible within one engine.`);
   }
   if (!isPlainObject(r.contracts)) fail('record.contracts must be an object.');
-  for (const difference of jsonDifferences(r.contracts, currentStudyContracts(), 'contracts', 1)) incompatible(`${difference}.`);
+  const contracts = currentStudyContracts();
+  for (const difference of jsonDifferences(r.contracts, contracts, 'contracts', 1)) incompatible(`${difference}.`);
+  // jsonDifferences visits keys only; the whole contract block must also be exactly equal (array lengths included).
+  if (canonicalJson(r.contracts) !== canonicalJson(contracts)) incompatible('contracts differ from this code\'s contracts.');
   same(r.evaluations, { validation: 'descriptive', heldOut: 'none' }, 'record.evaluations', fail);
 
   const P = manifest.configuration.training.populationSize;
