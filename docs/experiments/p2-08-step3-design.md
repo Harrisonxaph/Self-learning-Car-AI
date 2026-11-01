@@ -173,6 +173,45 @@ A1 and A7 episodes also carry their action seed. A first-lap time is derived lat
 
 Exit codes: 0 for success or an identical replay, 1 for a replay that differs, 2 for invalid, incompatible or unreadable input. Tests run the command line only on mechanics manifests with tiny P, G and E.
 
+### 4.5 C1 implementation notes (written before the C1 code)
+
+PR C is split into **C1** (`src/training/study.ts`: formats, strict parsing, compatibility and replay, as a library) and **C2** (`scripts/study.mjs`: the `run` and `replay` command line). C1 adds no command and runs nothing by itself.
+
+- **Manifest field shapes:**
+  - `configuration` is `{ generations, episodesPerTrack, holdTicks, training }`. `training` must be the complete resolved training settings (every key, nested keys exact) and must equal what the trainer's resolvers produce from it.
+  - `streams` is `{ rngStreams, a8Stream, actionSeedDerivation, selectionRule, a5Selection }`.
+  - `tracks` is `{ training: { id, contentHash }, validation: { id, contentHash }, splitManifestHash }`.
+  - `analysis.bootstrap` is exactly `{ resamples: 10000, seed: 20261028, level: 0.95, method: "percentile-nearest-rank-v1" }`. `analysis.wilcoxon` is `"exact-signed-rank-drop-zeros-midranks-v1"`, and `analysis.decisionRule` is `"p2-08-decision-v1"`.
+  - `code` is `{ revision }`: a 40-hex commit, or `null` for mechanics manifests only.
+- **Label rules on top of §4.1:**
+  - pilot and confirmatory manifests also need `holdTicks` = 30 and a code revision;
+  - mechanics manifests may set E, `holdTicks` and P freely, and have at most 1,000 seeds.
+- **Record `agents`**, the raw results:
+  - `A1`, `A7`: `{ training, validation }`. Each is E episodes carrying their `actionSeed`. `A7` also records `holdTicks`.
+  - `A2`: `{ candidates, validation }`. `candidates` is P × `{ index, genomeId, training }`, and `validation` is P episodes.
+  - `A9`: `{ index, model, validation }`.
+  - `A8`: `{ stream, samples, index, model, validation }`. `samples` is P × G candidates.
+  - `A5`: `{ generations, generation, index, selection, model, validation }`. `generations` is G arrays of P candidates, so the generation boundaries are kept.
+  - Every model is `{ id, parameters, provenance }`.
+- **Record `budgets`**, three separate parts:
+  - `planned`: P × G for evolution and for A8, E per track, `maxEpisodeTicks`;
+  - `actual`: the evaluations really counted (A5, A8, A2) and the elite re-evaluations;
+  - `diversity`: `evaluations`, `maxDistinctGenomes` (the bound) and `actualDistinctGenomes`.
+
+  They also hold `ticks` per agent and track.
+- **Checks on what the record means, beyond its shape:**
+  - every count against the manifest;
+  - candidate indices, and genome IDs in `sha256:` form;
+  - A2 = A5's generation 0, and A8's first P = A2;
+  - every selection recomputed with `selectBest` from training fitness only;
+  - each model's genome ID equals its candidate's, its frozen ID is recomputed with `freezeModel`, and its provenance equals the expected values;
+  - every action seed recomputed;
+  - ordered progress = gates ÷ the track's gates;
+  - episode ticks ≤ `maxEpisodeTicks`;
+  - every budget and tick sum recomputed;
+  - `resultsHash`.
+- **Replay:** it re-runs `generateAgents` from the manifest for the record's seed, compares the canonical JSON of `agents` (up to 20 differing paths), and re-evaluates the A9, A8 and A5 models alone on both tracks against their recorded episodes.
+
 ## 5. Analysis and report (PR D)
 
 The input is a manifest and one record per manifest seed. Every record is first parsed and **replayed**, so the analysis never reads a record that does not reproduce. It refuses missing, duplicate or extra seeds.
