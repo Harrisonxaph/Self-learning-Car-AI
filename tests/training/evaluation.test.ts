@@ -256,11 +256,22 @@ describe('evaluation configuration', () => {
     ['a misspelt fitness weight', { fitness: { ...DEFAULT_FITNESS_CONFIG, lapWieght: 42 } }, /Unknown evaluation config field "fitness\.lapWieght"/],
     ['an extra fitness field', { fitness: { ...DEFAULT_FITNESS_CONFIG, bonus: 1 } }, /"fitness\.bonus"/],
     ['a fitness block that is not an object', { fitness: 3 }, /Fitness config must be an object/],
+    [
+      'a JSON "__proto__" key inside fitness',
+      JSON.parse(`{"fitness": ${JSON.stringify({ ...DEFAULT_FITNESS_CONFIG }).replace('{', '{"__proto__": {"lapWeight": 9},')}}`),
+      /"fitness\.__proto__"/,
+    ],
     ['a bad limit', { maxEpisodeSeconds: 0 }, /maxEpisodeSeconds/],
     ['bad fitness', { fitness: { ...DEFAULT_FITNESS_CONFIG, version: 2 } }, /version/],
     ['an array', [], /must be an object/],
   ])('rejects %s', (_label, config, message) => {
     expect(() => createEvaluationSetup(config, env(OVAL))).toThrow(message);
+  });
+
+  it('names every allowed fitness field when one is unknown, and leaves a valid config usable', () => {
+    const allowed = Object.keys(DEFAULT_FITNESS_CONFIG).join(', ');
+    expect(() => createEvaluationSetup({ fitness: { ...DEFAULT_FITNESS_CONFIG, lapWieght: 42 } }, env(OVAL))).toThrow(`allowed: ${allowed}.`);
+    expect(createEvaluationSetup({ fitness: DEFAULT_FITNESS_CONFIG }, env(OVAL)).config.fitness).toEqual(DEFAULT_FITNESS_CONFIG);
   });
 
   it('accepts a complete fitness block in any key order, with changed weights', () => {
