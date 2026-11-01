@@ -12,10 +12,11 @@
 // Exit codes: 0 a written record (or an identical replay), 1 a replay that differs, 2 invalid, incompatible or
 // unreadable input, with nothing written. A record is raw results only: not an analysis, and not evidence of learning.
 import { execFileSync } from 'node:child_process';
-import { existsSync, linkSync, readFileSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
-import { basename, dirname, join, resolve } from 'node:path';
+import { existsSync, readFileSync, realpathSync, statSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { runnerImport } from 'vite';
+import { OutputExistsError, writeRecordFile } from './recordFile.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const USAGE =
@@ -118,26 +119,6 @@ function checkOutput(out, manifestPath, force) {
   if (!force) throw new UsageError(`${out} already exists; pass --force to replace it.`);
 }
 
-// Writes the whole record to a temporary file beside the output, then moves it into place: an interrupted or failed
-// run never leaves a partial record and never removes an existing one.
-function writeRecord(out, text, force) {
-  const temporary = join(dirname(out), `.${basename(out)}.${process.pid}.tmp`);
-  try {
-    writeFileSync(temporary, text, { flag: 'wx' });
-    if (force) renameSync(temporary, out);
-    else {
-      try {
-        linkSync(temporary, out); // fails if the output appeared while the seed ran
-      } catch (error) {
-        if (error.code === 'EEXIST') throw new UsageError(`${out} already exists; pass --force to replace it.`);
-        throw error;
-      }
-    }
-  } finally {
-    rmSync(temporary, { force: true });
-  }
-}
-
 async function main() {
   const options = parseArgs(process.argv.slice(2));
   const { module: study } = await runnerImport(resolve(ROOT, 'src/training/study.ts'));
@@ -153,7 +134,12 @@ async function main() {
     checkOutput(out, manifestPath, options.force);
     if (src.dirty) console.warn('Warning: the worktree has uncommitted or untracked changes; the record names the commit, not those changes.');
     const record = study.runStudySeed(manifestInput, options.seed, { engine: engine(), source: src, recordedAt: new Date().toISOString() });
-    writeRecord(out, `${JSON.stringify(record, null, 2)}\n`, options.force);
+    try {
+      writeRecordFile(out, `${JSON.stringify(record, null, 2)}\n`, options.force);
+    } catch (error) {
+      if (error instanceof OutputExistsError) throw new UsageError(error.message);
+      throw error;
+    }
     const { planned, actual, ticks } = record.budgets;
     const used = Object.values(ticks).reduce((n, t) => n + t.training + t.validation, 0);
     console.log(`Study ${manifest.id} (${manifest.label}), seed ${record.seed}: agents ${manifest.agents.join(', ')}.`);

@@ -21,6 +21,7 @@ import {
   WILCOXON,
 } from '../../src/training/study';
 import { sha256Hex } from '../../src/utils/sha256';
+import { OutputExistsError, writeRecordFile } from '../../scripts/recordFile.mjs';
 
 type Json = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 const ROOT = join(__dirname, '../..');
@@ -69,7 +70,7 @@ const editRecord = (name: string, change: (r: Json) => void, hash = true) => {
   change(r);
   return write(name, hash ? rehash(r) : r);
 };
-const leftovers = () => readdirSync(DIR).filter((name) => name.endsWith('.tmp'));
+const leftovers = (dir = DIR) => readdirSync(dir).filter((name) => name.includes('.tmp-'));
 const isReserved = (seed: number) => (seed >= 1001 && seed <= 1020) || (seed >= 9001 && seed <= 9003);
 
 describe('study command line', () => {
@@ -146,6 +147,49 @@ describe('study command line', () => {
         expect(run.err).toContain('is the manifest itself');
       }
       expect(readFileSync(MANIFEST_FILE, 'utf8')).toBe(before);
+    });
+
+    describe('writing the record file (scripts/recordFile.mjs)', () => {
+      const folder = (name: string) => {
+        const path = join(DIR, name);
+        mkdirSync(path);
+        return path;
+      };
+      const snapshot = (dir: string) => Object.fromEntries(readdirSync(dir).map((name) => [name, readFileSync(join(dir, name), 'utf8')]));
+
+      it.each([false, true])('never removes a file that already has a temporary-looking name beside the output (force %s)', (force) => {
+        // The name an earlier version used for its temporary file, for this very process: a file there (here, the
+        // manifest) must survive, and the record must still be written.
+        const dir = folder(`collision-${force}`);
+        const out = join(dir, 'record.json');
+        const collision = join(dir, `.record.json.${process.pid}.tmp`);
+        writeFileSync(collision, JSON.stringify(MANIFEST));
+        writeFileSync(join(dir, '.record.json.tmp-abcdef'), 'another');
+        const before = snapshot(dir);
+        writeRecordFile(out, 'the record', force);
+        expect(readFileSync(out, 'utf8')).toBe('the record');
+        expect(snapshot(dir)).toEqual({ ...before, 'record.json': 'the record' });
+        expect(leftovers(dir)).toEqual(['.record.json.tmp-abcdef']);
+      });
+
+      it('refuses an existing output without force, touching nothing', () => {
+        const dir = folder('exists');
+        const out = join(dir, 'record.json');
+        writeFileSync(out, 'old');
+        writeFileSync(join(dir, `.record.json.${process.pid}.tmp`), 'keep');
+        const before = snapshot(dir);
+        expect(() => writeRecordFile(out, 'new', false)).toThrow(OutputExistsError);
+        expect(snapshot(dir)).toEqual(before);
+      });
+
+      it('leaves everything in place when moving the record fails', () => {
+        const dir = folder('move-fails');
+        const out = folder('move-fails/record.json');
+        writeFileSync(join(out, 'inside'), 'keep');
+        expect(() => writeRecordFile(out, 'new', true)).toThrow();
+        expect(snapshot(out)).toEqual({ inside: 'keep' });
+        expect(readdirSync(dir)).toEqual(['record.json']);
+      });
     });
 
     it('refuses a directory or a missing folder as the output', () => {
