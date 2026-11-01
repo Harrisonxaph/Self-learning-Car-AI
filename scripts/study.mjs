@@ -141,11 +141,13 @@ async function main() {
       throw error;
     }
     const { planned, actual, ticks } = record.budgets;
-    const used = Object.values(ticks).reduce((n, t) => n + t.training + t.validation, 0);
+    // Car-ticks actually simulated: A2's training episodes are A5's generation 0 and A9's is one of them, so they are
+    // counted once (under A5). The record keeps each agent's attributed ticks unchanged.
+    const executed = ['A1', 'A7', 'A8', 'A5'].reduce((n, agent) => n + ticks[agent].training, 0) + Object.values(ticks).reduce((n, t) => n + t.validation, 0);
     console.log(`Study ${manifest.id} (${manifest.label}), seed ${record.seed}: agents ${manifest.agents.join(', ')}.`);
     console.log(
       `  ${actual.a5Evaluations} A5 and ${actual.a8Evaluations} A8 evaluations (planned ${planned.evolutionEvaluations} each), ` +
-        `${planned.episodesPerTrack} A1/A7 episodes per track; ${used} simulated car-ticks.`,
+        `${planned.episodesPerTrack} A1/A7 episodes per track; ${executed} car-ticks simulated (A2 and A9 training reused from A5's generation 0).`,
     );
     console.log(`Recorded ${out} (results ${record.resultsHash.slice(0, 19)}…).`);
     console.log('Raw record only: no analysis was run, validation is descriptive, no held-out track was used, and nothing here is evidence of learning.');
