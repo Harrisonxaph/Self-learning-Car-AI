@@ -1,6 +1,6 @@
 # P2-08 plan: random baselines and the controlled improvement study (E1, E2)
 
-> Status: **plan; steps 1–3 done, the step 4 pilot run (artifacts merged), the step 5 manifest merged (#109) and the confirmatory study run, its results in review.**
+> Status: **plan; steps 1–3 done, the step 4 pilot run (artifacts merged), the step 5 manifest merged (#109) and the confirmatory results merged (#110). P2-08 is Complete.**
 > - Step 1 (the nested-key prerequisite) is done in #94.
 > - Step 2 (A1/A7 drivers and `evaluateDriver`) is done in #96 (merged at `5b61db5`).
 > - Step 3 (baselines, records and analysis tooling) was [authorised by the owner](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/19#issuecomment-6560607741) and is merged in #99–#106 (`main` at `c14f368`).
@@ -10,7 +10,7 @@
 >   - it was run on 2026-11-02 at the frozen commit `c14f368` ([relayed run and storage instruction](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/19#issuecomment-6579857037));
 >   - its artifacts are merged in #108: configuration C1, n = 10, δ = 0.25.
 > - **The pilot's limits:** it is exploratory and acceptance-ineligible; validation was used only for the predeclared configuration choice and descriptive results; the held-out track is untouched.
-> - Step 5: the confirmatory manifest and [protocol](p2-08-confirmatory-protocol.md) are merged in #109. The confirmatory study was [run with the owner's approval](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/19#issuecomment-6581307850). Its `analyse` decision is `supported` on the training track only (validation: A5 did not outperform A8, descriptive), and the results (`experiments/results/p2-08/confirmatory/`) await Codex review and the owner's merge. No acceptance has been recorded.
+> - Step 5: the confirmatory manifest and [protocol](p2-08-confirmatory-protocol.md) are merged in #109. The confirmatory study was [run with the owner's approval](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/19#issuecomment-6581307850). Its `analyse` decision is `supported` on the training track only (validation: A5 did not outperform A8, descriptive), and the results (`experiments/results/p2-08/confirmatory/`) are merged in #110. The owner [accepted the disclosed `analyse` restart as a procedural exception for this study only](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/19#issuecomment-6589544564). The claim is limited to the training track; see the completion record in ROADMAP.md.
 >
 > Each step needs Codex review. No learning claim is made or implied.
 
