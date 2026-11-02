@@ -1,0 +1,95 @@
+{
+  "format": "self-driving-ai-evolution/p2-08-manifest",
+  "version": 1,
+  "id": "p2-08-confirmatory",
+  "label": "confirmatory",
+  "description": "P2-08 confirmatory study (plan step 5, §6 and §8): configuration C1 (the trainer defaults with G = 100), chosen by the exploratory pilot (#108). Preregistered: reviewed and approved before any confirmatory seed runs; nothing in it changes afterwards.",
+  "agents": [
+    "A1",
+    "A7",
+    "A2",
+    "A9",
+    "A8",
+    "A5"
+  ],
+  "seeds": [
+    1001,
+    1002,
+    1003,
+    1004,
+    1005,
+    1006,
+    1007,
+    1008,
+    1009,
+    1010
+  ],
+  "configuration": {
+    "generations": 100,
+    "episodesPerTrack": 50,
+    "holdTicks": 30,
+    "training": {
+      "populationSize": 50,
+      "eliteCount": 2,
+      "selection": {
+        "type": "tournament",
+        "size": 3
+      },
+      "crossover": {
+        "type": "uniform",
+        "rate": 0.7
+      },
+      "mutation": {
+        "rate": 0.1,
+        "scale": 0.2
+      },
+      "maxEpisodeSeconds": 60,
+      "stallSeconds": 5,
+      "maxLaps": 3,
+      "fitness": {
+        "version": 1,
+        "checkpointWeight": 1000,
+        "partialProgressWeight": 1000,
+        "lapWeight": 5000,
+        "collisionPenalty": 500,
+        "lapTimeBonusScale": 2000,
+        "referenceLapSeconds": 30,
+        "maxLapTimeRatio": 2
+      },
+      "brakeEnabled": true
+    }
+  },
+  "streams": {
+    "rngStreams": "trainer-run-initial-then-3-per-transition-v1",
+    "a8Stream": "p2-08-a8-continue-initial-v1",
+    "actionSeedDerivation": "p2-08-sha256-first-32-bits-v1",
+    "selectionRule": "highest-training-fitness-earliest-v1",
+    "a5Selection": "best-training-fitness-final-generation"
+  },
+  "tracks": {
+    "training": {
+      "id": "stadium-oval",
+      "contentHash": "sha256:f1c3e1a7f9ef938d7a1ffd4bcb79e4260fd870b4c637fdf43389ee7f4aefe8c2"
+    },
+    "validation": {
+      "id": "rounded-rectangle",
+      "contentHash": "sha256:9d9908c388bc685829d92d5e1f846421c008cf9302303ec6d572578bb0cb9dc9"
+    },
+    "splitManifestHash": "sha256:3cb594e2cdf4ed07728a8a50a54d558fc20f3d8e01628acd376eb9ff940772c3"
+  },
+  "metric": "ordered-progress-gates-per-lap-v1",
+  "analysis": {
+    "delta": 0.25,
+    "bootstrap": {
+      "resamples": 10000,
+      "seed": 20261028,
+      "level": 0.95,
+      "method": "percentile-nearest-rank-v1"
+    },
+    "wilcoxon": "exact-signed-rank-drop-zeros-midranks-v1",
+    "decisionRule": "p2-08-decision-v1"
+  },
+  "code": {
+    "revision": "c14f36862c72463bd8eee5371d2a4ad7dad2adba"
+  }
+}
