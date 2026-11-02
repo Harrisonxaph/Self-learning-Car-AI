@@ -56,7 +56,8 @@ const entryOf = (ops, path) => {
  * Each new file is then installed with a hard link, which never replaces an entry. If any step fails, every output
  * this call installed (recognised by its own inode, so a concurrently created entry is never touched) is removed
  * and every original is moved back. If an original cannot be moved back because another entry has taken its name,
- * the folder is kept and RollbackIncompleteError names where the original is. `ops` replaces the file-system calls
+ * or because moving it back fails, the folder is kept and RollbackIncompleteError names where the original is: a
+ * rollback never deletes an original. `ops` replaces the file-system calls
  * in tests.
  */
 export function writeRecordPair(entries, force, ops = nodeOps) {
@@ -88,18 +89,27 @@ export function writeRecordPair(entries, force, ops = nodeOps) {
         s.installed = true;
       }
     } catch (error) {
-      const stranded = [];
+      // Every rollback step is guarded on its own: a failure here must never lose an original, so any original
+      // that cannot be moved back stays in the kept folder and is named.
+      const problems = [];
       for (const s of staged) {
-        const current = entryOf(ops, s.out);
-        if (s.installed && current !== null && current.ino === s.ino) ops.unlink(s.out);
-        if (s.backup !== null) {
+        try {
+          const current = entryOf(ops, s.out);
+          if (s.installed && current !== null && current.ino === s.ino) ops.unlink(s.out);
+        } catch (undo) {
+          problems.push(`${s.out} could not be removed (${undo.message})`);
+        }
+        if (s.backup === null) continue;
+        try {
           if (entryOf(ops, s.out) === null) ops.rename(s.backup, s.out);
-          else stranded.push(`${s.out} (its previous content is at ${s.backup})`);
+          else problems.push(`another entry now holds ${s.out} (its previous content is at ${s.backup})`);
+        } catch (restore) {
+          problems.push(`${s.out} could not be restored (${restore.message}); its previous content is at ${s.backup}`);
         }
       }
-      if (stranded.length > 0) {
+      if (problems.length > 0) {
         keepFolder = true;
-        throw new RollbackIncompleteError(`${error.message} Another entry now holds ${stranded.join(', ')}.`);
+        throw new RollbackIncompleteError(`${error.message} Rollback incomplete: ${problems.join('; ')}.`);
       }
       throw error;
     }

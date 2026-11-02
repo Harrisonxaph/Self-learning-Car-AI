@@ -197,6 +197,30 @@ describe('study analyse', () => {
       expect(contents(dir)).toEqual({ 'report.md': 'someone else' });
     });
 
+    it('with --force, if restoring an original fails too, the original is kept and named, never deleted', () => {
+      const dir = folder('pair-restore-fails');
+      writeFileSync(join(dir, 'analysis.json'), 'old analysis');
+      writeFileSync(join(dir, 'report.md'), 'old report');
+      // Installing report.md fails, and so does moving the old report back onto report.md.
+      const failing = { ...ops('report.md'), rename: (from: string, to: string) => {
+        if (to.endsWith('report.md')) throw io;
+        renameSync(from, to);
+      } };
+      let error: unknown;
+      try {
+        writeRecordPair(pair(dir), true, failing);
+      } catch (e) {
+        error = e;
+      }
+      expect(error).toBeInstanceOf(RollbackIncompleteError);
+      const message = (error as Error).message;
+      expect(message).toContain('could not be restored');
+      const backup = message.match(/previous content is at (\S+?)(\)|\.$|;)/)![1]!;
+      expect(readFileSync(backup, 'utf8')).toBe('old report');
+      expect(readFileSync(join(dir, 'analysis.json'), 'utf8')).toBe('old analysis');
+      expect(existsSync(join(dir, 'report.md'))).toBe(false);
+    });
+
     it('with --force, a competing entry that takes a moved-aside name is kept, and the original is kept and named', () => {
       const dir = folder('pair-late-force');
       writeFileSync(join(dir, 'analysis.json'), 'old analysis');
