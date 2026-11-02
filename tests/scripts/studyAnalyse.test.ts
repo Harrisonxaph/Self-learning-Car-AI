@@ -5,7 +5,7 @@
 import { spawnSync } from 'node:child_process';
 import { existsSync, linkSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, renameSync, unlinkSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
 import { OutputExistsError, RollbackIncompleteError, writeRecordPair } from '../../scripts/recordFile.mjs';
 import { analyseRecords, analysisJson, renderReport } from '../../src/training/analysis';
@@ -142,14 +142,19 @@ describe('study analyse', () => {
       { out: join(dir, 'report.md'), text: 'new report' },
     ];
     const io = Object.assign(new Error('injected EIO'), { code: 'EIO' });
-    // The real calls, except that `link` runs `before` and may fail when it installs the given output.
+    // The real calls, except that `link` runs `before` and fails when it installs the staged new file for the given
+    // output (staged files are named new-<i>; a restore links an old-<i> backup and is not failed here).
     const ops = (failOn: string | null, before: (created: string) => void = () => {}) => ({
       link: (existing: string, created: string) => {
         before(created);
-        if (failOn !== null && created.endsWith(failOn)) throw io;
+        if (failOn !== null && created.endsWith(failOn) && basename(existing).startsWith('new-')) throw io;
         linkSync(existing, created);
       },
-      rename: renameSync,
+      // `before` also runs just before a rename, so a restore by check-then-rename is caught by the race test.
+      rename: (from: string, to: string) => {
+        before(to);
+        renameSync(from, to);
+      },
       lstat: lstatSync,
       unlink: unlinkSync,
     });
@@ -197,14 +202,37 @@ describe('study analyse', () => {
       expect(contents(dir)).toEqual({ 'report.md': 'someone else' });
     });
 
+    it('with --force, an entry created at the very moment of the restore is kept, and the original is kept and named (Codex review of b6b4015)', () => {
+      const dir = folder('pair-restore-race');
+      writeFileSync(join(dir, 'analysis.json'), 'old analysis');
+      writeFileSync(join(dir, 'report.md'), 'old report');
+      // Installing report.md fails; then, just as the old report is linked back, another process creates report.md.
+      const racing = ops('report.md', (created) => {
+        if (created.endsWith('report.md') && !existsSync(created)) restoring += 1;
+        if (restoring === 2) writeFileSync(created, 'someone else');
+      });
+      let restoring = 0;
+      let error: unknown;
+      try {
+        writeRecordPair(pair(dir), true, racing);
+      } catch (e) {
+        error = e;
+      }
+      expect(error).toBeInstanceOf(RollbackIncompleteError);
+      expect(readFileSync(join(dir, 'report.md'), 'utf8')).toBe('someone else');
+      expect(readFileSync(join(dir, 'analysis.json'), 'utf8')).toBe('old analysis');
+      const backup = (error as Error).message.match(/previous content is at (\S+?)(\)|\.$|;)/)![1]!;
+      expect(readFileSync(backup, 'utf8')).toBe('old report');
+    });
+
     it('with --force, if restoring an original fails too, the original is kept and named, never deleted', () => {
       const dir = folder('pair-restore-fails');
       writeFileSync(join(dir, 'analysis.json'), 'old analysis');
       writeFileSync(join(dir, 'report.md'), 'old report');
-      // Installing report.md fails, and so does moving the old report back onto report.md.
-      const failing = { ...ops('report.md'), rename: (from: string, to: string) => {
-        if (to.endsWith('report.md')) throw io;
-        renameSync(from, to);
+      // Installing report.md fails, and so does putting the old report back onto report.md.
+      const failing = { ...ops(null), link: (existing: string, created: string) => {
+        if (created.endsWith('report.md')) throw io;
+        linkSync(existing, created);
       } };
       let error: unknown;
       try {

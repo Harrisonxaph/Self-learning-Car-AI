@@ -364,7 +364,7 @@ D2 adds the `analyse` command to `scripts/study.mjs`. It handles only files and 
     1. Both texts are written into one new folder that the run owns.
     2. With `--force`, each existing output is moved aside into that folder.
     3. Each new file is installed with a hard link, which never replaces an entry.
-    4. If any step fails, the run removes the outputs it installed. They are recognised by their inode, so a concurrently created entry is never touched. Then every original is moved back.
+    4. If any step fails, the run removes the outputs it installed. They are recognised by their inode, so a concurrently created entry is never touched. Then every original is put back with a hard link, which never replaces an entry, so a file created at any moment, even during the restore, is kept. (This was approved by the owner as one extra bounded round after Codex's review of `b6b4015` found that a check-then-rename restore could overwrite such a file.)
     5. Every rollback step is guarded on its own. If a competing entry has taken an original's name, or moving an original back fails, the original is kept in the folder, and the error says where. A rollback never deletes an original. (Correction cycle 3: in `b6b4015`, a failed restore could still remove the folder that held the original.)
 
     An exit 2 therefore leaves the folder as it was, apart from entries created by others.

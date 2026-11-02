@@ -55,7 +55,8 @@ const entryOf = (ops, path) => {
  * creates (so it owns every name inside it). With `force`, each existing output is moved aside into that folder.
  * Each new file is then installed with a hard link, which never replaces an entry. If any step fails, every output
  * this call installed (recognised by its own inode, so a concurrently created entry is never touched) is removed
- * and every original is moved back. If an original cannot be moved back because another entry has taken its name,
+ * and every original is linked back with a hard link (which never replaces an entry). If an original cannot be put
+ * back because another entry has taken its name,
  * or because moving it back fails, the folder is kept and RollbackIncompleteError names where the original is: a
  * rollback never deletes an original. `ops` replaces the file-system calls
  * in tests.
@@ -100,11 +101,13 @@ export function writeRecordPair(entries, force, ops = nodeOps) {
           problems.push(`${s.out} could not be removed (${undo.message})`);
         }
         if (s.backup === null) continue;
+        // A hard link never replaces an entry, so an entry created at any moment before the restore is kept
+        // (Codex review of b6b4015: a check-then-rename could overwrite one created between the two steps).
         try {
-          if (entryOf(ops, s.out) === null) ops.rename(s.backup, s.out);
-          else problems.push(`another entry now holds ${s.out} (its previous content is at ${s.backup})`);
+          ops.link(s.backup, s.out);
         } catch (restore) {
-          problems.push(`${s.out} could not be restored (${restore.message}); its previous content is at ${s.backup}`);
+          if (restore.code === 'EEXIST') problems.push(`another entry now holds ${s.out} (its previous content is at ${s.backup})`);
+          else problems.push(`${s.out} could not be restored (${restore.message}); its previous content is at ${s.backup}`);
         }
       }
       if (problems.length > 0) {
