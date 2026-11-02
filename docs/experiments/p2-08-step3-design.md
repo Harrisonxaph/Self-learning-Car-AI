@@ -360,7 +360,14 @@ D2 adds the `analyse` command to `scripts/study.mjs`. It handles only files and 
   - the output folder must already exist and be a folder; it is never created;
   - if either output already exists, the command refuses without `--force`, before anything runs. Existence is checked on the folder entry itself (`lstat`), so a dangling symbolic link counts as existing. With `--force`, the link itself is replaced and its target is never written (Codex review of `6f863a6`). `run`'s `--out` check uses the same rule;
   - an output may never be one of the input files (manifest or records), even with `--force`. Paths are compared after resolving symbolic links;
-  - each file is written in full through `writeRecordFile` (C2's owned temporary folder, then a hard link or a rename). An interrupted run never leaves a partial file and never deletes an existing one. `analysis.json` is written first, then `report.md`.
+  - the two outputs are installed as **one unit** by `writeRecordPair` (Codex review of `521fb9a`: separately atomic files could still leave a mixed pair on exit 2):
+    1. Both texts are written into one new folder that the run owns.
+    2. With `--force`, each existing output is moved aside into that folder.
+    3. Each new file is installed with a hard link, which never replaces an entry.
+    4. If any step fails, the run removes the outputs it installed. They are recognised by their inode, so a concurrently created entry is never touched. Then every original is moved back.
+    5. If a competing entry has taken an original's name, the original is kept in the folder, and the error says where. Nothing is lost.
+
+    An exit 2 therefore leaves the folder as it was, apart from entries created by others.
 - **Exit codes:**
   - **0:** both outputs written;
   - **2:** a usage error; unreadable or invalid input; an incompatible record; a record that does not replay identically (`StudyAnalysisError`); missing, duplicate or extra seeds; or a refused output. Nothing is written in any of these cases.

@@ -3,10 +3,11 @@
 // produced here by runStudySeed, the library code `run` uses. No pilot or confirmatory seed is run, nothing is
 // committed, and nothing here is a study result or evidence of learning.
 import { spawnSync } from 'node:child_process';
-import { existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, linkSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, renameSync, unlinkSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
+import { OutputExistsError, RollbackIncompleteError, writeRecordPair } from '../../scripts/recordFile.mjs';
 import { analyseRecords, analysisJson, renderReport } from '../../src/training/analysis';
 import { resolveBaselineConfig } from '../../src/training/baselines';
 import { canonicalJson } from '../../src/training/experiment';
@@ -129,6 +130,93 @@ describe('study analyse', () => {
       expect(viaLink.code).toBe(2);
       expect(viaLink.err).toContain('is one of the input files');
       expect(readFileSync(MANIFEST_FILE, 'utf8')).toBe(JSON.stringify(MANIFEST));
+    });
+  });
+
+  // Codex review of 521fb9a: the two outputs are one unit. Failures are injected into the file-system calls, so the
+  // second installation fails after the first one succeeded.
+  describe('the output pair is installed as one unit (writeRecordPair)', () => {
+    const contents = (dir: string) => Object.fromEntries(readdirSync(dir).sort().map((name) => [name, lstatSync(join(dir, name)).isDirectory() ? 'folder' : readFileSync(join(dir, name), 'utf8')]));
+    const pair = (dir: string) => [
+      { out: join(dir, 'analysis.json'), text: 'new analysis' },
+      { out: join(dir, 'report.md'), text: 'new report' },
+    ];
+    const io = Object.assign(new Error('injected EIO'), { code: 'EIO' });
+    // The real calls, except that `link` runs `before` and may fail when it installs the given output.
+    const ops = (failOn: string | null, before: (created: string) => void = () => {}) => ({
+      link: (existing: string, created: string) => {
+        before(created);
+        if (failOn !== null && created.endsWith(failOn)) throw io;
+        linkSync(existing, created);
+      },
+      rename: renameSync,
+      lstat: lstatSync,
+      unlink: unlinkSync,
+    });
+
+    it.each([false, true])('installs both outputs and leaves nothing else (force %s)', (force) => {
+      const dir = folder(`pair-ok-${force}`);
+      if (force) writeFileSync(join(dir, 'report.md'), 'old report');
+      writeRecordPair(pair(dir), force);
+      expect(contents(dir)).toEqual({ 'analysis.json': 'new analysis', 'report.md': 'new report' });
+    });
+
+    it('without --force, a failure installing the second output leaves no new output', () => {
+      const dir = folder('pair-fail');
+      writeFileSync(join(dir, 'unrelated.txt'), 'keep');
+      expect(() => writeRecordPair(pair(dir), false, ops('report.md'))).toThrow('injected EIO');
+      expect(contents(dir)).toEqual({ 'unrelated.txt': 'keep' });
+    });
+
+    it('with --force, a failure installing the second output keeps both previous outputs', () => {
+      const dir = folder('pair-fail-force');
+      writeFileSync(join(dir, 'analysis.json'), 'old analysis');
+      writeFileSync(join(dir, 'report.md'), 'old report');
+      expect(() => writeRecordPair(pair(dir), true, ops('report.md'))).toThrow('injected EIO');
+      expect(contents(dir)).toEqual({ 'analysis.json': 'old analysis', 'report.md': 'old report' });
+    });
+
+    it('with --force, a failure moving the second original aside restores the first', () => {
+      const dir = folder('pair-fail-aside');
+      writeFileSync(join(dir, 'analysis.json'), 'old analysis');
+      writeFileSync(join(dir, 'report.md'), 'old report');
+      const failingRename = { ...ops(null), rename: (from: string, to: string) => {
+        if (from.endsWith('report.md')) throw io;
+        renameSync(from, to);
+      } };
+      expect(() => writeRecordPair(pair(dir), true, failingRename)).toThrow('injected EIO');
+      expect(contents(dir)).toEqual({ 'analysis.json': 'old analysis', 'report.md': 'old report' });
+    });
+
+    it('a competing report.md created after the first output is refused, kept, and this run removes only its own file', () => {
+      const dir = folder('pair-late');
+      const late = ops(null, (created) => {
+        if (created.endsWith('report.md')) writeFileSync(created, 'someone else');
+      });
+      expect(() => writeRecordPair(pair(dir), false, late)).toThrow(OutputExistsError);
+      expect(contents(dir)).toEqual({ 'report.md': 'someone else' });
+    });
+
+    it('with --force, a competing entry that takes a moved-aside name is kept, and the original is kept and named', () => {
+      const dir = folder('pair-late-force');
+      writeFileSync(join(dir, 'analysis.json'), 'old analysis');
+      writeFileSync(join(dir, 'report.md'), 'old report');
+      const late = ops(null, (created) => {
+        if (created.endsWith('report.md')) writeFileSync(created, 'someone else');
+      });
+      let error: unknown;
+      try {
+        writeRecordPair(pair(dir), true, late);
+      } catch (e) {
+        error = e;
+      }
+      expect(error).toBeInstanceOf(RollbackIncompleteError);
+      const message = (error as Error).message;
+      expect(message).toContain('previous content is at');
+      const backup = message.match(/previous content is at (\S+?)\)/)![1]!;
+      expect(readFileSync(backup, 'utf8')).toBe('old report');
+      expect(readFileSync(join(dir, 'analysis.json'), 'utf8')).toBe('old analysis');
+      expect(readFileSync(join(dir, 'report.md'), 'utf8')).toBe('someone else');
     });
   });
 

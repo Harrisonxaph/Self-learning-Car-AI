@@ -19,7 +19,7 @@ import { existsSync, lstatSync, readFileSync, realpathSync, statSync } from 'nod
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { runnerImport } from 'vite';
-import { OutputExistsError, writeRecordFile } from './recordFile.mjs';
+import { OutputExistsError, writeRecordFile, writeRecordPair } from './recordFile.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const USAGE =
@@ -171,13 +171,12 @@ async function analyse(options) {
   checkOutputDir(outDir, [manifestPath, ...recordPaths], options.force);
   const result = analysis.analyseRecords(manifestInput, records, engine());
   const texts = { 'analysis.json': analysis.analysisJson(result), 'report.md': analysis.renderReport(result) };
-  for (const name of OUTPUTS) {
-    try {
-      writeRecordFile(join(outDir, name), texts[name], options.force);
-    } catch (error) {
-      if (error instanceof OutputExistsError) throw new UsageError(error.message);
-      throw error;
-    }
+  // Both outputs are installed as one unit: on any failure the folder is returned to its previous state.
+  try {
+    writeRecordPair(OUTPUTS.map((name) => ({ out: join(outDir, name), text: texts[name] })), options.force);
+  } catch (error) {
+    if (error instanceof OutputExistsError) throw new UsageError(error.message);
+    throw error;
   }
   const { decision } = result;
   console.log(`Analysis of ${result.studyId} (${result.label}): n = ${result.n} training seed(s), every record replayed identically.`);
@@ -243,7 +242,7 @@ main().then(
     process.exitCode = code;
   },
   (error) => {
-    const known = error instanceof UsageError || /^(Study\w*Error|TrackLeakageError|TrackSplitError)$/.test(error?.name ?? '');
+    const known = error instanceof UsageError || /^(Study\w*Error|TrackLeakageError|TrackSplitError|RollbackIncompleteError)$/.test(error?.name ?? '');
     console.error(`${known ? '' : 'Unexpected error: '}${error?.message ?? error}`);
     if (error instanceof ArgumentError) console.error(USAGE);
     process.exitCode = 2;
