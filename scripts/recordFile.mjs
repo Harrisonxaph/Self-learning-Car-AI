@@ -54,24 +54,23 @@ const entryOf = (ops, path) => {
  * the folder is left as it was before the call. Both texts are written first into one new folder that this call
  * creates (so it owns every name inside it). With `force`, each existing output is moved aside into that folder.
  * Each new file is then installed with a hard link, which never replaces an entry. If any step fails, every output
- * this call installed (recognised by its own inode, so a concurrently created entry is never touched) is removed
- * and every original is linked back with a hard link (which never replaces an entry). If an original cannot be put
- * back because another entry has taken its name,
- * or because moving it back fails, the folder is kept and RollbackIncompleteError names where the original is: a
- * rollback never deletes an original. `ops` replaces the file-system calls
- * in tests.
+ * this call installed is atomically moved into the owned folder before its inode is inspected. An unexpected
+ * replacement is linked back without replacing any entry, or kept and named if it cannot be put back. Only owned
+ * content is discarded. Originals are restored with the same no-clobber links. If an original or captured
+ * replacement cannot be restored, the folder is kept and RollbackIncompleteError names its recovery path.
+ * Staging is covered by the cleanup guard too. `ops` replaces the file-system calls in tests.
  */
 export function writeRecordPair(entries, force, ops = nodeOps) {
   const dir = dirname(entries[0].out);
   if (entries.some((e) => dirname(e.out) !== dir)) throw new RangeError('writeRecordPair writes into one folder.');
   const folder = mkdtempSync(join(dir, '.analysis.tmp-'));
-  const staged = entries.map((e, i) => {
-    const temporary = join(folder, `new-${i}`);
-    writeFileSync(temporary, e.text, { flag: 'wx' });
-    return { ...e, temporary, ino: lstatSync(temporary).ino, backup: null, installed: false };
-  });
   let keepFolder = false;
   try {
+    const staged = entries.map((e, i) => {
+      const temporary = join(folder, `new-${i}`);
+      writeFileSync(temporary, e.text, { flag: 'wx' });
+      return { ...e, temporary, ino: lstatSync(temporary).ino, backup: null, installed: false };
+    });
     try {
       for (const [i, s] of staged.entries()) {
         if (force && entryOf(ops, s.out) !== null) {
@@ -93,12 +92,19 @@ export function writeRecordPair(entries, force, ops = nodeOps) {
       // Every rollback step is guarded on its own: a failure here must never lose an original, so any original
       // that cannot be moved back stays in the kept folder and is named.
       const problems = [];
-      for (const s of staged) {
-        try {
-          const current = entryOf(ops, s.out);
-          if (s.installed && current !== null && current.ino === s.ino) ops.unlink(s.out);
-        } catch (undo) {
-          problems.push(`${s.out} could not be removed (${undo.message})`);
+      for (const [i, s] of staged.entries()) {
+        if (s.installed) {
+          const removed = join(folder, `removed-${i}`);
+          let captured = false;
+          try {
+            // Capture the entry actually withdrawn, rather than checking a path and later unlinking its replacement.
+            ops.rename(s.out, removed);
+            captured = true;
+            if (ops.lstat(removed).ino !== s.ino) ops.link(removed, s.out);
+          } catch (undo) {
+            if (captured) problems.push(`${s.out} could not be recovered (${undo.message}) (its captured content is at ${removed})`);
+            else if (undo.code !== 'ENOENT') problems.push(`${s.out} could not be withdrawn (${undo.message})`);
+          }
         }
         if (s.backup === null) continue;
         // A hard link never replaces an entry, so an entry created at any moment before the restore is kept

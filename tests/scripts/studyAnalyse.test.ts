@@ -6,6 +6,7 @@ import { spawnSync } from 'node:child_process';
 import { existsSync, linkSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, renameSync, unlinkSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { afterAll, describe, expect, it } from 'vitest';
 import { OutputExistsError, RollbackIncompleteError, writeRecordPair } from '../../scripts/recordFile.mjs';
 import { analyseRecords, analysisJson, renderReport } from '../../src/training/analysis';
@@ -166,6 +167,39 @@ describe('study analyse', () => {
       expect(contents(dir)).toEqual({ 'analysis.json': 'new analysis', 'report.md': 'new report' });
     });
 
+    it.each([false, true])('cleans staged files when the second staging write fails (force %s)', (force) => {
+      const dir = folder(`pair-stage-fail-${force}`);
+      if (force) {
+        writeFileSync(join(dir, 'analysis.json'), 'old analysis');
+        writeFileSync(join(dir, 'report.md'), 'old report');
+      }
+      const before = contents(dir);
+      // Inject below the real staging writer in a separate process; the parent's filesystem calls stay unchanged.
+      const hook = write(`stage-hook-${force}.mjs`, `
+        import fs from 'node:fs';
+        import { syncBuiltinESMExports } from 'node:module';
+        const original = fs.writeFileSync;
+        fs.writeFileSync = (path, ...args) => {
+          if (String(path).endsWith('/new-1')) {
+            const error = new Error('injected staging EIO');
+            error.code = 'EIO';
+            throw error;
+          }
+          return original(path, ...args);
+        };
+        syncBuiltinESMExports();
+      `);
+      const script = `
+        import { writeRecordPair } from ${JSON.stringify(pathToFileURL(join(ROOT, 'scripts/recordFile.mjs')).href)};
+        try { writeRecordPair(${JSON.stringify(pair(dir))}, ${force}); }
+        catch (error) { console.error(error.message); process.exitCode = 2; }
+      `;
+      const run = spawnSync(process.execPath, ['--import', pathToFileURL(hook).href, '--input-type=module', '--eval', script], { cwd: ROOT, encoding: 'utf8' });
+      expect(run.status).toBe(2);
+      expect(run.stderr).toContain('injected staging EIO');
+      expect(contents(dir)).toEqual(before);
+    });
+
     it('without --force, a failure installing the second output leaves no new output', () => {
       const dir = folder('pair-fail');
       writeFileSync(join(dir, 'unrelated.txt'), 'keep');
@@ -200,6 +234,77 @@ describe('study analyse', () => {
       });
       expect(() => writeRecordPair(pair(dir), false, late)).toThrow(OutputExistsError);
       expect(contents(dir)).toEqual({ 'report.md': 'someone else' });
+    });
+
+    it.each([false, true])('preserves a competing analysis replaced just before rollback withdrawal (force %s)', (force) => {
+      const dir = folder(`pair-withdraw-race-${force}`);
+      const analysis = join(dir, 'analysis.json');
+      const incoming = write(`incoming-${force}.json`, 'someone else');
+      if (force) {
+        writeFileSync(analysis, 'old analysis');
+        writeFileSync(join(dir, 'report.md'), 'old report');
+      }
+      const replace = () => renameSync(incoming, analysis);
+      const racing = {
+        ...ops('report.md'),
+        // Model the same writer replacing the public entry immediately before the old unlink or new capture.
+        unlink: (path: string) => {
+          if (path === analysis) replace();
+          unlinkSync(path);
+        },
+        rename: (from: string, to: string) => {
+          if (from === analysis && basename(to).startsWith('removed-')) replace();
+          renameSync(from, to);
+        },
+      };
+      let error: unknown;
+      try {
+        writeRecordPair(pair(dir), force, racing);
+      } catch (e) {
+        error = e;
+      }
+      expect(contents(dir)).toMatchObject({ 'analysis.json': 'someone else' });
+      if (force) {
+        expect(error).toBeInstanceOf(RollbackIncompleteError);
+        const backup = (error as Error).message.match(/previous content is at (\S+?)(\)|\.$|;)/)![1]!;
+        expect(readFileSync(backup, 'utf8')).toBe('old analysis');
+        expect(readFileSync(join(dir, 'report.md'), 'utf8')).toBe('old report');
+      } else {
+        expect(error).toBe(io);
+        expect(contents(dir)).toEqual({ 'analysis.json': 'someone else' });
+      }
+    });
+
+    it('keeps and names displaced competing content when another writer prevents putting it back', () => {
+      const dir = folder('pair-withdraw-restore-race');
+      const analysis = join(dir, 'analysis.json');
+      const incoming = write('incoming-displaced.json', 'first writer');
+      const failing = ops('report.md');
+      const racing = {
+        ...failing,
+        unlink: (path: string) => {
+          if (path === analysis) renameSync(incoming, analysis);
+          unlinkSync(path);
+        },
+        rename: (from: string, to: string) => {
+          if (from === analysis && basename(to).startsWith('removed-')) renameSync(incoming, analysis);
+          renameSync(from, to);
+        },
+        link: (existing: string, created: string) => {
+          if (basename(existing).startsWith('removed-')) writeFileSync(created, 'second writer', { flag: 'wx' });
+          failing.link(existing, created);
+        },
+      };
+      let error: unknown;
+      try {
+        writeRecordPair(pair(dir), false, racing);
+      } catch (e) {
+        error = e;
+      }
+      expect(error).toBeInstanceOf(RollbackIncompleteError);
+      expect(readFileSync(analysis, 'utf8')).toBe('second writer');
+      const captured = (error as Error).message.match(/captured content is at (\S+?)\)/)![1]!;
+      expect(readFileSync(captured, 'utf8')).toBe('first writer');
     });
 
     it('with --force, an entry created at the very moment of the restore is kept, and the original is kept and named (Codex review of b6b4015)', () => {
