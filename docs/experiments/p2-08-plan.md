@@ -1,10 +1,16 @@
 # P2-08 plan: random baselines and the controlled improvement study (E1, E2)
 
-> Status: **plan; steps 1 and 2 done, step 3 authorised (tooling only), steps 4 and 5 not authorised.**
+> Status: **plan; steps 1–3 done, the step 4 pilot run (artifacts in review), step 5 not authorised.**
 > - Step 1 (the nested-key prerequisite) is done in #94.
 > - Step 2 (A1/A7 drivers and `evaluateDriver`) is done in #96 (merged at `5b61db5`).
-> - Step 3 (baselines, records and analysis tooling) is [authorised by the owner](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/19#issuecomment-6560607741) to start after the step 2 review follow-up is approved. It is not built yet.
-> - Steps 4 and 5 (the pilot and the confirmatory run) are not authorised, and neither has been run.
+> - Step 3 (baselines, records and analysis tooling) was [authorised by the owner](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/19#issuecomment-6560607741) and is merged in #99–#106 (`main` at `c14f368`).
+> - **Step 4, the exploratory pilot:**
+>   - [authorised by the owner](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/19#issuecomment-6575209368);
+>   - its manifests and protocol are merged in #107 (`8a4b6d5`, [Codex technical approval](https://github.com/Harrisonxaph/Self-learning-Car-AI/pull/107#pullrequestreview-5736644002));
+>   - it was run on 2026-11-02 at the frozen commit `c14f368` ([relayed run and storage instruction](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/19#issuecomment-6579857037));
+>   - its artifacts are in #108, awaiting Codex review and the owner's merge.
+> - **The pilot's limits:** it is exploratory and acceptance-ineligible; validation was used only for the predeclared configuration choice and descriptive results; the held-out track is untouched.
+> - Step 5 (the confirmatory manifest and run) is not authorised and has not been run. No learning claim has been accepted.
 >
 > Each step needs Codex review. No learning claim is made or implied.
 
@@ -171,7 +177,7 @@ The manifest is reviewed by Codex and approved by the owner **before** any confi
 ## 10. Implementation steps (each needs its own authorization)
 
 1. **Prerequisite:** fix #89's open P3: reject unknown keys inside nested configuration blocks. A typo there was dropped silently, which matters once configurations drive a study. **Done in #94** (merged at `d42bb2a` after [Codex technical approval](https://github.com/Harrisonxaph/Self-learning-Car-AI/pull/94#pullrequestreview-5728292609)).
-2. **Drivers and evaluation harness:** **done in #96** (merged at `5b61db5`; design in [ARCHITECTURE.md, "Baseline drivers and headless evaluation"](../ARCHITECTURE.md#baseline-drivers-and-headless-evaluation-p2-08-step-2)). Step 3 is authorised as tooling only; steps 4 and 5 are not authorised.
+2. **Drivers and evaluation harness:** **done in #96** (merged at `5b61db5`; design in [ARCHITECTURE.md, "Baseline drivers and headless evaluation"](../ARCHITECTURE.md#baseline-drivers-and-headless-evaluation-p2-08-step-2)). Step 3 tooling followed in #99–#106; see the status above for steps 4 and 5.
    - `RandomDriver` (A1) and `CorrelatedRandomDriver` (A7) behind the existing `Driver` interface;
    - a headless `evaluateDriver` that uses the same per-tick path as the trainer.
 3. **Baselines and study runner:**
@@ -180,7 +186,7 @@ The manifest is reviewed by Codex and approved by the owner **before** any confi
    - frozen-model evaluation on the training and validation tracks;
    - manifest and record formats;
    - `npm run study -- run | replay | analyse`.
-4. **Pilot** (§8): run, record and report as exploratory, then the confirmatory-manifest PR.
+4. **Pilot** (§8): run, record and report as exploratory, then the confirmatory-manifest PR. **Run on 2026-11-02**: protocol in #107, artifacts in #108 (`experiments/results/p2-08/pilot/pilot.md`).
 5. **Confirmatory run:** a results PR with records, replay evidence and the report. P2-08 completion follows only from that PR.
 
 **Tests planned for steps 2 and 3:**
@@ -195,7 +201,7 @@ The manifest is reviewed by Codex and approved by the owner **before** any confi
 - **Records:** replay and rejection, as for P2-07.
 - **Analysis:** checked against hand-computed paired differences, bootstrap intervals and signed-rank values on synthetic data; the bootstrap is deterministic from its seed.
 
-**Runtime estimate** (to be measured in the pilot): `npm run demo:train` runs 50 generations of 50 cars in about 80 s, so A5 plus A8 take about 3 minutes per seed. The 10-seed confirmatory study should take about 30 minutes in Node.
+**Runtime estimate** (to be measured in the pilot): `npm run demo:train` runs 50 generations of 50 cars in about 80 s, so A5 plus A8 take about 3 minutes per seed. The 10-seed confirmatory study should take about 30 minutes in Node. *Measured in the pilot (`pilot.md`):* a G = 50 seed took 109–149 s and a G = 100 seed 268–323 s for its run alone, and replay and `analyse` each add about as much again.
 
 ## 11. Limitations stated in advance
 
