@@ -111,6 +111,16 @@ describe('study command line', () => {
   });
 
   describe('safe overwrite', () => {
+    it('treats a dangling symbolic link at --out as an existing file', () => {
+      const link = join(DIR, 'dangling-record.json');
+      symlinkSync(join(DIR, 'nothing-here.json'), link);
+      const run = cli('run', MANIFEST_FILE, '--seed', '7311', '--out', link);
+      expect(run.code).toBe(2);
+      expect(run.err).toContain('already exists; pass --force');
+      expect(existsSync(join(DIR, 'nothing-here.json'))).toBe(false);
+      expect(leftovers()).toEqual([]);
+    });
+
     it('refuses to replace an existing record without --force, leaving it untouched', () => {
       const before = readFileSync(RECORD_FILE, 'utf8');
       const run = cli('run', MANIFEST_FILE, '--seed', '7311', '--out', RECORD_FILE);

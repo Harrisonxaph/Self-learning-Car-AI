@@ -349,6 +349,39 @@ PR D is split into **D1** (`src/training/analysis.ts`: the statistics, the analy
 
   Confirmatory and pilot manifests exist in memory only and are never run. Nothing is written, and no real study output is produced.
 
+### 5.2 D2 implementation notes (written before the D2 code)
+
+D2 adds the `analyse` command to `scripts/study.mjs`. It handles only files and arguments; the analysis is D1's `analyseRecords`, loaded through Vite like `run` and `replay`.
+
+- **Command:** `npm run study -- analyse <manifest.json> <record.json>… --out-dir <dir> [--force]`. It needs at least one record, and `--out-dir` and `--force` may each be given once.
+- **Order:** read every file, check the output paths, then analyse. `analyseRecords` parses the manifest and every record, replays each record, and refuses missing, duplicate and extra seeds. Nothing is written until the analysis has finished.
+- **Outputs:** `<dir>/analysis.json` (`analysisJson`, canonical JSON) and `<dir>/report.md` (`renderReport`). Both are deterministic, so a re-run writes the same bytes.
+- **Safe writing:**
+  - the output folder must already exist and be a folder; it is never created;
+  - if either output already exists, the command refuses without `--force`, before anything runs. Existence is checked on the folder entry itself (`lstat`), so a dangling symbolic link counts as existing. With `--force`, the link itself is replaced and its target is never written (Codex review of `6f863a6`). `run`'s `--out` check uses the same rule;
+  - an output may never be one of the input files (manifest or records), even with `--force`. Paths are compared after resolving symbolic links;
+  - the two outputs are installed as **one unit** by `writeRecordPair` (Codex review of `521fb9a`: separately atomic files could still leave a mixed pair on exit 2):
+    1. Both texts are written into one new folder that the run owns. Staging is inside the cleanup guard: a staging failure removes that folder before any originals have been moved.
+    2. With `--force`, each existing output is moved aside into that folder.
+    3. Each new file is installed with a hard link, which never replaces an entry.
+    4. If any step fails, each installed output path is atomically moved into the owned folder **before** its inode is inspected. Captured content matching the staged inode belongs to this run and can be discarded there. If another writer replaced the public path, its captured entry is restored with a no-clobber hard link. This avoids a check-then-unlink race that could delete that writer's content. Every original is then restored with a no-clobber hard link too.
+    5. Every rollback step is guarded on its own. If an original or captured replacement cannot be restored because another entry holds its name or recovery I/O fails, the material is kept in the owned folder and `RollbackIncompleteError` names its path. A rollback never discards an unexpected captured entry or an original. The restore links retain the earlier owner-approved no-clobber fix; the capture and staging guards address [review 5733233933](https://github.com/Harrisonxaph/Self-learning-Car-AI/pull/105#pullrequestreview-5733233933).
+
+    A completed rollback restores the previous outputs apart from entries created by others. If concurrent writes or recovery failures prevent that, the error identifies the retained recovery material instead of deleting it.
+- **Exit codes:**
+  - **0:** both outputs written;
+  - **2:** a usage error; unreadable or invalid input; an incompatible record; a record that does not replay identically (`StudyAnalysisError`); missing, duplicate or extra seeds; or a refused output. Nothing is written in any of these cases.
+
+  There is no exit 1, because the analysis never reports a difference. A record that does not reproduce is invalid input for an analysis, not a result.
+- **Printed summary:** the label, n, `acceptanceEligible`, the decision, the claim (or "none") and the two paths. It repeats that only an acceptance-eligible confirmatory analysis can support the claim, and that validation is descriptive.
+- **Tests** (`tests/scripts/studyAnalyse.test.ts`):
+  - the command runs as its own process on a temporary mechanics manifest with seeds 7371 and 7372. Its records are produced in the test process by `runStudySeed`, the same library code `run` uses;
+  - the written files equal `analysisJson`/`renderReport` of `analyseRecords`, and a forced re-run gives identical bytes;
+  - refusals: existing outputs, a missing folder, an output folder that is a file, an output that is an input (also through a symbolic link), a record that does not replay, a missing, duplicate or extra seed, and usage errors. Each refusal leaves nothing written;
+  - a mechanics analysis prints "not evaluated" and no claim.
+
+  No pilot or confirmatory seed is run, and no manifest, record or analysis is committed.
+
 ## 6. Tests shared by PRs B to D
 
 - **Determinism:** the same manifest and seed give an identical record, also in another order and alongside other seeds.
