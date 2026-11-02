@@ -68,7 +68,7 @@ Under `experiments/results/p2-08/pilot/`, in a separate PR after the runs:
   - the lap check;
   - a statement that the pilot is exploratory, acceptance-ineligible and makes no claim.
 
-**Record storage needs the owner's choice.** A seed record at G = 2 is about 0.17 MB. At G = 50 it is estimated at about 4 MB, and at G = 100 about 8 MB, so the nine records come to roughly 50 MB raw. Plan §9 leaves storage of large records to the owner. The recommendation is gzip-compressed records (`seed-s.json.gz`, expected to be about a tenth of the size), with the SHA-256 of each uncompressed record listed in `pilot.md`. The record's own `resultsHash` and replay still apply after `gunzip`. The alternative is to commit the raw JSON.
+**Record storage needs the owner's choice.** A seed record at G = 2 is about 0.17 MB. At G = 50 it is estimated at about 4 MB, and at G = 100 about 8 MB, so the nine records come to roughly 50 MB raw. Plan §9 leaves storage of large records to the owner. The recommendation is gzip-compressed records (`seed-s.json.gz`, expected to be about a tenth of the size), with the SHA-256 of each uncompressed record listed in `pilot.md`. The record's own `resultsHash` and replay still apply after `gunzip`. The alternative is to commit the raw JSON. **Chosen:** gzip records, with the SHA-256 of each uncompressed record ([relayed owner instruction, 2026-11-02](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/19#issuecomment-6579857037)).
 
 ## 5. Boundaries
 
