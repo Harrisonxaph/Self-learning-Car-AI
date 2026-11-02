@@ -38,16 +38,34 @@ Coasting at 20 m/s already slows the car by roughly 6 m/s², so whether braking 
 
 ## 3. Persistence and configuration (A1)
 
-**Recommended (option A): put the brake mask into the frozen model's identity, for new records only.**
-- **What changes:** every frozen model in the new E4 records (§5) carries `provenance.brakeEnabled` (boolean). It therefore changes the model `id`.
-- **Parsing:** the record parser rejects a model whose `provenance.brakeEnabled` differs from the manifest's `configuration.training.brakeEnabled`. Replay evaluates each frozen model with that value.
-- **Existing records:** P2-07 and P2-08 records keep their current formats and IDs, and still parse and replay unchanged. The new provenance key belongs only to the new record kind.
-- **The P3 contract:** this plan records it for P3-05/P3-06. A model saved from such a record writes `architecture.brakeEnabled = provenance.brakeEnabled`, and loading rejects a mismatch. The plan does not implement P3-05/P3-06, and does not make them a P2-09 prerequisite.
-- **Tests (step 2):**
+**Recommended (option A): put the brake mask into the frozen model's identity, for new models only.** It has two parts, matching implementation steps 2 and 5.
+
+**Part 1 (step 2): an independent model identity and mask contract,** with no new record kind.
+- **The convention:** a frozen model may carry `provenance.brakeEnabled` (boolean). Being part of the provenance, it enters the model `id`.
+- **Two helpers:**
+  - `modelBrakeEnabled(model)` returns that value. It rejects a model whose `provenance.brakeEnabled` is missing or not a boolean, naming the path.
+  - `createFrozenModelDriver(model)` drives the model with exactly that value.
+- **Tests:**
   - the same parameters with `brakeEnabled` true and false give different IDs;
-  - a record whose provenance and manifest disagree is rejected with a named path;
-  - replay of an A4 model drives with brake = 0, checked against T1's zero-brake network;
-  - the existing P2-07 and P2-08 record tests and committed records still pass unchanged.
+  - a model with the key missing or not a boolean is rejected with a named path;
+  - a `false` model drives exactly like T1's zero-brake network, and a `true` model exactly like `createNetworkDriver(parameters, { brakeEnabled: true })`;
+  - the existing P2-07 and P2-08 record tests and committed records still pass unchanged. Their models do not carry the key, their formats and IDs are untouched, and the helpers are not applied to them.
+
+**Part 2 (step 5): per-agent binding in the E4 record kind.**
+- **Per-agent configuration:** an E4 manifest has one shared training configuration *without* `brakeEnabled`, plus a fixed per-agent effective setting: **A4 → `false`, A5 → `true`**. The study kind fixes these, and they are not free parameters.
+- **Validation:** the record parser, model-identity checks and replay all use the agent's own value:
+  - an A4 model must have `provenance.brakeEnabled === false`;
+  - an A5 model must have `true`;
+  - each is replayed with its own value.
+- **What is rejected, with the path named:**
+  - an A4 model carrying `true`, or an A5 model carrying `false`;
+  - a model moved into the other agent's slot;
+  - a manifest whose shared training configuration contains `brakeEnabled`;
+  - a manifest whose per-agent settings differ from A4 = `false`, A5 = `true`.
+
+  Each of these has its own test in step 5.
+
+**The P3 contract:** this plan records it for P3-05/P3-06. A model saved from such a record writes `architecture.brakeEnabled = provenance.brakeEnabled`, and loading rejects a mismatch. The plan does not implement P3-05/P3-06, and does not make them a P2-09 prerequisite.
 
 **Alternative (option B): explicitly defer "saved models" to P3-05/P3-06.**
 - This needs an owner-approved change to P2-09's acceptance wording, recorded in ROADMAP and #20.
@@ -123,9 +141,14 @@ The record is about 0.1 MB, so it is stored raw. A re-run reproduces it byte-for
 
 | Condition | Reported as |
 | --- | --- |
-| interval lower bound > 0 **and** mean ≥ 0.25 lap | "A5 (braking) reached more training-track progress than A4" |
-| interval upper bound < 0 **and** mean ≤ −0.25 lap | "A4 (no braking) reached more training-track progress than A5" |
-| anything else | "no clear difference in training-track progress" |
+| interval lower bound > 0 **and** mean ≥ 0.25 lap | "A5 (braking) reached meaningfully more training-track progress than A4" |
+| interval upper bound < 0 **and** mean ≤ −0.25 lap | "A4 (no braking) reached meaningfully more training-track progress than A5" |
+| interval excludes 0 **but** \|mean\| < 0.25 lap | "A5 (or A4, by sign) reached more training-track progress, but the difference is below the predeclared 0.25-lap meaningful threshold" |
+| interval includes 0 | "no direction established: the interval spans zero" |
+
+The four rows are exhaustive and mutually exclusive. If the interval excludes 0, its bounds share the sign of the mean.
+
+Every report states the actual mean, interval, median, IQR and n, whatever the label. **Neither of the last two rows** means "no effect" or "equivalent". They mean only that a predeclared meaningful advantage was not established. One says the evidence shows a direction below the threshold; the other says the direction is uncertain.
 
 **Secondary measures (descriptive, both tracks, paired by seed):**
 - first-lap time (only seeds where both laps complete, with n);
@@ -157,14 +180,14 @@ Validation results never decide anything.
   - and A4 never applies the brake: its brake command is 0 on every tick.
 
   Both records parse and replay identically.
-- **Persistence (step 2):** as in §3.
+- **Persistence:** part 1's tests in step 2, and part 2's per-agent binding and cross-agent rejection tests in step 5 (§3).
 - **Feasibility driver (step 3):**
   - it is deterministic;
   - BRAKE and COAST give identical steering and throttle on every tick until the first over-speed tick;
   - COAST never brakes;
   - it refuses held-out tracks;
   - the gate-midpoint polyline and curvature match hand-computed values on the oval's straights and arcs.
-- **E4 analysis (step 5):** hand-computed paired differences, bootstrap and Wilcoxon checks on synthetic data, the three outcome labels, and the A4 brake-usage = 0 check.
+- **E4 analysis (step 5):** hand-computed paired differences, bootstrap and Wilcoxon checks on synthetic data, the four outcome labels, and the A4 brake-usage = 0 check. Synthetic cases cover each label, including ten differences of exactly +0.20, which must give "below the predeclared 0.25-lap meaningful threshold", not "no direction".
 
 ## 7. Failure handling (all runs: feasibility and E4)
 
@@ -176,7 +199,7 @@ Validation results never decide anything.
 ## 8. Implementation steps (each needs its own owner authorisation)
 
 1. **This plan.** Documentation only.
-2. **Persistence (A1):** option A or B (§3), with its tests. No study is run.
+2. **Persistence (A1):** option A part 1 (the model identity and mask contract and its tests, §3) or option B. No new record kind and no study run. Part 2 is integrated in step 5.
 3. **Feasibility driver and harness:**
    - `GatePursuitDriver`, BRAKE and COAST modes;
    - `npm run feasibility` writing the record in §4;
@@ -187,7 +210,8 @@ Validation results never decide anything.
 5. **E4 tooling:**
    - an A4/A5 study kind (manifest, record, replay and frozen-model evaluation, reusing the P2-08 code);
    - the reserved seeds 2001–2010;
-   - the paired A5 − A4 analysis and brake-usage measure;
+   - the per-agent `brakeEnabled` binding (A4 = `false`, A5 = `true`) and its cross-agent rejection tests. This is option A part 2 (§3). Under option B, only the per-agent configuration and its tests apply;
+   - the paired A5 − A4 analysis with the four outcome labels (§5), and the brake-usage measure;
    - T2.
 
    No study is run.
