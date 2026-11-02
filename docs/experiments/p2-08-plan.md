@@ -1,6 +1,6 @@
 # P2-08 plan: random baselines and the controlled improvement study (E1, E2)
 
-> Status: **plan; steps 1–3 done, the step 4 pilot run (artifacts in review), step 5 not authorised.**
+> Status: **plan; steps 1–3 done, the step 4 pilot run (artifacts merged), the step 5 manifest in preparation and its run not authorised.**
 > - Step 1 (the nested-key prerequisite) is done in #94.
 > - Step 2 (A1/A7 drivers and `evaluateDriver`) is done in #96 (merged at `5b61db5`).
 > - Step 3 (baselines, records and analysis tooling) was [authorised by the owner](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/19#issuecomment-6560607741) and is merged in #99–#106 (`main` at `c14f368`).
@@ -8,9 +8,9 @@
 >   - [authorised by the owner](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/19#issuecomment-6575209368);
 >   - its manifests and protocol are merged in #107 (`8a4b6d5`, [Codex technical approval](https://github.com/Harrisonxaph/Self-learning-Car-AI/pull/107#pullrequestreview-5736644002));
 >   - it was run on 2026-11-02 at the frozen commit `c14f368` ([relayed run and storage instruction](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/19#issuecomment-6579857037));
->   - its artifacts are in #108, awaiting Codex review and the owner's merge.
+>   - its artifacts are merged in #108: configuration C1, n = 10, δ = 0.25.
 > - **The pilot's limits:** it is exploratory and acceptance-ineligible; validation was used only for the predeclared configuration choice and descriptive results; the held-out track is untouched.
-> - Step 5 (the confirmatory manifest and run) is not authorised and has not been run. No learning claim has been accepted.
+> - Step 5: the confirmatory manifest and [protocol](p2-08-confirmatory-protocol.md) are [authorised for preparation](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/19#issuecomment-6580274602), for Codex review and the owner's approval. The confirmatory run is not authorised and has not been run. No learning claim has been accepted.
 >
 > Each step needs Codex review. No learning claim is made or implied.
 
@@ -187,7 +187,7 @@ The manifest is reviewed by Codex and approved by the owner **before** any confi
    - manifest and record formats;
    - `npm run study -- run | replay | analyse`.
 4. **Pilot** (§8): run, record and report as exploratory, then the confirmatory-manifest PR. **Run on 2026-11-02**: protocol in #107, artifacts in #108 (`experiments/results/p2-08/pilot/pilot.md`).
-5. **Confirmatory run:** a results PR with records, replay evidence and the report. P2-08 completion follows only from that PR.
+5. **Confirmatory run:** a results PR with records, replay evidence and the report. P2-08 completion follows only from that PR. The frozen manifest and its protocol come first: [`p2-08-confirmatory-protocol.md`](p2-08-confirmatory-protocol.md).
 
 **Tests planned for steps 2 and 3:**
 - **Determinism:** A1/A7 are deterministic from their action seeds; A7 holds each action for exactly 30 ticks.
