@@ -75,6 +75,7 @@ So on this split, A5's training-track advantage **did not transfer**. The plan t
   - My reasoning: the interruption was the execution environment's time limit, not one of the protocol's named failures (a failed run, a non-identical replay, or an analysis refusing its records). It produced no output.
   - Strictly, though, the prescribed `analyse` did not complete on its first attempt, and the study was not paused for an owner decision before it was resumed.
   - The numerical result cannot depend on the restart, because `analyse` is deterministic in its records. Codex reproduced `analysis.json` and `report.md` byte-for-byte. Whether the procedural deviation is acceptable is the owner's decision.
+  - **Owner disposition (recorded after #110 merged):** [accepted as a procedural exception for this study only](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/19#issuecomment-6589544564). It sets no precedent for later protocols.
 
 ## Measurements
 
