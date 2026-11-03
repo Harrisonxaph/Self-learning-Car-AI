@@ -473,6 +473,15 @@ Every car is controlled through one `Driver` interface (`decide(observation) →
 
 Built in P1-08 (`ai/drivers.ts`): the interface, an `Observation` holding the car, and the human driver. `controlsFromInput` maps held buttons to controls: full steering towards the held side (both sides cancel), full throttle, full brake, in any combination; the physics limits the wheel angle at speed.
 
+### Frozen-model brake mask (P2-09 step 2)
+
+Authorised as step 2 of [the P2-09 plan](experiments/p2-09-plan.md) only ([owner option A and authorisation](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/20#issuecomment-6591922425)). It adds an independent model identity and mask contract, with no new record kind, manifest or study.
+
+- **The convention:** a frozen model (`freezeModel`, `training/trackSplits.ts`) may carry `provenance.brakeEnabled`, a boolean. Provenance is part of the model ID, so the same parameters with the brake enabled and disabled are two different models, and changing the flag afterwards breaks the ID. The key is optional: P2-07 and P2-08 models do not carry it, and their formats and IDs are unchanged.
+- **`modelBrakeEnabled(model)`** (`training/frozenModelBrake.ts`) returns the flag. It throws `RangeError` if `model` is not an unchanged frozen model (`isFrozenModel`, so a forged ID or a flipped flag is caught), or if `model.provenance.brakeEnabled` is missing or not a boolean, naming that path.
+- **`createFrozenModelDriver(model)`** is `createNetworkDriver(model.parameters, { brakeEnabled: modelBrakeEnabled(model) })`. It never defaults the mask.
+- **Not in step 2:** the per-agent binding of A4 (`false`) and A5 (`true`) inside an E4 record, with its parser and replay checks, belongs to plan step 5. The mapping to `architecture.brakeEnabled` in a saved model belongs to P3-05 and P3-06.
+
 ### Baseline drivers and headless evaluation (P2-08 step 2)
 
 Authorised as step 2 of [the P2-08 plan](experiments/p2-08-plan.md) only. This design was written and committed before the code. It adds drivers and an evaluation function; it adds no A2/A8/A9 selection, manifests, study runner, statistics, dashboard or persistence, and runs no study.
