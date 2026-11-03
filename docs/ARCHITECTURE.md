@@ -473,6 +473,22 @@ Every car is controlled through one `Driver` interface (`decide(observation) →
 
 Built in P1-08 (`ai/drivers.ts`): the interface, an `Observation` holding the car, and the human driver. `controlsFromInput` maps held buttons to controls: full steering towards the held side (both sides cancel), full throttle, full brake, in any combination; the physics limits the wheel angle at speed.
 
+### Feasibility driver and harness (P2-09 step 3)
+
+Authorised as step 3 of [the P2-09 plan](experiments/p2-09-plan.md) only ([owner authorisation](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/20#issuecomment-6603831373)). It builds the tool for the braking-versus-coasting feasibility check (plan §4). **It does not run the check**: that is step 4 and needs its own authorisation. Physical feasibility of a scripted driver only, with no bearing on whether a network learns to brake.
+
+- **Driver** (`ai/gatePursuitDriver.ts`): `createGatePursuitDriver(track, physics, { mode, aLat, lookAheadMeters, vTop })` is an `EpisodeDriver` generalised from `tests/sim/ovalDriver.ts` (which is unchanged). It follows the closed polyline through the midpoints of the track's gates, so it works on any track with at least 3 gates.
+  - **Steering:** pure pursuit 8 m ahead along the polyline, as `pursuit()` does.
+  - **Speed target:** `min(vTop, sqrt(aLat × R))`, where `R` is the circumradius of the three consecutive midpoints nearest to the arc length `lookAheadMeters` ahead (Infinity where they are collinear).
+  - **Throttle:** 1 below the target, otherwise 0.
+  - **The one difference between modes:** above the target by more than 0.5 m/s, `'brake'` brakes (brake = 1) and `'coast'` does not. Steering, throttle and the target are identical, and the driver keeps no state.
+- **Harness** (`training/feasibility.ts`): `runFeasibility({ engine, source })` runs the predeclared grid once per mode per track and returns the record. The grid is 5 × 4 × 3 = 60 variants per mode per track on `stadium-oval` (training) and `rounded-rectangle` (validation), 240 episodes in all.
+  - **Shared path:** episodes run through `evaluateDriver` and the trainer's own limits (60 s, 5 s stall, 3 laps, fitness version 1). Tracks come only from `trainingTrack` and `validationTrack`, and `createEvaluationSetup` refuses a held-out track.
+  - **Decision:** `decideTrack` applies the plan's rule per track: braking is useful if only BRAKE completes a crash-free lap (rule i), or the best BRAKE lap is faster than the best COAST lap by at least max(0.5 s, 2% of the COAST time) (rule ii). A completed lap is crash-free, because a move that hits a wall credits no gate. Acceptance A2 is met if braking is useful on at least one track.
+  - **Record:** `resultsHash` covers the episodes only, so it does not depend on the engine or the commit. The record also says whether the grid is the predeclared one (`preregisteredGrid`).
+- **Command** (`scripts/feasibility.mjs`): `npm run feasibility -- run --out-dir <dir> [--force]` writes `feasibility.json` and `feasibility.md` as one unit (`writeRecordPair`), never over an existing output without `--force`. It takes no grid or track option. It exits 0, or 2 for invalid arguments, a missing or linked output directory, or an existing output.
+- **Not in step 3:** the check itself (step 4), the E4 per-agent record binding and tooling (step 5), and any held-out use.
+
 ### Frozen-model brake mask (P2-09 step 2)
 
 Authorised as step 2 of [the P2-09 plan](experiments/p2-09-plan.md) only ([owner option A and authorisation](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/20#issuecomment-6591922425)). It adds an independent model identity and mask contract, with no new record kind, manifest or study.
