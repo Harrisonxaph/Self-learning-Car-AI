@@ -175,7 +175,7 @@ export function wilcoxonSignedRank(differences: readonly number[]): WilcoxonResu
 // ---------------------------------------------------------------------------------------------------------------
 // Summaries
 
-const episodeSummary = (episode: Json): EpisodeSummary => ({
+export const episodeSummary = (episode: Json): EpisodeSummary => ({
   outcome: episode.outcome as EpisodeSummary['outcome'],
   gatesPassed: episode.gatesPassed as number,
   crashed: episode.crashed as boolean,

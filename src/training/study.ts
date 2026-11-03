@@ -41,6 +41,8 @@ export const CONFIRMATORY_SEED_SETS = Object.freeze([
   Object.freeze(Array.from({ length: 10 }, (_, i) => 1001 + i)),
   Object.freeze(Array.from({ length: 20 }, (_, i) => 1001 + i)),
 ]);
+/** P2-09 E4's reserved seeds (docs/experiments/p2-09-plan.md §5): disjoint from the pilot and the P2-08 confirmatory seeds. */
+export const E4_SEEDS = Object.freeze(Array.from({ length: 10 }, (_, i) => 2001 + i));
 export const MAX_MECHANICS_SEEDS = 1_000;
 
 /** A malformed or inconsistent study manifest. */
@@ -56,8 +58,9 @@ export class StudyCompatibilityError extends Error {
   override name = 'StudyCompatibilityError';
 }
 
-type Fail = (message: string) => never;
-type Json = Record<string, unknown>;
+// The helpers below are exported for the P2-09 E4 study (e4Study.ts), which parses its records with the same strictness.
+export type Fail = (message: string) => never;
+export type Json = Record<string, unknown>;
 
 export interface StudyManifest {
   readonly format: typeof STUDY_MANIFEST_FORMAT;
@@ -131,29 +134,29 @@ export interface StudyReplay {
   readonly sameSourceRevision: boolean | null;
 }
 
-const hashOf = (value: unknown): string => `sha256:${sha256Hex(canonicalJson(value))}`;
-const HASH = /^sha256:[0-9a-f]{64}$/;
-const REVISION = /^[0-9a-f]{40}$/;
-const ISO_TIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,3})?Z$/;
-const ID_PATTERN = /^[a-z0-9][a-z0-9-]{0,63}$/;
-const isPlainObject = (value: unknown): value is Json => value !== null && typeof value === 'object' && !Array.isArray(value);
+export const hashOf = (value: unknown): string => `sha256:${sha256Hex(canonicalJson(value))}`;
+export const HASH = /^sha256:[0-9a-f]{64}$/;
+export const REVISION = /^[0-9a-f]{40}$/;
+export const ISO_TIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,3})?Z$/;
+export const ID_PATTERN = /^[a-z0-9][a-z0-9-]{0,63}$/;
+export const isPlainObject = (value: unknown): value is Json => value !== null && typeof value === 'object' && !Array.isArray(value);
 
-function exact(value: unknown, path: string, keys: readonly string[], fail: Fail): Json {
+export function exact(value: unknown, path: string, keys: readonly string[], fail: Fail): Json {
   if (!isPlainObject(value)) return fail(`${path} must be an object.`);
   for (const key of keys) if (!Object.prototype.hasOwnProperty.call(value, key)) fail(`incomplete: ${path}.${key} is missing.`);
   for (const key of Object.keys(value)) if (!keys.includes(key)) fail(`${path} has an unknown field "${key}".`);
   return value;
 }
-const int = (value: unknown, path: string, min: number, max: number, fail: Fail): number =>
+export const int = (value: unknown, path: string, min: number, max: number, fail: Fail): number =>
   typeof value === 'number' && Number.isInteger(value) && value >= min && value <= max ? value : fail(`${path} must be an integer from ${min} to ${max}, got ${String(value)}.`);
-const finite = (value: unknown, path: string, fail: Fail): number =>
+export const finite = (value: unknown, path: string, fail: Fail): number =>
   typeof value === 'number' && Number.isFinite(value) ? value : fail(`${path} must be a finite number, got ${String(value)}.`);
-const str = (value: unknown, path: string, fail: Fail): string => (typeof value === 'string' ? value : fail(`${path} must be a string.`));
+export const str = (value: unknown, path: string, fail: Fail): string => (typeof value === 'string' ? value : fail(`${path} must be a string.`));
 /**
  * An array with an own, defined element at every index. Array callbacks (map, forEach, reduce) skip holes, so a
  * sparse array such as `[1, , 2]` or `new Array(1)` would otherwise pass every per-element check unexamined.
  */
-const dense = (value: unknown, path: string, fail: Fail): unknown[] => {
+export const dense = (value: unknown, path: string, fail: Fail): unknown[] => {
   if (!Array.isArray(value)) return fail(`${path} must be an array.`);
   for (let i = 0; i < value.length; i += 1) {
     if (!Object.prototype.hasOwnProperty.call(value, i) || value[i] === undefined) fail(`${path}[${i}] is missing.`);
@@ -164,19 +167,19 @@ const dense = (value: unknown, path: string, fail: Fail): unknown[] => {
  * Every array anywhere inside `value` must be dense (an own, defined element at each index). Checked over the whole
  * manifest or record first, so no later comparison (including ones that only visit enumerable keys) can see a hole.
  */
-function denseEverywhere(value: unknown, path: string, fail: Fail): void {
+export function denseEverywhere(value: unknown, path: string, fail: Fail): void {
   if (Array.isArray(value)) {
     dense(value, path, fail).forEach((item, i) => denseEverywhere(item, `${path}[${i}]`, fail));
   } else if (isPlainObject(value)) {
     for (const [key, item] of Object.entries(value)) denseEverywhere(item, `${path}.${key}`, fail);
   }
 }
-const arr = (value: unknown, path: string, length: number, fail: Fail): unknown[] => {
+export const arr = (value: unknown, path: string, length: number, fail: Fail): unknown[] => {
   const list = dense(value, path, fail);
   if (list.length !== length) fail(`${path} must have ${length} entries, got ${list.length}.`);
   return list;
 };
-const same = (value: unknown, expected: unknown, path: string, fail: Fail): void => {
+export const same = (value: unknown, expected: unknown, path: string, fail: Fail): void => {
   if (canonicalJson(value) !== canonicalJson(expected)) fail(`${path} must be ${canonicalJson(expected)}, got ${canonicalJson(value)}.`);
 };
 
@@ -208,7 +211,7 @@ const NESTED_KEYS: Readonly<Record<string, readonly string[]>> = Object.fromEntr
 );
 const MANIFEST_KEYS = ['format', 'version', 'id', 'label', 'description', 'agents', 'seeds', 'configuration', 'streams', 'tracks', 'metric', 'analysis', 'code'];
 
-const reserved = (seed: number): boolean => (seed >= 1001 && seed <= 1020) || PILOT_SEEDS.includes(seed);
+export const reserved = (seed: number): boolean => (seed >= 1001 && seed <= 1020) || PILOT_SEEDS.includes(seed) || E4_SEEDS.includes(seed);
 
 /**
  * Checks a study manifest completely and returns it. Throws StudyManifestError for any missing or unknown field (at
@@ -239,7 +242,7 @@ export function parseStudyManifest(input: unknown): StudyManifest {
     fail('a confirmatory manifest\'s seeds must be exactly 1001–1010 or 1001–1020, in order.');
   }
   if (label === 'mechanics') {
-    if (seeds.some(reserved)) fail('a mechanics manifest may not use the reserved pilot (9001–9003) or confirmatory (1001–1020) seeds.');
+    if (seeds.some(reserved)) fail('a mechanics manifest may not use the reserved pilot (9001–9003), P2-08 confirmatory (1001–1020) or P2-09 E4 (2001–2010) seeds.');
     if (seeds.length > MAX_MECHANICS_SEEDS) fail(`a mechanics manifest has at most ${MAX_MECHANICS_SEEDS} seeds.`);
   }
 
@@ -307,8 +310,8 @@ export function currentStudyContracts(): StudyContracts {
   return { ...currentContracts(), randomAction: RANDOM_ACTION_ALGORITHM, evaluation: { fitnessVersion: FITNESS_VERSION } };
 }
 
-const plain = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
-const modelJson = (model: { id: string; parameters: readonly number[]; provenance: object }) => ({
+export const plain = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
+export const modelJson = (model: { id: string; parameters: readonly number[]; provenance: object }) => ({
   id: model.id,
   parameters: [...model.parameters],
   provenance: { ...model.provenance },
@@ -357,7 +360,7 @@ function maxEpisodeTicksFor(manifest: StudyManifest, seed: number): number {
 
 const RECORD_KEYS = ['format', 'version', 'manifestHash', 'seed', 'recordedAt', 'source', 'engine', 'contracts', 'budgets', 'agents', 'evaluations', 'resultsHash'];
 
-function checkContext(context: StudyContext, fail: Fail): void {
+export function checkContext(context: StudyContext, fail: Fail): void {
   const e = exact(context?.engine, 'engine', ['name', 'version', 'v8'], fail);
   for (const key of ['name', 'version', 'v8']) if (typeof e[key] !== 'string' || (e[key] as string).length === 0) fail(`engine.${key} must be a non-empty string.`);
   const s = exact(context.source, 'source', ['revision', 'dirty', 'unavailableReason', 'appVersion'], fail);
@@ -409,14 +412,14 @@ const EPISODE_KEYS = ['outcome', 'ticks', 'gatesPassed', 'lapTicks', 'crashed', 
 const FITNESS_KEYS = ['checkpoints', 'partialProgress', 'laps', 'lapTimeBonus', 'collisionPenalty', 'total'];
 
 /** What checking an episode needs: the tick limit, the track's gates and the manifest's scoring. */
-interface EpisodeCheck {
+export interface EpisodeCheck {
   readonly maxTicks: number;
   readonly gates: number;
   readonly fitness: FitnessConfig;
   readonly rules: EpisodeRules;
 }
 
-function checkEpisode(value: unknown, path: string, check: EpisodeCheck, fail: Fail, extra: readonly string[] = []): Json {
+export function checkEpisode(value: unknown, path: string, check: EpisodeCheck, fail: Fail, extra: readonly string[] = []): Json {
   const { maxTicks, gates } = check;
   const e = exact(value, path, [...EPISODE_KEYS, ...extra], fail);
   if (!OUTCOMES.includes(e.outcome as string)) fail(`${path}.outcome must be one of ${OUTCOMES.join(', ')}.`);
@@ -442,7 +445,7 @@ function checkEpisode(value: unknown, path: string, check: EpisodeCheck, fail: F
   return e;
 }
 
-function checkCandidate(value: unknown, path: string, index: number, check: EpisodeCheck, fail: Fail): Json {
+export function checkCandidate(value: unknown, path: string, index: number, check: EpisodeCheck, fail: Fail): Json {
   const c = exact(value, path, ['index', 'genomeId', 'training'], fail);
   if (c.index !== index) fail(`${path}.index must be ${index}.`);
   if (typeof c.genomeId !== 'string' || !HASH.test(c.genomeId)) fail(`${path}.genomeId must be a sha256: hash.`);
@@ -450,7 +453,7 @@ function checkCandidate(value: unknown, path: string, index: number, check: Epis
   return c;
 }
 
-function checkModel(value: unknown, path: string, expectedGenomeId: string, provenance: Json, fail: Fail): void {
+export function checkModel(value: unknown, path: string, expectedGenomeId: string, provenance: Json, fail: Fail): void {
   const m = exact(value, path, ['id', 'parameters', 'provenance'], fail);
   const parameters = arr(m.parameters, `${path}.parameters`, PARAMETER_COUNT, fail).map((p, i) => finite(p, `${path}.parameters[${i}]`, fail));
   same(m.provenance, provenance, `${path}.provenance`, fail);
@@ -458,8 +461,8 @@ function checkModel(value: unknown, path: string, expectedGenomeId: string, prov
   if (m.id !== freezeModel(parameters, provenance as Record<string, string | number | boolean>).id) fail(`${path}.id does not match its parameters and provenance.`);
 }
 
-const totals = (candidates: readonly Json[]): number[] => candidates.map((c) => ((c.training as Json).fitness as Json).total as number);
-const ticksOf = (episodes: readonly Json[]): number => episodes.reduce((n, e) => n + (e.ticks as number), 0);
+export const totals = (candidates: readonly Json[]): number[] => candidates.map((c) => ((c.training as Json).fitness as Json).total as number);
+export const ticksOf = (episodes: readonly Json[]): number => episodes.reduce((n, e) => n + (e.ticks as number), 0);
 
 /**
  * Checks a seed record against its manifest completely, before anything runs, and returns it. Throws
