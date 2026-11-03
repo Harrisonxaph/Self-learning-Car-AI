@@ -33,6 +33,32 @@ export function writeRecordFile(out, text, force) {
   }
 }
 
+/** An output name already holds a directory. It is never replaced, even with `force`, because replacing it would delete its contents. */
+export class OutputDirectoryError extends Error {
+  name = 'OutputDirectoryError';
+}
+
+/**
+ * Checks, before any work is done, that every output named in `names` can be written into `outDir`: the entry itself
+ * (not what a symbolic link points to, so a dangling link counts as existing) must not be a directory, even with
+ * `force`, and must not exist at all unless `force` is given. Throws OutputDirectoryError or OutputExistsError.
+ * writeRecordPair moves an existing entry aside and removes it afterwards, so a directory here would be lost.
+ */
+export function checkOutputEntries(outDir, names, force) {
+  for (const name of names) {
+    const out = join(outDir, name);
+    let existing;
+    try {
+      existing = lstatSync(out);
+    } catch (error) {
+      if (error.code === 'ENOENT') continue;
+      throw error;
+    }
+    if (existing.isDirectory()) throw new OutputDirectoryError(`${out} is a directory; choose another output folder or remove it yourself.`);
+    if (!force) throw new OutputExistsError(`${out} already exists${existing.isSymbolicLink() ? ' as a symbolic link' : ''}; pass --force to replace it.`);
+  }
+}
+
 /** Rolling back a failed pair left an original output aside, because a new entry now holds its name. */
 export class RollbackIncompleteError extends Error {
   name = 'RollbackIncompleteError';

@@ -1,5 +1,7 @@
 export declare class OutputExistsError extends Error {}
 export declare class RollbackIncompleteError extends Error {}
+export declare class OutputDirectoryError extends Error {}
+export declare function checkOutputEntries(outDir: string, names: readonly string[], force: boolean): void;
 export declare function writeRecordFile(out: string, text: string, force: boolean): void;
 export interface PairOps {
   link(existing: string, created: string): void;

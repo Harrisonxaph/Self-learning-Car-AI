@@ -9,17 +9,18 @@
 // outside world (arguments, files, git and the engine); the check itself is src/training/feasibility.ts, loaded
 // through Vite so the command line and the tests run the same TypeScript.
 //
-// Exit codes: 0 written, 2 invalid arguments, a missing or unsuitable output directory, or an output that already
-// exists, with nothing written. Physical feasibility of a scripted driver only: not an analysis of learning.
+// Exit codes: 0 written, 2 invalid arguments, a missing or unsuitable output directory, an output that is a directory
+// (even with --force), or an output that already exists without --force, with nothing written. Physical feasibility of a scripted driver only: not an analysis of learning.
 import { execFileSync } from 'node:child_process';
 import { lstatSync, readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { runnerImport } from 'vite';
-import { OutputExistsError, RollbackIncompleteError, writeRecordPair } from './recordFile.mjs';
+import { checkOutputEntries, OutputDirectoryError, OutputExistsError, RollbackIncompleteError, writeRecordPair } from './recordFile.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const USAGE = 'Usage:\n  npm run feasibility -- run --out-dir <dir> [--force]';
+const OUTPUTS = ['feasibility.json', 'feasibility.md'];
 
 class UsageError extends Error {}
 
@@ -77,6 +78,9 @@ async function main(argv) {
   const options = parseArgs(argv);
   const dir = resolve(options.outDir);
   checkOutDir(dir);
+  // Before the grid runs: a directory at an output name is refused even with --force (replacing it would delete its
+  // contents), and an existing output is refused without --force.
+  checkOutputEntries(dir, OUTPUTS, options.force);
   const { module: feasibility } = await runnerImport(join(ROOT, 'src/training/feasibility.ts'));
   const src = source();
   if (src.dirty) console.warn('Note: the worktree has uncommitted changes; the record says so (source.dirty).');
@@ -93,7 +97,7 @@ async function main(argv) {
 main(process.argv.slice(2)).catch((error) => {
   if (error instanceof UsageError) {
     console.error(`${error.message}\n${USAGE}`);
-  } else if (error instanceof OutputExistsError || error instanceof RollbackIncompleteError) {
+  } else if (error instanceof OutputExistsError || error instanceof OutputDirectoryError || error instanceof RollbackIncompleteError) {
     console.error(error.message);
   } else {
     console.error(error instanceof Error ? error.stack ?? error.message : String(error));
