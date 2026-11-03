@@ -61,7 +61,20 @@ export interface E4AgentResult {
   readonly evaluations: number;
   readonly maxDistinctGenomes: number;
   readonly actualDistinctGenomes: number;
-  readonly ticks: PerTrack<number>;
+  /**
+   * Simulated car-ticks, kept apart so the equal search budget is not mixed with the checks: `training` is the search
+   * (every generation's episodes, P × G of them), `validation` is the descriptive validation episode, and
+   * `verification` is the frozen champion driven alone once more on the training track (to count its brake usage and
+   * to check that it reproduces itself). Everything the seed simulates is in exactly one of the three.
+   */
+  readonly ticks: E4Ticks;
+}
+
+/** What one agent's seed simulated; see E4AgentResult.ticks. */
+export interface E4Ticks {
+  readonly training: number;
+  readonly validation: number;
+  readonly verification: number;
 }
 
 /** The evaluation setups for an agent configuration: the training track as the trainer ran it, and the validation track. */
@@ -170,6 +183,6 @@ export function generateE4Agent(config: E4AgentConfig, agent: E4Agent, seed: num
     evaluations: setup.config.populationSize * G,
     maxDistinctGenomes: setup.config.populationSize * G - eliteReevaluations,
     actualDistinctGenomes,
-    ticks: Object.freeze({ training: generations.reduce((t, gen) => t + sumTicks(gen), 0), validation: onValidation.episode.ticks }),
+    ticks: Object.freeze({ training: generations.reduce((t, gen) => t + sumTicks(gen), 0), validation: onValidation.episode.ticks, verification: onTraining.episode.ticks }),
   });
 }

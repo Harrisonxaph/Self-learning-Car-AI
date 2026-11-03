@@ -133,6 +133,14 @@ describe('npm run e4: run, replay and analyse on the tiny mechanics fixture', ()
     expect(result.out).toMatch(/6 A4 and 6 A5 evaluations \(planned 6 each\)/);
     expect(result.out).toContain('Raw record only: no analysis was run');
     const record = read(RECORD_A);
+    // The printed total is every car-tick the seed simulated, split into the search, the validation episodes and the
+    // frozen champions' verification episodes (Codex's P2 on #117), and agrees with the record's own accounting.
+    const sum = (key: string) => Object.values(record.budgets.ticks as Record<string, Record<string, number>>).reduce((n, t) => n + t[key]!, 0);
+    expect(sum('verification')).toBeGreaterThan(0);
+    expect(result.out).toContain(
+      `${sum('training') + sum('validation') + sum('verification')} car-ticks simulated (search ${sum('training')}, validation ${sum('validation')}, verification of the frozen champions ${sum('verification')})`,
+    );
+    expect(record.budgets.actual.verificationEpisodes).toEqual({ A4: 1, A5: 1 });
     expect(() => parseE4Record(record, MANIFEST, ENGINE)).not.toThrow();
     expect(record.agents.A4.brakeEnabled).toBe(false);
     expect(record.agents.A5.brakeEnabled).toBe(true);

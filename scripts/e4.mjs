@@ -212,9 +212,13 @@ async function main() {
       throw error;
     }
     const { planned, actual, ticks } = record.budgets;
-    const executed = Object.values(ticks).reduce((n, t) => n + t.training + t.validation, 0);
+    // Every car-tick the seed simulated: the search (the equal P x G budget), the descriptive validation episodes and the
+    // frozen champions' verification episodes (each champion driven alone once more on the training track).
+    const sum = (key) => Object.values(ticks).reduce((n, t) => n + t[key], 0);
+    const executed = sum('training') + sum('validation') + sum('verification');
     console.log(`E4 study ${manifest.id} (${manifest.label}), seed ${record.seed}: agents ${manifest.agents.join(', ')} (A4 brake off, A5 brake on).`);
-    console.log(`  ${actual.evaluations.A4} A4 and ${actual.evaluations.A5} A5 evaluations (planned ${planned.evolutionEvaluations} each); ${executed} car-ticks simulated.`);
+    console.log(`  ${actual.evaluations.A4} A4 and ${actual.evaluations.A5} A5 evaluations (planned ${planned.evolutionEvaluations} each); ${executed} car-ticks simulated ` +
+        `(search ${sum('training')}, validation ${sum('validation')}, verification of the frozen champions ${sum('verification')}).`);
     console.log(`Recorded ${out} (results ${record.resultsHash.slice(0, 19)}…).`);
     console.log('Raw record only: no analysis was run, validation is descriptive, no held-out track was used, and nothing here is evidence of learning.');
     return 0;

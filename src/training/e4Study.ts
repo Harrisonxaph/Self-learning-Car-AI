@@ -271,6 +271,8 @@ function budgetsJson(manifest: E4Manifest, results: Readonly<Record<E4Agent, E4A
     actual: {
       evaluations: each((a) => a.evaluations),
       eliteReevaluations: manifest.configuration.training.eliteCount * (G - 1),
+      // The frozen champion's extra training-track episode (not part of the equal P × G search budget).
+      verificationEpisodes: each(() => 1),
     },
     diversity: each((a) => ({ evaluations: a.evaluations, maxDistinctGenomes: a.maxDistinctGenomes, actualDistinctGenomes: a.actualDistinctGenomes })),
     ticks: each((a) => a.ticks),
@@ -401,13 +403,19 @@ export function parseE4Record(input: unknown, manifestInput: unknown, engine: Ex
   const eachAgent = (pick: (agent: E4Agent) => unknown) => Object.fromEntries(E4_AGENTS.map((agent) => [agent, pick(agent)]));
   same(r.budgets, {
     planned: { evolutionEvaluations: P * G, maxEpisodeTicks: maxTicks },
-    actual: { evaluations: eachAgent(() => P * G), eliteReevaluations: eliteCount * (G - 1) },
+    actual: { evaluations: eachAgent(() => P * G), eliteReevaluations: eliteCount * (G - 1), verificationEpisodes: eachAgent(() => 1) },
     diversity: eachAgent((agent) => ({
       evaluations: P * G,
       maxDistinctGenomes: P * G - eliteCount * (G - 1),
       actualDistinctGenomes: new Set(parsed[agent].gens.flat().map((c) => c.genomeId)).size,
     })),
-    ticks: eachAgent((agent) => ({ training: sumTrain(parsed[agent].gens), validation: (parsed[agent].block.validation as Json).ticks })),
+    // training = the search; validation = the descriptive episode; verification = the frozen champion re-driven alone
+    // on the training track, which reproduces its own training episode, so it is that episode's tick count.
+    ticks: eachAgent((agent) => ({
+      training: sumTrain(parsed[agent].gens),
+      validation: (parsed[agent].block.validation as Json).ticks,
+      verification: (parsed[agent].gens[G - 1]![parsed[agent].index]!.training as Json).ticks,
+    })),
   }, 'record.budgets', fail);
 
   if (typeof r.resultsHash !== 'string' || !HASH.test(r.resultsHash)) fail('record.resultsHash must be a sha256: hash.');
