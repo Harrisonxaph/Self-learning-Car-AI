@@ -22,7 +22,8 @@
     "demo:laps": "vitest run tests/sim/lapDemo.test.ts --silent=false --reporter=verbose",
     "demo:train": "vitest run tests/training/trainingDemo.test.ts --mode train-demo --silent=false --reporter=verbose",
     "experiment": "node scripts/experiment.mjs",
-    "study": "node scripts/study.mjs"
+    "study": "node scripts/study.mjs",
+    "feasibility": "node scripts/feasibility.mjs"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

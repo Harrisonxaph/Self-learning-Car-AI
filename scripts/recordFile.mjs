@@ -33,6 +33,32 @@ export function writeRecordFile(out, text, force) {
   }
 }
 
+/** An output name already holds a directory. It is never replaced, even with `force`, because replacing it would delete its contents. */
+export class OutputDirectoryError extends Error {
+  name = 'OutputDirectoryError';
+}
+
+/**
+ * Checks, before any work is done, that every output named in `names` can be written into `outDir`: the entry itself
+ * (not what a symbolic link points to, so a dangling link counts as existing) must not be a directory, even with
+ * `force`, and must not exist at all unless `force` is given. Throws OutputDirectoryError or OutputExistsError.
+ * writeRecordPair moves an existing entry aside and removes it afterwards, so a directory here would be lost.
+ */
+export function checkOutputEntries(outDir, names, force) {
+  for (const name of names) {
+    const out = join(outDir, name);
+    let existing;
+    try {
+      existing = lstatSync(out);
+    } catch (error) {
+      if (error.code === 'ENOENT') continue;
+      throw error;
+    }
+    if (existing.isDirectory()) throw new OutputDirectoryError(`${out} is a directory; choose another output folder or remove it yourself.`);
+    if (!force) throw new OutputExistsError(`${out} already exists${existing.isSymbolicLink() ? ' as a symbolic link' : ''}; pass --force to replace it.`);
+  }
+}
+
 /** Rolling back a failed pair left an original output aside, because a new entry now holds its name. */
 export class RollbackIncompleteError extends Error {
   name = 'RollbackIncompleteError';
@@ -58,7 +84,10 @@ const entryOf = (ops, path) => {
  * replacement is linked back without replacing any entry, or kept and named if it cannot be put back. Only owned
  * content is discarded. Originals are restored with the same no-clobber links. If an original or captured
  * replacement cannot be restored, the folder is kept and RollbackIncompleteError names its recovery path.
- * Staging is covered by the cleanup guard too. `ops` replaces the file-system calls in tests.
+ * An existing output that is a directory (even one created after a preflight check) is refused with
+ * OutputDirectoryError and not moved. If one is only found after it was captured, it is never restored (a directory
+ * cannot be hard-linked, and a rename could replace another process's empty directory): the folder is kept and
+ * RollbackIncompleteError names its recovery path. Staging is covered by the cleanup guard too. `ops` replaces the file-system calls in tests.
  */
 export function writeRecordPair(entries, force, ops = nodeOps) {
   const dir = dirname(entries[0].out);
@@ -73,10 +102,21 @@ export function writeRecordPair(entries, force, ops = nodeOps) {
     });
     try {
       for (const [i, s] of staged.entries()) {
-        if (force && entryOf(ops, s.out) !== null) {
+        const existing = force ? entryOf(ops, s.out) : null;
+        if (existing !== null) {
+          // A directory seen here is refused without moving anything (a preflight check cannot cover the time a long
+          // run takes, so this is the check that counts; Codex review of 54c186f).
+          if (existing.isDirectory()) throw new OutputDirectoryError(`${s.out} is a directory; choose another output folder or remove it yourself.`);
           const backup = join(folder, `old-${i}`);
           ops.rename(s.out, backup);
           s.backup = backup;
+          // The entry captured may not be the one just seen. A directory cannot be hard-linked back, and a rename
+          // could replace an empty directory another process has just created, so it is never restored: it is kept
+          // in the kept folder and named (Codex review of a43de48).
+          if (ops.lstat(backup).isDirectory()) {
+            s.backupIsDirectory = true;
+            throw new OutputDirectoryError(`${s.out} became a directory while the outputs were being written; choose another output folder or remove it yourself.`);
+          }
         }
       }
       for (const s of staged) {
@@ -107,6 +147,10 @@ export function writeRecordPair(entries, force, ops = nodeOps) {
           }
         }
         if (s.backup === null) continue;
+        if (s.backupIsDirectory) {
+          problems.push(`${s.out} was replaced by a directory that was captured; its previous content is at ${s.backup}`);
+          continue;
+        }
         // A hard link never replaces an entry, so an entry created at any moment before the restore is kept
         // (Codex review of b6b4015: a check-then-rename could overwrite one created between the two steps).
         try {

@@ -19,7 +19,7 @@ import { existsSync, lstatSync, readFileSync, realpathSync, statSync } from 'nod
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { runnerImport } from 'vite';
-import { OutputExistsError, writeRecordFile, writeRecordPair } from './recordFile.mjs';
+import { OutputDirectoryError, OutputExistsError, writeRecordFile, writeRecordPair } from './recordFile.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const USAGE =
@@ -175,7 +175,7 @@ async function analyse(options) {
   try {
     writeRecordPair(OUTPUTS.map((name) => ({ out: join(outDir, name), text: texts[name] })), options.force);
   } catch (error) {
-    if (error instanceof OutputExistsError) throw new UsageError(error.message);
+    if (error instanceof OutputExistsError || error instanceof OutputDirectoryError) throw new UsageError(error.message);
     throw error;
   }
   const { decision } = result;

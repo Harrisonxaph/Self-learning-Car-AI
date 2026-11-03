@@ -1,9 +1,9 @@
 # P2-09 plan: braking toggle, braking feasibility check and E4 (A4 vs A5)
 
-> **Status: plan merged (#112, #113). P2-09 is In Progress: step 2 only is authorised.**
-> - **Owner decisions:** persistence **option A** was chosen and [step 2 authorised](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/20#issuecomment-6591922425). It is implemented in `src/training/frozenModelBrake.ts` and in review. Steps 3–8 are not authorised.
+> **Status: plan merged (#112, #113). P2-09 is In Progress: step 2 is merged (#114) and step 3 is authorised and in review.**
+> - **Owner decisions:** persistence **option A** was chosen and [step 2 authorised](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/20#issuecomment-6591922425). Step 2 is merged in #114 (`src/training/frozenModelBrake.ts`). [Step 3 only was then authorised](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/20#issuecomment-6603831373): the feasibility driver and harness (`src/ai/gatePursuitDriver.ts`, `src/training/feasibility.ts`, `scripts/feasibility.mjs`), in review. **The check itself (step 4) has not been run.** Steps 4–8 are not authorised.
 > - **Authorisation:** this plan was [authorised as documentation only](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/20#issuecomment-6591090802). It follows [Codex's assessment on #20](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/20#issuecomment-6590499057).
-> - **Not done:** only step 2 is implemented (in review in #114). Steps 3–8 are not implemented or run. Each step in §8 needs its own owner authorisation, Codex review and owner merge.
+> - **Not done:** steps 2 and 3 are implemented. Steps 4–8 are not implemented or run, and no feasibility result exists. Each step in §8 needs its own owner authorisation, Codex review and owner merge.
 > - **Not changed:** no physics or track change is proposed.
 > - **E5 is out of scope.** It covers the held-out braking benefit and belongs to P5-02.
 
