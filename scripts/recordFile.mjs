@@ -84,8 +84,10 @@ const entryOf = (ops, path) => {
  * replacement is linked back without replacing any entry, or kept and named if it cannot be put back. Only owned
  * content is discarded. Originals are restored with the same no-clobber links. If an original or captured
  * replacement cannot be restored, the folder is kept and RollbackIncompleteError names its recovery path.
- * An existing output that turns out to be a directory (even one created after a preflight check) is put back and
- * refused with OutputDirectoryError, never deleted. Staging is covered by the cleanup guard too. `ops` replaces the file-system calls in tests.
+ * An existing output that is a directory (even one created after a preflight check) is refused with
+ * OutputDirectoryError and not moved. If one is only found after it was captured, it is never restored (a directory
+ * cannot be hard-linked, and a rename could replace another process's empty directory): the folder is kept and
+ * RollbackIncompleteError names its recovery path. Staging is covered by the cleanup guard too. `ops` replaces the file-system calls in tests.
  */
 export function writeRecordPair(entries, force, ops = nodeOps) {
   const dir = dirname(entries[0].out);
@@ -100,15 +102,20 @@ export function writeRecordPair(entries, force, ops = nodeOps) {
     });
     try {
       for (const [i, s] of staged.entries()) {
-        if (force && entryOf(ops, s.out) !== null) {
+        const existing = force ? entryOf(ops, s.out) : null;
+        if (existing !== null) {
+          // A directory seen here is refused without moving anything (a preflight check cannot cover the time a long
+          // run takes, so this is the check that counts; Codex review of 54c186f).
+          if (existing.isDirectory()) throw new OutputDirectoryError(`${s.out} is a directory; choose another output folder or remove it yourself.`);
           const backup = join(folder, `old-${i}`);
           ops.rename(s.out, backup);
           s.backup = backup;
-          // Inspect what was actually captured, not what a check saw earlier: a directory that appeared since any
-          // preflight check must not be discarded with the owned folder (Codex review of 54c186f).
+          // The entry captured may not be the one just seen. A directory cannot be hard-linked back, and a rename
+          // could replace an empty directory another process has just created, so it is never restored: it is kept
+          // in the kept folder and named (Codex review of a43de48).
           if (ops.lstat(backup).isDirectory()) {
             s.backupIsDirectory = true;
-            throw new OutputDirectoryError(`${s.out} is a directory; choose another output folder or remove it yourself.`);
+            throw new OutputDirectoryError(`${s.out} became a directory while the outputs were being written; choose another output folder or remove it yourself.`);
           }
         }
       }
@@ -140,14 +147,16 @@ export function writeRecordPair(entries, force, ops = nodeOps) {
           }
         }
         if (s.backup === null) continue;
+        if (s.backupIsDirectory) {
+          problems.push(`${s.out} was replaced by a directory that was captured; its previous content is at ${s.backup}`);
+          continue;
+        }
         // A hard link never replaces an entry, so an entry created at any moment before the restore is kept
         // (Codex review of b6b4015: a check-then-rename could overwrite one created between the two steps).
         try {
-          // A directory cannot be hard-linked. A rename puts it back and never replaces a file or a non-empty directory.
-          if (s.backupIsDirectory) ops.rename(s.backup, s.out);
-          else ops.link(s.backup, s.out);
+          ops.link(s.backup, s.out);
         } catch (restore) {
-          if (restore.code === 'EEXIST' || restore.code === 'ENOTEMPTY' || restore.code === 'ENOTDIR') problems.push(`another entry now holds ${s.out} (its previous content is at ${s.backup})`);
+          if (restore.code === 'EEXIST') problems.push(`another entry now holds ${s.out} (its previous content is at ${s.backup})`);
           else problems.push(`${s.out} could not be restored (${restore.message}); its previous content is at ${s.backup}`);
         }
       }

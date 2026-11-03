@@ -5,7 +5,7 @@
 import { spawnSync } from 'node:child_process';
 import { existsSync, linkSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { basename, join } from 'node:path';
+import { join } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
 import { checkOutputEntries, OutputDirectoryError, OutputExistsError, RollbackIncompleteError, writeRecordPair } from '../../scripts/recordFile.mjs';
 
@@ -232,58 +232,56 @@ describe('writeRecordPair: a directory that appears after the preflight check (-
     expect(readdirSync(dir)).toEqual(['feasibility.md']);
   });
 
-  it('a directory that appears between the check and the move-aside is still kept (it is the captured entry that is inspected)', () => {
-    const dir = fresh('between');
-    writeFileSync(join(dir, 'feasibility.md'), 'previous file');
+  // The entry is looked at before it is moved, so a directory seen then is refused without being moved at all. Only a
+  // directory that appears in the instant between that look and the move-aside is captured; it is never restored (a
+  // directory cannot be hard-linked, and a rename could replace another process's empty directory), so it is kept
+  // in the kept folder and its path is named (Codex's P2 on a43de48).
+  const swapInDirectory = (dir: string, afterCapture: () => void = () => {}) => {
     const out = join(dir, 'feasibility.md');
-    // The path holds a file when the writer looks, and a directory when it is moved aside.
     let swapped = false;
-    const racing = ops({
+    return ops({
       rename: (from: string, to: string) => {
         if (from === out && !swapped) {
           swapped = true;
-          rmSync(out);
+          rmSync(out); // the file the writer saw is replaced by a directory just before the move
           keepDirectory(dir, 'feasibility.md');
+          renameSync(from, to);
+          afterCapture();
+          return;
         }
         renameSync(from, to);
       },
     });
-    expect(() => writeRecordPair(pair(dir), true, racing as never)).toThrow(OutputDirectoryError);
-    expectIntact(dir, 'feasibility.md');
-    expect(readdirSync(dir)).toEqual(['feasibility.md']);
-  });
+  };
+  const recoveryOf = (error: unknown) => (error as Error).message.match(/previous content is at (\S+?)(\)|\.$|;)/)![1]!;
 
-  it('if a directory cannot be put back, it is kept and its recovery path is named', () => {
-    const dir = fresh('restore-fails');
-    keepDirectory(dir, 'feasibility.md');
-    const failing = ops({
-      rename: (from: string, to: string) => {
-        if (basename(from).startsWith('old-')) throw Object.assign(new Error('injected EIO'), { code: 'EIO' });
-        renameSync(from, to);
-      },
-    });
+  it('a directory that appears between the look and the move-aside is kept in the kept folder, with its path named', () => {
+    const dir = fresh('between');
+    writeFileSync(join(dir, 'feasibility.json'), 'previous json');
+    writeFileSync(join(dir, 'feasibility.md'), 'previous file');
     let error: unknown;
     try {
-      writeRecordPair(pair(dir), true, failing as never);
+      writeRecordPair(pair(dir), true, swapInDirectory(dir) as never);
     } catch (e) {
       error = e;
     }
     expect(error).toBeInstanceOf(RollbackIncompleteError);
-    const recovery = (error as Error).message.match(/previous content is at (\S+?)(\)|\.$|;)/)![1]!;
+    const recovery = recoveryOf(error);
     expect(readFileSync(join(recovery, 'keep.txt'), 'utf8')).toBe('keep');
     expect(readFileSync(join(recovery, 'inner', 'deep.txt'), 'utf8')).toBe('deep');
+    expect(readFileSync(join(dir, 'feasibility.json'), 'utf8')).toBe('previous json'); // the other output is restored
+    expect(existsSync(join(dir, 'feasibility.md'))).toBe(false); // nothing was put in the captured directory's place
     rmSync(join(recovery, '..'), { recursive: true, force: true });
   });
 
-  it('an entry created at the moment of the restore is kept, never replaced, and the directory is named', () => {
-    const dir = fresh('restore-race');
-    keepDirectory(dir, 'feasibility.md');
+  it('an empty directory another process creates after the capture is never replaced (Codex P2 on a43de48)', () => {
+    const dir = fresh('concurrent-empty-directory');
+    writeFileSync(join(dir, 'feasibility.md'), 'previous file');
     const out = join(dir, 'feasibility.md');
-    const racing = ops({
-      rename: (from: string, to: string) => {
-        if (basename(from).startsWith('old-') && to === out) writeFileSync(out, 'someone else');
-        renameSync(from, to);
-      },
+    let created = 0;
+    const racing = swapInDirectory(dir, () => {
+      mkdirSync(out); // another process creates an empty directory at the name
+      created = lstatSync(out).ino;
     });
     let error: unknown;
     try {
@@ -292,9 +290,39 @@ describe('writeRecordPair: a directory that appears after the preflight check (-
       error = e;
     }
     expect(error).toBeInstanceOf(RollbackIncompleteError);
-    expect(readFileSync(out, 'utf8')).toBe('someone else');
-    const recovery = (error as Error).message.match(/previous content is at (\S+?)(\)|\.$|;)/)![1]!;
+    expect(lstatSync(out).isDirectory()).toBe(true);
+    expect(lstatSync(out).ino).toBe(created); // the same directory, not replaced
+    expect(readdirSync(out)).toEqual([]);
+    const recovery = recoveryOf(error);
     expect(readFileSync(join(recovery, 'keep.txt'), 'utf8')).toBe('keep');
     rmSync(join(recovery, '..'), { recursive: true, force: true });
+  });
+
+  it('a file another process creates after the capture is never replaced either', () => {
+    const dir = fresh('concurrent-file');
+    writeFileSync(join(dir, 'feasibility.md'), 'previous file');
+    const out = join(dir, 'feasibility.md');
+    let error: unknown;
+    try {
+      writeRecordPair(pair(dir), true, swapInDirectory(dir, () => writeFileSync(out, 'someone else')) as never);
+    } catch (e) {
+      error = e;
+    }
+    expect(error).toBeInstanceOf(RollbackIncompleteError);
+    expect(readFileSync(out, 'utf8')).toBe('someone else');
+    const recovery = recoveryOf(error);
+    expect(readFileSync(join(recovery, 'keep.txt'), 'utf8')).toBe('keep');
+    rmSync(join(recovery, '..'), { recursive: true, force: true });
+  });
+
+  it('a directory seen before the move is not moved at all: no kept folder and no recovery path', () => {
+    const dir = fresh('seen-first');
+    keepDirectory(dir, 'feasibility.md');
+    const renames: string[] = [];
+    const watching = ops({ rename: (from: string, to: string) => (renames.push(from), renameSync(from, to)) });
+    expect(() => writeRecordPair(pair(dir), true, watching as never)).toThrow(OutputDirectoryError);
+    expect(renames).toEqual([]);
+    expectIntact(dir, 'feasibility.md');
+    expect(readdirSync(dir)).toEqual(['feasibility.md']);
   });
 });
