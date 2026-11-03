@@ -3,11 +3,11 @@
 // checking BEFORE the grid is run, so no feasibility check is executed and nothing is written. The run itself is plan
 // step 4, which needs its own authorisation.
 import { spawnSync } from 'node:child_process';
-import { existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, linkSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
-import { checkOutputEntries, OutputDirectoryError, OutputExistsError } from '../../scripts/recordFile.mjs';
+import { checkOutputEntries, OutputDirectoryError, OutputExistsError, RollbackIncompleteError, writeRecordPair } from '../../scripts/recordFile.mjs';
 
 const ROOT = join(__dirname, '../..');
 const DIR = mkdtempSync(join(tmpdir(), 'feasibility-cli-'));
@@ -167,5 +167,134 @@ describe('checkOutputEntries', () => {
     symlinkSync(join(DIR, 'nowhere-either'), join(dir, 'feasibility.md'));
     expect(() => checkOutputEntries(dir, NAMES, true)).not.toThrow(); // the links are replaced, never their targets
     expect(() => checkOutputEntries(dir, NAMES, false)).toThrow(OutputExistsError);
+  });
+});
+
+// Codex review of 54c186f (P1): the preflight check runs BEFORE the grid, and the grid takes a while, so a directory can
+// appear at an output name between that check and the write. writeRecordPair must then refuse it and put it back; it
+// must never delete it. No grid is run: the sequence is checkOutputEntries, then a directory appears, then the writer.
+describe('writeRecordPair: a directory that appears after the preflight check (--force)', () => {
+  const NAMES = ['feasibility.json', 'feasibility.md'];
+  const pair = (dir: string) => NAMES.map((name) => ({ out: join(dir, name), text: `new ${name}` }));
+  const fresh = (name: string) => {
+    const dir = join(DIR, `late-${name}`);
+    mkdirSync(dir);
+    return dir;
+  };
+  const ops = (over: Record<string, unknown> = {}) => ({ link: linkSync, rename: renameSync, lstat: lstatSync, unlink: unlinkSync, ...over });
+  const keepDirectory = (dir: string, name: string) => {
+    mkdirSync(join(dir, name, 'inner'), { recursive: true });
+    writeFileSync(join(dir, name, 'keep.txt'), 'keep');
+    writeFileSync(join(dir, name, 'inner', 'deep.txt'), 'deep');
+  };
+  const expectIntact = (dir: string, name: string) => {
+    expect(lstatSync(join(dir, name)).isDirectory()).toBe(true);
+    expect(readFileSync(join(dir, name, 'keep.txt'), 'utf8')).toBe('keep');
+    expect(readFileSync(join(dir, name, 'inner', 'deep.txt'), 'utf8')).toBe('deep');
+  };
+
+  it.each(NAMES)('refuses a directory at %s, keeps its contents, and leaves nothing else behind', (name) => {
+    const dir = fresh(`only-${name}`);
+    expect(() => checkOutputEntries(dir, NAMES, true)).not.toThrow(); // the preflight passes: nothing is there yet
+    keepDirectory(dir, name); // ... then the directory appears while the grid runs
+    expect(() => writeRecordPair(pair(dir), true)).toThrow(OutputDirectoryError);
+    expectIntact(dir, name);
+    expect(readdirSync(dir)).toEqual([name]);
+  });
+
+  it.each([
+    ['feasibility.json', 'feasibility.md'],
+    ['feasibility.md', 'feasibility.json'],
+  ])('with a directory at %s and an existing file at %s, both previous outputs are preserved on refusal', (directory, file) => {
+    const dir = fresh(`mixed-${directory}`);
+    writeFileSync(join(dir, file), 'previous file');
+    expect(() => checkOutputEntries(dir, NAMES, true)).not.toThrow();
+    keepDirectory(dir, directory);
+    expect(() => writeRecordPair(pair(dir), true)).toThrow(OutputDirectoryError);
+    expectIntact(dir, directory);
+    expect(readFileSync(join(dir, file), 'utf8')).toBe('previous file');
+    expect(readdirSync(dir).sort()).toEqual([...NAMES].sort());
+  });
+
+  it('keeps both directories when both outputs became directories', () => {
+    const dir = fresh('both');
+    for (const name of NAMES) keepDirectory(dir, name);
+    expect(() => writeRecordPair(pair(dir), true)).toThrow(OutputDirectoryError);
+    for (const name of NAMES) expectIntact(dir, name);
+    expect(readdirSync(dir).sort()).toEqual([...NAMES].sort());
+  });
+
+  it('refuses a directory without --force as well, and keeps it', () => {
+    const dir = fresh('no-force');
+    keepDirectory(dir, 'feasibility.md');
+    expect(() => writeRecordPair(pair(dir), false)).toThrow(OutputExistsError);
+    expectIntact(dir, 'feasibility.md');
+    expect(readdirSync(dir)).toEqual(['feasibility.md']);
+  });
+
+  it('a directory that appears between the check and the move-aside is still kept (it is the captured entry that is inspected)', () => {
+    const dir = fresh('between');
+    writeFileSync(join(dir, 'feasibility.md'), 'previous file');
+    const out = join(dir, 'feasibility.md');
+    // The path holds a file when the writer looks, and a directory when it is moved aside.
+    let swapped = false;
+    const racing = ops({
+      rename: (from: string, to: string) => {
+        if (from === out && !swapped) {
+          swapped = true;
+          rmSync(out);
+          keepDirectory(dir, 'feasibility.md');
+        }
+        renameSync(from, to);
+      },
+    });
+    expect(() => writeRecordPair(pair(dir), true, racing as never)).toThrow(OutputDirectoryError);
+    expectIntact(dir, 'feasibility.md');
+    expect(readdirSync(dir)).toEqual(['feasibility.md']);
+  });
+
+  it('if a directory cannot be put back, it is kept and its recovery path is named', () => {
+    const dir = fresh('restore-fails');
+    keepDirectory(dir, 'feasibility.md');
+    const failing = ops({
+      rename: (from: string, to: string) => {
+        if (basename(from).startsWith('old-')) throw Object.assign(new Error('injected EIO'), { code: 'EIO' });
+        renameSync(from, to);
+      },
+    });
+    let error: unknown;
+    try {
+      writeRecordPair(pair(dir), true, failing as never);
+    } catch (e) {
+      error = e;
+    }
+    expect(error).toBeInstanceOf(RollbackIncompleteError);
+    const recovery = (error as Error).message.match(/previous content is at (\S+?)(\)|\.$|;)/)![1]!;
+    expect(readFileSync(join(recovery, 'keep.txt'), 'utf8')).toBe('keep');
+    expect(readFileSync(join(recovery, 'inner', 'deep.txt'), 'utf8')).toBe('deep');
+    rmSync(join(recovery, '..'), { recursive: true, force: true });
+  });
+
+  it('an entry created at the moment of the restore is kept, never replaced, and the directory is named', () => {
+    const dir = fresh('restore-race');
+    keepDirectory(dir, 'feasibility.md');
+    const out = join(dir, 'feasibility.md');
+    const racing = ops({
+      rename: (from: string, to: string) => {
+        if (basename(from).startsWith('old-') && to === out) writeFileSync(out, 'someone else');
+        renameSync(from, to);
+      },
+    });
+    let error: unknown;
+    try {
+      writeRecordPair(pair(dir), true, racing as never);
+    } catch (e) {
+      error = e;
+    }
+    expect(error).toBeInstanceOf(RollbackIncompleteError);
+    expect(readFileSync(out, 'utf8')).toBe('someone else');
+    const recovery = (error as Error).message.match(/previous content is at (\S+?)(\)|\.$|;)/)![1]!;
+    expect(readFileSync(join(recovery, 'keep.txt'), 'utf8')).toBe('keep');
+    rmSync(join(recovery, '..'), { recursive: true, force: true });
   });
 });
