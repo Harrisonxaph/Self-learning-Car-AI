@@ -3,7 +3,7 @@
 > **Status: plan merged (#112, #113). P2-09 is In Progress: step 2 only is authorised.**
 > - **Owner decisions:** persistence **option A** was chosen and [step 2 authorised](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/20#issuecomment-6591922425). It is implemented in `src/training/frozenModelBrake.ts` and in review. Steps 3–8 are not authorised.
 > - **Authorisation:** this plan was [authorised as documentation only](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/20#issuecomment-6591090802). It follows [Codex's assessment on #20](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/20#issuecomment-6590499057).
-> - **Not done:** nothing in it is implemented or run. Each step in §8 needs its own owner authorisation, Codex review and owner merge.
+> - **Not done:** only step 2 is implemented (in review in #114). Steps 3–8 are not implemented or run. Each step in §8 needs its own owner authorisation, Codex review and owner merge.
 > - **Not changed:** no physics or track change is proposed.
 > - **E5 is out of scope.** It covers the held-out braking benefit and belongs to P5-02.
 
