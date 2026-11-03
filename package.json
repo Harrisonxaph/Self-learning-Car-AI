@@ -23,7 +23,8 @@
     "demo:train": "vitest run tests/training/trainingDemo.test.ts --mode train-demo --silent=false --reporter=verbose",
     "experiment": "node scripts/experiment.mjs",
     "study": "node scripts/study.mjs",
-    "feasibility": "node scripts/feasibility.mjs"
+    "feasibility": "node scripts/feasibility.mjs",
+    "e4": "node scripts/e4.mjs"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
