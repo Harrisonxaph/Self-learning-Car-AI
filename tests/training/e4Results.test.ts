@@ -164,4 +164,18 @@ describe('the result, as the analysis wrote it, and as e4.md states it', () => {
       'No seed was re-run',
     ]) expect(summary).toContain(fact);
   });
+
+  it('describes the descriptive observations without asserting equivalence or an untested cause (Codex P2 on fac22cb)', () => {
+    expect(summary).not.toMatch(/same progress|no progress difference|little room|are equivalent/i);
+    for (const fact of [
+      'Its mean observed training-track progress was 2.465 laps, against A4\'s 2.480.',
+      'Only 3 of the 10 pairs have equal gate counts; the other 7 differ by one gate.',
+      'The preregistered analysis established no direction.',
+      'is an **untested hypothesis**',
+    ]) expect(summary).toContain(fact);
+    // The counts behind the sentence: three zero differences out of ten, and the rest one gate either way.
+    const gates = (analysis.primary as Json).units as number[];
+    expect(gates.filter((g) => g === 0)).toHaveLength(3);
+    expect(gates.filter((g) => Math.abs(g) === 1)).toHaveLength(7);
+  });
 });
