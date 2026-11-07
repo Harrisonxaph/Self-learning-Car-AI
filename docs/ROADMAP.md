@@ -740,7 +740,7 @@ Dependencies are taken from the table above.
 - **Test requirements:**
   - Unit: stats aggregation.
   - E2E: dashboard updates during training.
-- **Plan:** [docs/plans/p3-01-plan.md](plans/p3-01-plan.md), plan only ([authorised](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/21#issuecomment-6713504223)); implementation is not authorised.
+- **Plan:** [docs/plans/p3-01-plan.md](plans/p3-01-plan.md), plan only ([authorised](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/21#issuecomment-6713504223)); implementation is not authorised. The existing `docs/TESTING.md` training-view and low-power checks are retained and apply to P3-01 as described in plan §6; the low-power check's frame-rate and step-time readouts are outside P3-01's approved scope and stay outstanding unless the owner makes an explicit criterion change.
 
 ### P3-02 — Live training fitness graph and analytics
 

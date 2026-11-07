@@ -3,6 +3,7 @@
 > **Status: plan only. Implementation is not authorised.**
 > - **Authorisation:** [preparation of this plan only](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/21#issuecomment-6713504223), using the [owner-approved scope](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/21#issuecomment-6713339826). Both are relayed owner instructions on #21.
 > - **Scope change (owner-approved):** fitness and the rates are shown for the **last completed generation** only. The current generation shows live counts. The ROADMAP entry and issue #21 are reconciled to this in the same PR as this plan.
+> - **Design choices (owner, relayed):** the [four live counts and the crash-only collision rate](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/21#issuecomment-6713705745) in §4 are owner-specified, and the existing TESTING.md requirements are retained (§6). Nothing is moved or waived without an explicit criterion change.
 > - **Review:** this plan needs Codex review and the owner's merge. Implementation needs its own owner authorisation.
 
 ## 1. What P3-01 must deliver (ROADMAP, issue #21, as reconciled)
@@ -49,7 +50,7 @@ P is the population size (`generation.cars.length`; 50 by default).
 | Stalled | cars with outcome `stalled` |
 | Finished | cars with outcome `completed` or `timeout` (ended without crash or stall) |
 
-The four counts always sum to P (tested). Running fitness is **not** shown for the current generation, because it is incomplete until the generation ends.
+These four definitions are the owner's ([relayed on #21](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/21#issuecomment-6713705745)). Every car's `episode.outcome` is exactly one of `null`, `crashed`, `stalled`, `completed` or `timeout`, so the four counts are mutually exclusive and always sum to P (tested). Running fitness is **not** shown for the current generation, because it is incomplete until the generation ends.
 
 **Last completed generation (from `GenerationStats`, unchanged):**
 
@@ -58,7 +59,7 @@ The four counts always sum to P (tested). Running fitness is **not** shown for t
 | Generation | `stats.generation + 1` | integer |
 | Best fitness | `stats.bestFitness` | 2 decimals |
 | Mean fitness | `stats.meanFitness` | 2 decimals |
-| Crash rate | `stats.outcomes.crashed / P` | % to 1 decimal, with the count (e.g. "62.0% (31/50)") |
+| Crash rate (the collision rate) | `stats.outcomes.crashed / P`: crashes only, stalls excluded | % to 1 decimal, with the count (e.g. "62.0% (31/50)") |
 | Stalls | `stats.outcomes.stalled`, with `stalled / P` | separate row, count and % |
 | Lap-completion rate | `stats.carsWithLap / P` (cars that completed at least one valid lap) | % to 1 decimal, with the count |
 
@@ -90,7 +91,10 @@ Before the first generation completes, every last-completed value shows "—", w
   3. Values update as generations complete.
   4. After rotation and after an app switch, it still lines up and updates.
 - **Accessibility:** text at the HUD's existing size, enough contrast, values in `<output>` elements with `<dt>` labels, no new controls (so no new touch targets), and no animation (`prefers-reduced-motion` is not affected).
-- **TESTING.md:** the implementation PR adds these device checks. The existing "Low-power check: frame rate and step time on the dashboard", which notes it "waits for P3-01", needs frame-rate and step-time readouts. Those are not in P3-01's approved scope; they are performance monitoring (P3-07). The implementation PR should re-point that note to P3-07 unless the owner adds them to P3-01.
+- **TESTING.md requirements are retained, and nothing is moved or waived** (owner instruction, [#21](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/21#issuecomment-6713705745)). How they apply to P3-01:
+  - **Training view checks** (the P2-05 list in "Mobile and device checks", and the tab-switch or lock-screen check): apply unchanged. The dashboard changes the `?mode=train` layout, so the implementation PR asks for them again on iPhone and iPad with the dashboard visible, and records the results or lists them as outstanding. The four dashboard checks above are added to that section.
+  - **Low-power check** ("frame rate and step time on the dashboard stay usable"): TESTING.md says it waits for the dashboard, so P3-01 is the first change where it can apply. The "stay usable" part applies: with the dashboard visible on a device in low-power mode, the owner records whether `?mode=train` stays responsive. The "frame rate and step time **on the dashboard**" part cannot be met by P3-01 as scoped, because the approved scope has no such readouts. That part is recorded as **outstanding, neither passed nor waived**, and P3-01 stays In Review while it is outstanding (AGENTS.md gate 3 allows an outstanding check to be recorded). Closing it needs an explicit owner criterion change (§9).
+  - **Informational measurement, not a gate:** the implementation PR reports the measured dashboard update cost per frame, labelled informational. It sets no threshold and does not stand in for the low-power check.
 
 ## 7. Out of scope
 
@@ -108,5 +112,14 @@ Before the first generation completes, every last-completed value shows "—", w
 
 ## 9. Open questions for the owner
 
-1. "Finished" is defined above as ending without a crash or stall (completed or timeout), so the four live counts sum to P. Is that the meaning you want, or should "finished" mean any ended episode?
-2. Frame-rate and step-time readouts: re-point the TESTING.md low-power check to P3-07 (proposed), or add them to P3-01?
+**Resolved by the owner** ([relayed on #21](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/21#issuecomment-6713705745)):
+
+1. "Finished" means outcome `completed` or `timeout`. Running is outcome `null`, crashed is `crashed` and stalled is `stalled`. The four counts are mutually exclusive and sum to the population size. The collision rate counts crashes only.
+2. The existing TESTING.md requirements are retained. They are not moved or waived without an explicit criterion change.
+
+**Decision still open for the owner (needed before P3-01 can be marked Complete, not before implementation starts):** the readout part of the low-power check (§6) cannot be met by P3-01's approved scope. Options:
+- (a) leave it outstanding until P3-07 supplies frame-rate and step-time readouts (this plan assumes (a));
+- (b) an explicit criterion change that adds the readouts to P3-01;
+- (c) an explicit criterion change to the check's wording in TESTING.md.
+
+This plan changes none of the three. It also does not change TESTING.md itself.
