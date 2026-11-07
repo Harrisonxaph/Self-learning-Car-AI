@@ -3,7 +3,7 @@
 > **Status: plan only. Implementation is not authorised.**
 > - **Authorisation:** [preparation of this plan only](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/21#issuecomment-6713504223), using the [owner-approved scope](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/21#issuecomment-6713339826). Both are relayed owner instructions on #21.
 > - **Scope change (owner-approved):** fitness and the rates are shown for the **last completed generation** only. The current generation shows live counts. The ROADMAP entry and issue #21 are reconciled to this in the same PR as this plan.
-> - **Design choices (owner, relayed):** the [four live counts and the crash-only collision rate](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/21#issuecomment-6713705745) in §4 are owner-specified, and the existing TESTING.md requirements are retained (§6). Nothing is moved or waived without an explicit criterion change.
+> - **Design choices (owner, relayed):** the [four live counts and the crash-only collision rate](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/21#issuecomment-6713705745) in §4 are owner-specified, and the existing TESTING.md requirements are retained (§6). The owner's [criterion clarification](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/21#issuecomment-6713856759) (§6.1): P3-01 completion does not require the FPS and step-time instrumentation, which stays in P3-07.
 > - **Review:** this plan needs Codex review and the owner's merge. Implementation needs its own owner authorisation.
 
 ## 1. What P3-01 must deliver (ROADMAP, issue #21, as reconciled)
@@ -91,10 +91,28 @@ Before the first generation completes, every last-completed value shows "—", w
   3. Values update as generations complete.
   4. After rotation and after an app switch, it still lines up and updates.
 - **Accessibility:** text at the HUD's existing size, enough contrast, values in `<output>` elements with `<dt>` labels, no new controls (so no new touch targets), and no animation (`prefers-reduced-motion` is not affected).
-- **TESTING.md requirements are retained, and nothing is moved or waived** (owner instruction, [#21](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/21#issuecomment-6713705745)). How they apply to P3-01:
+- **TESTING.md requirements are retained** (owner instruction, [#21](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/21#issuecomment-6713705745)). How they apply to P3-01:
   - **Training view checks** (the P2-05 list in "Mobile and device checks", and the tab-switch or lock-screen check): apply unchanged. The dashboard changes the `?mode=train` layout, so the implementation PR asks for them again on iPhone and iPad with the dashboard visible, and records the results or lists them as outstanding. The four dashboard checks above are added to that section.
-  - **Low-power check** ("frame rate and step time on the dashboard stay usable"): TESTING.md says it waits for the dashboard, so P3-01 is the first change where it can apply. The "stay usable" part applies: with the dashboard visible on a device in low-power mode, the owner records whether `?mode=train` stays responsive. The "frame rate and step time **on the dashboard**" part cannot be met by P3-01 as scoped, because the approved scope has no such readouts. That part is recorded as **outstanding, neither passed nor waived**, and P3-01 stays In Review while it is outstanding (AGENTS.md gate 3 allows an outstanding check to be recorded). Closing it needs an explicit owner criterion change (§9).
-  - **Informational measurement, not a gate:** the implementation PR reports the measured dashboard update cost per frame, labelled informational. It sets no threshold and does not stand in for the low-power check.
+  - **Low-power check:** see §6.1. Its responsiveness part applies to P3-01. Its frame-rate and step-time figures belong to P3-07.
+
+### 6.1 P3-01 completion criteria and performance checks (owner clarification, [#21](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/21#issuecomment-6713856759))
+
+**The clarification.** P3-01 completion requires its mobile readability, responsiveness and regression checks. It does **not** require the FPS and simulation-step-time instrumentation, which stays assigned to P3-07 (debug panel with FPS and mean step time; acceptance: metrics visible on a named device and browser). P3-01 neither provides those readouts nor claims any FPS or step-time figure. The P3-07 requirement is unchanged and is restated in its ROADMAP entry.
+
+**Performance checks that still apply to P3-01, and how each is measured:**
+
+| # | Check | How it is measured or recorded | Where | Gate? |
+| --- | --- | --- | --- | --- |
+| 1 | The dashboard is updated at most once per rendered frame, never once per tick | Unit test: drive the page loop with a spy on the dashboard update across a frame that runs several ticks, and assert one call per frame while the trainer advanced several ticks | `tests/ui/trainingPage.test.ts` or `tests/ui/trainingDashboard.test.ts` | Yes (CI) |
+| 2 | Unchanged values do not rewrite the DOM | Unit test: update twice with equal values and count DOM mutations (a `MutationObserver` in the DOM test environment, or counted writes) | `tests/ui/trainingDashboard.test.ts` | Yes (CI) |
+| 3 | The dashboard does not change training results | The existing rendered-equals-headless check and determinism and golden suites keep passing unchanged | `tests/training/trainer.test.ts` and the existing suites | Yes (CI) |
+| 4 | `?mode=train` keeps advancing generations with the dashboard visible, on all six emulated projects | E2E: the generation counter and the last-completed group change over a bounded wait. This shows functional responsiveness, not a frame rate | `tests/e2e/training.spec.ts` | Yes (CI) |
+| 5 | The page stays responsive on a real iPhone and iPad with the dashboard visible, and in low-power mode | Owner observation, recorded per device: model, OS and browser, render mode, population, whether taps and rotation respond and generations keep advancing, and whether the track and cars stay visible. It is an observation, **not a measurement** | PR description or issue comment | Yes (recorded, or listed as outstanding if no device) |
+| 6 | Dashboard update cost per frame | Informational only: a one-off measurement with `performance.now()` around the update call in the test harness, population 50, reporting the mean and p95 over a stated number of frames and naming the machine. It is not shipped and is not the P3-07 readout. It sets no threshold | Implementation PR description | No |
+
+**What is not claimed.** No FPS or simulation-step-time figure is available to P3-01, so none is reported as passed. Where TESTING.md's low-power check asks for those figures, the implementation PR states "FPS and step time not measured (P3-07)". Check 6 is a harness timing of one function on named hardware, not a frame rate and not evidence that low-power devices are fast enough. Checks 1 to 4 run in CI, where WebKit and Chromium are emulation, not hardware, so they do not replace check 5.
+
+**TESTING.md wording** changes in this PR so it does not contradict the clarification. See §8.
 
 ## 7. Out of scope
 
@@ -108,7 +126,9 @@ Before the first generation completes, every last-completed value shows "—", w
 ## 8. Implementation steps (each needs owner authorisation)
 
 1. **This plan**, with the ROADMAP and #21 reconciled. Documentation only.
-2. **Implementation PR (`feat/p3-01-dashboard`):** §3 and §5, ARCHITECTURE.md and TESTING.md updates, all required checks run, and Codex review. Owner device checks recorded or listed as outstanding (P3-01 stays In Review until they are recorded).
+2. **Implementation PR (`feat/p3-01-dashboard`):** §3, §5 and §6.1, ARCHITECTURE.md and TESTING.md updates (the four dashboard device checks added to the training-view list), all required checks run, and Codex review. Owner device checks recorded or listed as outstanding (P3-01 stays In Review until they are recorded).
+
+The plan PR (#122) itself makes the `docs/TESTING.md` wording change for the clarification (documentation only), so TESTING.md does not contradict it: the low-power line becomes "with the dashboard visible and the device in low-power mode, `?mode=train` stays responsive; frame rate and step time are read from the P3-07 debug panel once it exists, and are reported as not measured until then", and the closing sentence of "Mobile and device checks" says the responsiveness part applies from P3-01 and the readouts wait for P3-07.
 
 ## 9. Open questions for the owner
 
@@ -117,9 +137,6 @@ Before the first generation completes, every last-completed value shows "—", w
 1. "Finished" means outcome `completed` or `timeout`. Running is outcome `null`, crashed is `crashed` and stalled is `stalled`. The four counts are mutually exclusive and sum to the population size. The collision rate counts crashes only.
 2. The existing TESTING.md requirements are retained. They are not moved or waived without an explicit criterion change.
 
-**Decision still open for the owner (needed before P3-01 can be marked Complete, not before implementation starts):** the readout part of the low-power check (§6) cannot be met by P3-01's approved scope. Options:
-- (a) leave it outstanding until P3-07 supplies frame-rate and step-time readouts (this plan assumes (a));
-- (b) an explicit criterion change that adds the readouts to P3-01;
-- (c) an explicit criterion change to the check's wording in TESTING.md.
+3. FPS and simulation-step-time readouts stay in P3-07. P3-01 completion requires its mobile readability, responsiveness and regression checks, not that instrumentation (§6.1). The owner authorised this as a focused criterion clarification in this PR ([relayed on #21](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/21#issuecomment-6713856759)), with Codex review before implementation.
 
-This plan changes none of the three. It also does not change TESTING.md itself.
+**No decision is open for the owner in this plan.** The next owner gates are the merges of #121 and then this PR, and a separate authorisation to implement.
