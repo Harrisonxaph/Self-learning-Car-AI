@@ -73,21 +73,43 @@ Until then, use `Not Started`, `In Progress`, `Blocked` or `In Review`. Never de
 
 - GitHub is the source of truth for code and docs.
 - Work on a dedicated branch per feature (`feat/<roadmap-id>-short-name`, `docs/...`, `fix/...`) and open a pull request that names the roadmap ID and issue. Never push directly to `main` and never merge without the owner's approval.
-- Claude Code is the main developer: take ownership of approved implementation tasks, write and maintain tests, use dedicated feature branches, prepare PRs, explain decisions, and address Codex review findings. Do not start a phase merely because its issue exists.
+- Claude Code is the main developer: take ownership of approved implementation tasks, write and maintain tests, use dedicated feature branches, prepare PRs, explain decisions, address Codex review findings, and coordinate the work as set out in "Coordination and owner decisions" below. Do not start a phase merely because its issue exists.
 - Codex is the independent reviewer: inspect the latest issues, branches, PR head, full diff and test evidence; review architecture, simulation, neural networks, evolution, reward design, reproducibility, performance and mobile behaviour. Report defects for Claude to fix rather than editing Claude's branch. Codex does not take implementation ownership unless the owner explicitly requests an exception.
 - Do not edit the same files as another agent at the same time unless coordinated in the issue or PR.
 - Phase 6 items in `docs/ROADMAP.md` are documented research ideas only. Do not implement them without approval.
 - Stretch targets ST1 to ST5 must stay visible in every roadmap revision.
+
+### Coordination and owner decisions
+
+This is the single policy for who coordinates the work and when the owner is asked. Other sections refer here and do not restate it. It adds no gate and removes none.
+
+1. **Claude Code owns development coordination.** Before opening a branch or PR, inspect the open PRs, branches and the issue, and update an existing PR rather than opening a duplicate. Resolve routine implementation and Git choices (branch layout, commit split, how to sync a branch, test selection, wording) within the approved scope. Batch corrections, and request Codex review directly on the PR through GitHub, at the full head SHA.
+2. **GitHub is the coordination record.** Issues, PR comments and reviews carry the state. Claude reads Codex's findings there and addresses them. The owner is not asked to copy messages or prompts between agents. A review request does not guarantee that a separate Codex session runs, so report which of these exists for the head:
+   - an *automated receipt*: the connector's summary, a "no major issues" comment or a reaction. It is not technical approval.
+   - a *formal technical approval*: a Codex review record in the format below, naming the agent, the reviewed head SHA and the outcome. Only this satisfies completion criterion 8, and only for the SHA it names.
+3. **Check the records before asking the owner anything:** the recorded owner decisions (the evidence forms below), the issue discussion and the current PR state. Do not ask again for an approval that is already recorded, unless the proposed action materially changes what was approved. An approval counts only if it is traceable to one of those records.
+4. **Make routine, reversible decisions without asking, within approved scope,** and record the choice in one line on the PR (what and why). A decision is reversible when a normal commit or branch operation undoes it and it touches no deployment, repository setting, shared `main` history or other contributor's work. To bring a reviewed branch up to date, prefer merging `main` into it over rebasing or force-pushing, which keeps the reviewed commits and review anchors intact.
+5. **While a review is pending, leave one concise status** (the PR link, the full head SHA and the exact outstanding gate) and update it rather than adding comments. Do not issue overlapping review requests or ask the owner to relay prompts. Request review again only for a new head.
+6. **Batch genuine owner decisions into one message.** For each decision, say which owner gate makes it the owner's and recommend one answer.
+7. **The owner's gates are these, and agents do not add others:**
+   - starting work that is not yet approved (a feature, a phase, or a Phase 6 research item);
+   - changes to scope or acceptance criteria;
+   - running a new study, or re-running one after a failure or interruption as its protocol requires;
+   - deployment, and repository, CI or Vercel settings;
+   - completion decisions for a feature or a phase;
+   - merges.
+8. **Unchanged safeguards:** independent Codex review at the current full head SHA, every required CI job on that head, the applicable tests and device checks, the scientific-honesty rules, and the owner-evidence rules. At most three correction cycles per PR; then report the unresolved blockers once, as in the usage-efficient workflow.
+9. **When Codex's formal technical approval covers the current head and required CI is green on it, stop with one clear merge request** to the owner naming the PR, the head SHA, the review and the CI run. Agents do not merge automatically.
 
 ### GitHub review using the shared account
 
 The owner chose independent AI review recorded in GitHub comments. Both integrations may act through the same GitHub account; GitHub can reject a formal Approve action as a self-review even when Claude and Codex are separate agents. A formal approval badge is therefore optional, not the review gate. Do not create a second identity or weaken existing checks to obtain a badge.
 
 1. Claude opens a PR with its roadmap ID/issue, change summary, actual test results and outstanding manual checks. Include the full current head SHA and request Codex review.
-2. Use the configured Codex GitHub integration: open the PR for review, mark a draft ready, or comment `@codex review`. After new commits, request review again and verify the reviewed SHA. An older automated summary or a reaction alone is not approval of a later commit. If the integration is unavailable, a separate Codex session may review and post its findings through the connector.
+2. Claude requests the review itself, directly on the PR, and does not ask the owner to relay it. Use the configured Codex GitHub integration: open the PR for review, mark a draft ready, or comment `@codex review`. After new commits, request review again once and verify the reviewed SHA. An automated receipt (the connector's summary or a reaction) is not formal technical approval of any commit, and an older one is not approval of a later commit; see "Coordination and owner decisions". If the integration is unavailable, a separate Codex session may review and post its findings through the connector.
 3. Codex posts a review comment identifying the agent, reviewed head SHA, scope, checks actually run, unavailable environments, findings and disposition. The outcome is `Changes required` or `Technical approval`. Findings include file/line references where practical; approval requires no unresolved blocking findings. Claude replies to findings and links its fixes, then requests re-review.
 4. Link the current Codex review in the PR description/template. New commits require re-review or explicit Codex confirmation covering the new head. For stacked PRs, name the combined snapshot and integration order; approval of that snapshot does not approve an older incomplete branch by itself.
-5. The owner explicitly approves the final PR/combined snapshot for merging, using one of the forms of owner evidence below and referencing the PR and reviewed version. Technical approval by Codex does not authorize merging. Agents never auto-merge or merge without that owner instruction. All required CI, acceptance and relevant device checks still apply; unavailable required checks keep the feature In Review.
+5. The owner explicitly approves the final PR/combined snapshot for merging, using one of the forms of owner evidence below and referencing the PR and reviewed version. Technical approval by Codex does not authorize merging. Claude asks for the merge once, in the single merge request described in "Coordination and owner decisions". Agents never auto-merge or merge without that owner instruction. All required CI, acceptance and relevant device checks still apply; unavailable required checks keep the feature In Review.
 
 #### Owner evidence on a shared account
 
@@ -132,7 +154,7 @@ Work every task through six stages: **INSPECT → PLAN → IMPLEMENT → VERIFY 
    - the docs sections it names.
 
    Do not survey the whole repository or re-read unchanged files without a reason. Check first for existing code, tests, fixtures and documentation to reuse.
-2. **PLAN.** State the bounded scope in a few lines: what changes, what does not, and which tests prove it. Where the roadmap or the owner asks for a design note first, commit it before the code. Anything outside the approved scope goes back to the owner as a question, not into the PR.
+2. **PLAN.** State the bounded scope in a few lines: what changes, what does not, and which tests prove it. Where the roadmap or the owner asks for a design note first, commit it before the code. Anything outside the approved scope goes back to the owner as part of one batched decision (see "Coordination and owner decisions"), not into the PR.
 3. **IMPLEMENT.** Change only what the approved scope needs:
    - reuse existing modules, helpers, fixtures and test patterns rather than adding parallel ones;
    - no drive-by refactors, renames or formatting changes;
@@ -150,7 +172,7 @@ Work every task through six stages: **INSPECT → PLAN → IMPLEMENT → VERIFY 
    - **After merge:** check the required CI on the resulting `main` commit, and record the result where the work is tracked. A failure there is fixed before further work builds on it.
 5. **REVIEW.** Request Codex review at the full head SHA, as in the shared-account workflow above.
    - **Batch the corrections.** Fix every finding in one review round, in one focused commit or a small set of commits. Run the checks once for that batch, reply once per finding, then request re-review once.
-   - **At most three correction cycles per PR.** A correction cycle is one push answering a review. If the fourth review still requires changes, stop. Post a short blocker report on the PR, saying what is still open, why it keeps recurring and the options, and ask the owner how to proceed. Do not keep iterating.
+   - **At most three correction cycles per PR.** A correction cycle is one push answering a review. If the fourth review still requires changes, stop. Post a short blocker report on the PR, saying what is still open, why it keeps recurring and the options with a recommendation, and ask the owner how to proceed, batched with any other pending owner decision. Do not keep iterating.
    - **No relaxed standards.** The limit never lowers the bar for approval. Independent Codex review and explicit owner merge approval are still required.
 6. **RECORD.** Update only the records the change affects: the roadmap status or changelog row, `docs/TESTING.md` when tests change, and design notes when behaviour changes. Make these updates in the same PR as the change, and avoid preventable follow-up PRs for wording, status or evidence that could have gone in it.
 
