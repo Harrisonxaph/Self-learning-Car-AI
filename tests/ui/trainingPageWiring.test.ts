@@ -4,14 +4,10 @@
 // generation boundary, and a frame that ran no tick still updates it once. Counting the aggregation calls (not the
 // text written) means a duplicate update on one frame cannot hide behind the write-on-change suppression.
 import { describe, expect, it, vi } from 'vitest';
-import stadiumOval from '../../src/data/tracks/stadium-oval.json';
-import type { ViewportEnvironment } from '../../src/render/viewport';
-import { DEFAULT_SIM_CONFIG, DEFAULT_VEHICLE_PHYSICS } from '../../src/sim/config';
-import { loadTrack } from '../../src/sim/track';
-import { startTrainingPage, type TrainingPage } from '../../src/ui/trainingPage';
-import { recordingContext } from '../render/recordingContext';
-import { fakeDashboard } from './dashboardFakes';
+import { DEFAULT_SIM_CONFIG } from '../../src/sim/config';
+import { startTrainingPage } from '../../src/ui/trainingPage';
 import { FakeFrames } from './fakeFrames';
+import { fakePage } from './fakeTrainingPage';
 
 const counts = vi.hoisted(() => ({ live: 0, completed: 0 }));
 vi.mock('../../src/training/generationMetrics', async (importOriginal) => {
@@ -28,41 +24,6 @@ vi.mock('../../src/training/generationMetrics', async (importOriginal) => {
     },
   };
 });
-
-/** Just enough of the page's DOM objects for `startTrainingPage` to run in Node. */
-function fakePage(frames: FakeFrames, clock?: { ms: number }) {
-  const dashboard = fakeDashboard();
-  const canvas = { width: 0, height: 0, dataset: {} as Record<string, string>, setAttribute() {} };
-  const context = { setTransform() {}, clearRect() {} };
-  const hidden = { hidden: false };
-  const panel = { hidden: true };
-  const status = { textContent: '' };
-  const graph = {
-    details: { open: false, hidden: true, addEventListener() {} },
-    canvas: { width: 0, height: 0, setAttribute() {} },
-    context: Object.assign(recordingContext().ctx, { setTransform() {}, clearRect() {} }),
-    summary: { textContent: '' },
-  };
-  const viewport: ViewportEnvironment = { measure: () => ({ width: 390, height: 600 }), devicePixelRatio: () => 1, subscribe: () => () => {} };
-  const page = {
-    canvas,
-    context,
-    status,
-    hide: [hidden],
-    dashboard: { panel, outputs: dashboard.outputs },
-    // No track layer yet: the frame draws nothing, which leaves the per-frame dashboard path under test.
-    trackLayer: { get: () => null },
-    track: loadTrack(stadiumOval),
-    physics: DEFAULT_VEHICLE_PHYSICS,
-    config: DEFAULT_SIM_CONFIG,
-    graph,
-    frames,
-    viewportEnvironment: viewport,
-    graphViewportEnvironment: viewport,
-    now: clock ? () => clock.ms : undefined,
-  } as unknown as TrainingPage;
-  return { page, canvas, dashboard, panel, hidden, graph };
-}
 
 describe('the training page wiring (the actual page, not the test\'s own callbacks)', () => {
   it('reveals the dashboard, and updates it exactly once per rendered frame across multi-tick frames and a generation boundary', () => {

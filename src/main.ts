@@ -21,7 +21,7 @@ import {
   createHeldInputs,
   type HoldAction,
 } from './ui/controls/input';
-import { debugRaysEnabled } from './ui/debugFlags';
+import { debugFpsEnabled, debugRaysEnabled } from './ui/debugFlags';
 import { browserFrameEnvironment, startFrameLoop } from './ui/frameLoop';
 import { hudView, nextFeedback, type Feedback } from './ui/hud';
 import { pageMode } from './ui/pageMode';
@@ -71,6 +71,17 @@ if (pageMode(window.location.search) === 'train') {
     context,
     status: hud.message,
     hide: [element<HTMLElement>('.hud'), element<HTMLElement>('.controls'), element<HTMLElement>('.keys-help')],
+    fps: debugFpsEnabled(window.location.search) ? element<HTMLElement>('#fps-readout') : undefined,
+    controls: {
+      group: element<HTMLElement>('#training-controls'),
+      pause: element<HTMLButtonElement>('#speed-pause'),
+      speeds: {
+        normal: element<HTMLButtonElement>('[data-speed="normal"]'),
+        fast: element<HTMLButtonElement>('[data-speed="fast"]'),
+        max: element<HTMLButtonElement>('[data-speed="max"]'),
+      },
+      drawCap: element<HTMLSelectElement>('#draw-cap'),
+    },
     graph: {
       details: element<HTMLDetailsElement>('#training-graph'),
       canvas: graphCanvas,
