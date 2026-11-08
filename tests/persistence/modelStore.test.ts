@@ -64,7 +64,7 @@ const ids = (store: ReturnType<typeof setup>['store']) => {
 describe('an empty store', () => {
   it('lists nothing, without an error', () => {
     const { store } = setup();
-    expect(store.list()).toEqual({ available: true, entries: [] });
+    expect(store.list()).toEqual({ available: true, entries: [], partial: false });
   });
   it('says plainly that an unknown or missing save cannot be used', () => {
     const { store } = setup();
@@ -75,7 +75,7 @@ describe('an empty store', () => {
     const { store, storage } = setup();
     store.save(model('a'));
     storage.data.clear();
-    expect(store.list()).toEqual({ available: true, entries: [] });
+    expect(store.list()).toEqual({ available: true, entries: [], partial: false });
   });
 });
 
@@ -215,6 +215,49 @@ describe('browser storage that fails', () => {
     storage.failRemove = () => new Error('denied');
     expect(store.remove('a')).toEqual({ ok: false, message: MESSAGES.unavailable });
     expect(ids(store)).toEqual(['a']);
+  });
+});
+
+describe('inaccessible storage is not an empty store', () => {
+  it('reports unavailable when both the index and the key enumeration throw', () => {
+    const { store, storage } = setup();
+    store.save(model('a'));
+    storage.failGet = () => new Error('denied');
+    storage.failScan = true;
+    expect(store.list()).toEqual({ available: false, message: MESSAGES.unavailable });
+    expect(store.save(model('b'))).toEqual({ ok: false, reason: 'unavailable', message: MESSAGES.unavailable });
+  });
+  it('reports unavailable when every read throws and nothing can be enumerated either', () => {
+    const storage = new FakeStorage();
+    storage.failGet = () => new Error('denied');
+    storage.failScan = true;
+    const store = createModelStore({ storage: () => storage, registry: REGISTRY });
+    expect(store.list()).toEqual({ available: false, message: MESSAGES.unavailable });
+  });
+  it('still lists what it can read, and says it is partial, when only the index read throws', () => {
+    const { store, storage } = setup();
+    store.save(model('a'));
+    store.save(model('b'));
+    storage.failGet = (key) => (key === INDEX_KEY ? new Error('boom') : null);
+    expect(store.list()).toMatchObject({ available: true, partial: true, entries: [{ id: 'a', status: 'ok' }, { id: 'b', status: 'ok' }] });
+  });
+  it('still lists the indexed saves, and says it is partial, when only the key enumeration throws', () => {
+    const { store, storage } = setup();
+    store.save(model('a'));
+    storage.failScan = true;
+    expect(store.list()).toMatchObject({ available: true, partial: true, entries: [{ id: 'a', status: 'ok' }] });
+  });
+  it('lists models that cannot be read as damaged, partial only if the index or scan failed', () => {
+    const { store, storage } = setup();
+    store.save(model('a'));
+    storage.failGet = (key) => (key.startsWith(MODEL_KEY_PREFIX) ? new Error('read failed') : null);
+    expect(store.list()).toMatchObject({ available: true, partial: false, entries: [{ id: 'a', status: 'damaged' }] });
+  });
+  it('is not partial for an ordinary empty or healthy store', () => {
+    const { store } = setup();
+    expect(store.list()).toMatchObject({ available: true, partial: false });
+    store.save(model('a'));
+    expect(store.list()).toMatchObject({ available: true, partial: false });
   });
 });
 

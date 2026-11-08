@@ -17,6 +17,24 @@ import { FakeFrames } from './fakeFrames';
 import { FakeLocalStorage, fakePage, type FakeNode } from './fakeTrainingPage';
 
 const calls = vi.hoisted(() => ({ cars: [] as { x: number; y: number }[][] }));
+/** Makes a replay throw from the given tick on, to test that a failing network never escapes the frame. */
+const fault = vi.hoisted(() => ({ at: null as number | null }));
+vi.mock('../../src/training/championReplay', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../src/training/championReplay')>();
+  return {
+    ...actual,
+    createChampionReplay: (genome: Float64Array, setup: Parameters<typeof actual.createChampionReplay>[1]) => {
+      const real = actual.createChampionReplay(genome, setup);
+      return {
+        ...real,
+        step() {
+          if (fault.at !== null && real.ticks() >= fault.at) throw new RangeError('Hidden pre-activation 0 is not finite (Infinity).');
+          return real.step();
+        },
+      };
+    },
+  };
+});
 vi.mock('../../src/render/raceView', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../src/render/raceView')>();
   return {
@@ -36,6 +54,7 @@ const REGISTRY = tracksIn('training');
 
 beforeEach(() => {
   calls.cars.length = 0;
+  fault.at = null;
 });
 
 function setup(options: { storage?: () => FakeLocalStorage | null } = {}) {
@@ -327,5 +346,151 @@ describe('a saved champion keeps its own recorded setup', () => {
     expect(saved.replay.state()).not.toEqual(live.state());
     // Training did not take the saved physics.
     expect(trainer.setup.environment.physics.engineAcceleration).toBe(DEFAULT_VEHICLE_PHYSICS.engineAcceleration);
+  });
+});
+
+/** Opens the panel and returns a page with one saved champion whose stored document was edited by `edit`. */
+function withEditedSave(edit: (doc: any) => void) { // eslint-disable-line @typescript-eslint/no-explicit-any
+  const storage = new FakeLocalStorage();
+  const p = setup({ storage: () => storage });
+  p.completeGenerations(1);
+  p.saved.save.click();
+  const key = `${MODEL_KEY_PREFIX}saved-1`;
+  const doc = JSON.parse(storage.data.get(key)!);
+  edit(doc);
+  storage.data.set(key, JSON.stringify(doc));
+  p.replay.details.toggle(true);
+  return { p, storage };
+}
+
+describe('a replay that fails does not take the page with it', () => {
+  it('refuses a finite genome whose network overflows, with a message, before anything starts', () => {
+    const { p } = withEditedSave((d) => (d.parameters.values = d.parameters.values.map(() => Number.MAX_VALUE)));
+    expect(p.rows()[0]!.attributes['data-status']).toBe('ok'); // it validates: the numbers are finite
+    const before = Number(p.canvas.dataset.tick);
+    p.button(p.rows()[0]!, 'Replay').click();
+    expect(p.saved.status.textContent).toContain('numbers too large to compute');
+    p.run(60);
+    expect(p.canvas.dataset.replay).toBe('off');
+    expect(p.controls.speeds.fast.disabled).toBe(false);
+    expect(Number(p.canvas.dataset.tick)).toBeGreaterThan(before);
+    expect(p.canvas.dataset.mode).toBe('train');
+  });
+
+  it('stops a replay that fails part-way, says so, restores the controls, and keeps training', () => {
+    const { p } = withEditedSave(() => {});
+    p.controls.speeds.fast.click();
+    p.run();
+    p.button(p.rows()[0]!, 'Replay').click();
+    p.run(40);
+    expect(p.canvas.dataset.replay).toBe('running');
+    const ticks = Number(p.canvas.dataset.replayTick);
+    fault.at = ticks + 3;
+    p.run(10); // the failure happens inside the frame handler
+    expect(p.canvas.dataset.replay).toBe('off');
+    expect(p.saved.status.textContent).toContain('The replay of saved champion');
+    expect(p.saved.status.textContent).toContain('Training carries on');
+    expect(p.canvas.dataset.speed).toBe('fast');
+    expect(p.controls.speeds.max.disabled).toBe(false);
+    const tick = Number(p.canvas.dataset.tick);
+    p.run(30);
+    expect(Number(p.canvas.dataset.tick)).toBeGreaterThan(tick);
+  });
+});
+
+describe("a saved champion's own timestep sets its pace and its readouts", () => {
+  const shorten = (dt: number) => (d: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
+    d.training.configuration.timestepSeconds = dt;
+    d.training.configuration.maxEpisodeSeconds = 1;
+    d.training.maxEpisodeSeconds = 1;
+  };
+  it('runs a 1/30 s recording at 1× against the page clock: about 30 ticks a second, shown as that much time', () => {
+    const { p } = withEditedSave(shorten(1 / 30));
+    p.button(p.rows()[0]!, 'Replay').click();
+    p.run(); // the first frame only records time
+    p.run(60); // one second of page time
+    expect(Number(p.canvas.dataset.replayTick)).toBeGreaterThanOrEqual(29);
+    expect(Number(p.canvas.dataset.replayTick)).toBeLessThanOrEqual(30);
+    p.run(10);
+    expect(p.canvas.dataset.replay).toBe('done');
+    const ticks = Number(p.canvas.dataset.replayTick);
+    expect(ticks).toBeLessThanOrEqual(30);
+    expect(p.replay.outputs.result.textContent).toContain(`after ${(ticks / 30).toFixed(2)} s`);
+    expect(p.replay.outputs.decision.textContent).toContain(`Decision ${ticks} at ${((ticks - 1) / 30).toFixed(2)} s`);
+  });
+  it('runs a 1/120 s recording two ticks to a page tick', () => {
+    const { p } = withEditedSave(shorten(1 / 120));
+    p.button(p.rows()[0]!, 'Replay').click();
+    p.run();
+    p.run(30); // half a second of page time
+    expect(Number(p.canvas.dataset.replayTick)).toBeGreaterThanOrEqual(58);
+    expect(Number(p.canvas.dataset.replayTick)).toBeLessThanOrEqual(60);
+  });
+  it('keeps a live champion at one tick to a page tick', () => {
+    const p = setup();
+    p.completeGenerations(1);
+    p.replay.start.click();
+    p.run();
+    p.run(30);
+    expect(Number(p.canvas.dataset.replayTick)).toBeGreaterThanOrEqual(29);
+    expect(Number(p.canvas.dataset.replayTick)).toBeLessThanOrEqual(30);
+  });
+});
+
+describe('restarting', () => {
+  it('restarts the saved champion that is running, and never switches to a live generation', () => {
+    const { p } = withEditedSave(() => {});
+    p.button(p.rows()[0]!, 'Replay').click();
+    p.run(60);
+    expect(p.replay.start.textContent).toBe('Restart saved');
+    expect(p.replay.start.attributes['aria-label']).toBe('Restart saved champion');
+    expect(Number(p.canvas.dataset.replayTick)).toBeGreaterThan(20);
+    p.replay.start.click();
+    p.run();
+    expect(p.canvas.dataset.replaySource).toBe('saved');
+    expect(p.canvas.dataset.replayGeneration).toBeUndefined();
+    expect(Number(p.canvas.dataset.replayTick)).toBeLessThanOrEqual(1);
+    p.run(10);
+    expect(p.canvas.dataset.replaySource).toBe('saved');
+  });
+  it('lets a live replay still restart from the generation picked', () => {
+    const p = setup();
+    p.completeGenerations(2);
+    p.replay.generation.value = '1';
+    p.replay.start.click();
+    p.run(20);
+    expect(p.replay.start.textContent).toBe('Restart');
+    p.replay.generation.value = '2';
+    p.replay.start.click();
+    p.run();
+    expect(p.canvas.dataset.replaySource).toBe('generation');
+    expect(p.canvas.dataset.replayGeneration).toBe('2');
+  });
+});
+
+describe('storage that cannot be fully read', () => {
+  it('says so when the index cannot be read but the saves can, and lists them', () => {
+    const storage = new FakeLocalStorage();
+    const first = setup({ storage: () => storage });
+    first.completeGenerations(1);
+    first.saved.save.click();
+    const real = storage.getItem.bind(storage);
+    storage.getItem = (key: string) => {
+      if (key === INDEX_KEY) throw new Error('denied');
+      return real(key);
+    };
+    const second = setup({ storage: () => storage });
+    expect(second.rows()).toHaveLength(1);
+    expect(second.saved.status.textContent).toContain('could not be fully read');
+  });
+  it('says storage is unavailable, not that nothing is saved, when every read throws', () => {
+    const storage = new FakeLocalStorage();
+    storage.getItem = () => {
+      throw new Error('denied');
+    };
+    Object.defineProperty(storage, 'length', { get: () => { throw new Error('denied'); } });
+    const p = setup({ storage: () => storage });
+    expect(p.saved.status.textContent).toContain('Browser storage is unavailable');
+    expect(p.rows()).toHaveLength(0);
   });
 });

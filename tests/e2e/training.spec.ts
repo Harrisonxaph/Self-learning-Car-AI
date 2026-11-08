@@ -647,6 +647,33 @@ test('a saved champion survives a page reload, replays and can be deleted', asyn
   await expect(page.locator('#saved-status')).toHaveText('Deleted.');
 });
 
+test('a saved champion whose network overflows is refused with a message, and the page keeps running without an error', async ({ page }) => {
+  await installPausedClock(page);
+  await page.goto('/?mode=train');
+  await page.clock.runFor(100);
+  await advanceUntil(page, (v) => v.data.chartPoints === '1');
+  await page.locator('#champion-replay > summary').click();
+  await page.locator('#saved-save').click();
+  await expect(page.locator('#saved-list li')).toHaveCount(1);
+  // Finite numbers pass validation, but a network with the largest doubles overflows when it is run.
+  await page.evaluate(() => {
+    const index = JSON.parse(localStorage.getItem('sdae:models:index')!) as string[];
+    const key = `sdae:model:${index[0]}`;
+    const doc = JSON.parse(localStorage.getItem(key)!);
+    doc.parameters.values = doc.parameters.values.map(() => Number.MAX_VALUE);
+    localStorage.setItem(key, JSON.stringify(doc));
+  });
+  await page.locator('#champion-replay > summary').click();
+  await page.locator('#champion-replay > summary').click();
+  await expect(page.locator('#saved-list li')).toHaveCount(1);
+  const tick = Number(await data(page, 'tick'));
+  await page.locator('#saved-list').getByRole('button', { name: /^Replay / }).click();
+  await expect(page.locator('#saved-status')).toContainText('numbers too large to compute');
+  await page.clock.runFor(1000);
+  await expect(page.locator('#sim-canvas')).toHaveAttribute('data-replay', 'off');
+  expect(Number(await data(page, 'tick'))).toBeGreaterThan(tick);
+});
+
 test('with localStorage denied, the page says so and training and replay carry on', async ({ page }) => {
   await page.addInitScript(() => {
     Object.defineProperty(window, 'localStorage', {

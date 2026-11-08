@@ -31,6 +31,7 @@ export interface ModelStoreOptions {
 export const MESSAGES = Object.freeze({
   unavailable: 'Browser storage is unavailable here (for example in a private window), so nothing can be saved or listed. Training and replay still work.',
   quota: 'Browser storage is full. Delete a saved champion and try again.',
+  partial: 'Some saved champions may not be shown, because browser storage could not be fully read.',
   full: `You have ${MAX_SAVES} saved champions, the most this app keeps. Delete one to save another.`,
 });
 
@@ -47,7 +48,8 @@ export type StoreEntry =
   | { readonly id: string; readonly status: 'ok'; readonly summary: EntrySummary; readonly warnings: readonly string[]; readonly drivable: boolean }
   | { readonly id: string; readonly status: 'damaged'; readonly problem: string };
 
-export type StoreListing = { readonly available: true; readonly entries: readonly StoreEntry[] } | { readonly available: false; readonly message: string };
+/** `partial` is true when part of the storage could not be read (so some saves may be missing from `entries`). */
+export type StoreListing = { readonly available: true; readonly entries: readonly StoreEntry[]; readonly partial: boolean } | { readonly available: false; readonly message: string };
 
 export type SaveResult =
   | { readonly ok: true; readonly indexed: boolean }
@@ -100,27 +102,28 @@ export function createModelStore(options: ModelStoreOptions): ModelStore {
     }
   };
 
-  /** The ids in the index (null if it is missing or damaged), in order. */
-  const readIndex = (storage: StorageLike): readonly string[] | null => {
+  /** The ids in the index (null if it is missing or damaged), in order; `failed` is true if the storage threw when reading it. */
+  const readIndex = (storage: StorageLike): { ids: readonly string[] | null; failed: boolean } => {
     let text: string | null;
     try {
       text = storage.getItem(INDEX_KEY);
     } catch {
-      return null;
+      return { ids: null, failed: true };
     }
-    if (text === null) return null;
+    if (text === null) return { ids: null, failed: false };
     try {
       const parsed: unknown = JSON.parse(text);
-      if (!Array.isArray(parsed) || !parsed.every((id) => typeof id === 'string' && MODEL_ID_PATTERN.test(id))) return null;
-      return [...new Set(parsed as string[])];
+      if (!Array.isArray(parsed) || !parsed.every((id) => typeof id === 'string' && MODEL_ID_PATTERN.test(id))) return { ids: null, failed: false };
+      return { ids: [...new Set(parsed as string[])], failed: false };
     } catch {
-      return null;
+      return { ids: null, failed: false };
     }
   };
 
-  /** Ids of model keys present in storage, sorted. */
-  const scanKeys = (storage: StorageLike): string[] => {
+  /** Ids of model keys present in storage, sorted; `failed` is true if the storage could not be enumerated. */
+  const scanKeys = (storage: StorageLike): { ids: string[]; failed: boolean } => {
     const ids: string[] = [];
+    let failed = false;
     try {
       for (let i = 0; i < storage.length; i += 1) {
         const key = storage.key(i);
@@ -130,16 +133,22 @@ export function createModelStore(options: ModelStoreOptions): ModelStore {
         }
       }
     } catch {
-      // A store that cannot be scanned lists only what the index names.
+      // A store that cannot be scanned lists only what the index names, and says so.
+      failed = true;
     }
-    return ids.sort();
+    return { ids: ids.sort(), failed };
   };
 
-  /** Every id the store knows about: the index first (in order), then model keys it does not name. */
-  const knownIds = (storage: StorageLike): string[] => {
-    const indexed = readIndex(storage) ?? [];
+  /**
+   * Every id the store knows about: the index first (in order), then model keys it does not name. `failed` is true if the
+   * storage threw while reading the index or enumerating keys, so a short or empty result may not be the whole truth.
+   */
+  const knownIds = (storage: StorageLike): { ids: string[]; failed: boolean } => {
+    const index = readIndex(storage);
+    const indexed = index.ids ?? [];
     const seen = new Set(indexed);
-    return [...indexed, ...scanKeys(storage).filter((id) => !seen.has(id))];
+    const scan = scanKeys(storage);
+    return { ids: [...indexed, ...scan.ids.filter((id) => !seen.has(id))], failed: index.failed || scan.failed };
   };
 
   const writeIndex = (storage: StorageLike, ids: readonly string[]): boolean => {
@@ -175,7 +184,10 @@ export function createModelStore(options: ModelStoreOptions): ModelStore {
     list() {
       const storage = open();
       if (!storage) return { available: false, message: MESSAGES.unavailable };
-      return { available: true, entries: knownIds(storage).map((id) => readEntry(storage, id)) };
+      const known = knownIds(storage);
+      // Nothing found while the storage was throwing is "unavailable", not an ordinary empty list.
+      if (known.failed && known.ids.length === 0) return { available: false, message: MESSAGES.unavailable };
+      return { available: true, entries: known.ids.map((id) => readEntry(storage, id)), partial: known.failed };
     },
 
     save(model) {
@@ -185,7 +197,9 @@ export function createModelStore(options: ModelStoreOptions): ModelStore {
       if (text.length > MAX_MODEL_BYTES) return { ok: false, reason: 'invalid', message: 'This champion could not be saved: it is larger than the 1 MiB limit.' };
       const storage = open();
       if (!storage) return { ok: false, reason: 'unavailable', message: MESSAGES.unavailable };
-      const ids = knownIds(storage);
+      const known = knownIds(storage);
+      if (known.failed && known.ids.length === 0) return { ok: false, reason: 'unavailable', message: MESSAGES.unavailable };
+      const ids = known.ids;
       if (!ids.includes(model.id) && ids.length >= MAX_SAVES) return { ok: false, reason: 'full', message: MESSAGES.full };
       // The model first and the index second: if the second write fails, `list` still finds the model.
       try {
@@ -218,7 +232,7 @@ export function createModelStore(options: ModelStoreOptions): ModelStore {
       if (!MODEL_ID_PATTERN.test(id)) return { ok: false, message: 'That is not a saved champion.' };
       const storage = open();
       if (!storage) return { ok: false, message: MESSAGES.unavailable };
-      const ids = knownIds(storage);
+      const ids = knownIds(storage).ids;
       try {
         storage.removeItem(modelKey(id));
       } catch {

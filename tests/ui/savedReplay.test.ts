@@ -3,7 +3,7 @@
 import { describe, expect, it } from 'vitest';
 import stadiumOval from '../../src/data/tracks/stadium-oval.json';
 import { runNetwork } from '../../src/ai/network';
-import { buildModel, modelParameters } from '../../src/persistence/modelFormat';
+import { buildModel, compatibility, modelParameters, validateModel } from '../../src/persistence/modelFormat';
 import { createModelStore, type StorageLike } from '../../src/persistence/modelStore';
 import { DEFAULT_SIM_CONFIG, DEFAULT_VEHICLE_PHYSICS, terminalSpeed } from '../../src/sim/config';
 import { loadTrack } from '../../src/sim/track';
@@ -116,5 +116,43 @@ describe('a saved then loaded champion drives identically', () => {
     const a = replayForModel(model).replay;
     const b = replayForModel(model).replay;
     for (let i = 0; i < 100; i += 1) expect(a.step()).toEqual(b.step());
+  });
+});
+
+describe('a model that validates can always be set up', () => {
+  // The validator mirrors the trainer's own rules by hand, so this checks the two stay in step: for each edit, if the model
+  // validates then building its setup and running its replay throws nothing.
+  const { out } = champions(3, 1);
+  const base = JSON.parse(JSON.stringify(buildModel({ champion: out[0]!.stats.champion, fitness: 1, generation: 0, record: out[0]!.record, id: 'contract', createdAt: '2026-11-08T22:00:00.000Z', codeVersion: 'test' })));
+  const registry = tracksIn('training');
+  const edits: [string, (d: any) => void][] = [ // eslint-disable-line @typescript-eslint/no-explicit-any
+    ...[0, 1, 2, 50, 100_000, 100_001, 2.5, -1].map((n): [string, (d: any) => void] => [`populationSize ${n}`, (d) => { d.training.configuration.populationSize = n; d.training.populationSize = n; }]), // eslint-disable-line @typescript-eslint/no-explicit-any
+    ...[0, 1, 50, 51, -1].map((n): [string, (d: any) => void] => [`eliteCount ${n}`, (d) => { d.training.configuration.eliteCount = n; d.training.eliteCount = n; }]), // eslint-disable-line @typescript-eslint/no-explicit-any
+    ...[0, 1, 3, 50, 51].map((n): [string, (d: any) => void] => [`selection.size ${n}`, (d) => { d.training.configuration.selection.size = n; d.training.selection.size = n; }]), // eslint-disable-line @typescript-eslint/no-explicit-any
+    ...[0, 0.5, 1, 1.0001, -0.0001].map((n): [string, (d: any) => void] => [`crossover.rate ${n}`, (d) => { d.training.configuration.crossover.rate = n; d.training.crossover.rate = n; }]), // eslint-disable-line @typescript-eslint/no-explicit-any
+    ...[0, 0.5, 1, 1.0001].map((n): [string, (d: any) => void] => [`mutation.rate ${n}`, (d) => { d.training.configuration.mutation.rate = n; d.training.mutation.rate = n; }]), // eslint-disable-line @typescript-eslint/no-explicit-any
+    ...[0, 1, 1e9, -1].map((n): [string, (d: any) => void] => [`mutation.scale ${n}`, (d) => { d.training.configuration.mutation.scale = n; d.training.mutation.scale = n; }]), // eslint-disable-line @typescript-eslint/no-explicit-any
+    ...[0, 1, 2, 3.5, 100].map((n): [string, (d: any) => void] => [`maxLaps ${n}`, (d) => (d.training.configuration.maxLaps = n)]), // eslint-disable-line @typescript-eslint/no-explicit-any
+    ...[0.001, 0.01, 0.1, 0.5].map((n): [string, (d: any) => void] => [`timestep ${n}`, (d) => (d.training.configuration.timestepSeconds = n)]), // eslint-disable-line @typescript-eslint/no-explicit-any
+    ...[0.001, 1, 1e6, 1e7].map((n): [string, (d: any) => void] => [`maxEpisodeSeconds ${n}`, (d) => { d.training.configuration.maxEpisodeSeconds = n; d.training.maxEpisodeSeconds = n; }]), // eslint-disable-line @typescript-eslint/no-explicit-any
+    ...[0.001, 1, 1e6, 1e7].map((n): [string, (d: any) => void] => [`stallSeconds ${n}`, (d) => (d.training.configuration.stallSeconds = n)]), // eslint-disable-line @typescript-eslint/no-explicit-any
+    ...[0.1, 1, 10, 100].map((n): [string, (d: any) => void] => [`wheelbase ${n}`, (d) => (d.training.configuration.physics.wheelbase = n)]), // eslint-disable-line @typescript-eslint/no-explicit-any
+    ...[-1, 0, 0.5, 1.5].map((n): [string, (d: any) => void] => [`maxSteerRadians ${n}`, (d) => (d.training.configuration.physics.maxSteerRadians = n)]), // eslint-disable-line @typescript-eslint/no-explicit-any
+    ...[0.1, 2, 4, 40].map((n): [string, (d: any) => void] => [`vehicleLength ${n}`, (d) => (d.training.configuration.physics.vehicleLength = n)]), // eslint-disable-line @typescript-eslint/no-explicit-any
+    ...[0.1, 1, 2, 20].map((n): [string, (d: any) => void] => [`vehicleWidth ${n}`, (d) => (d.training.configuration.physics.vehicleWidth = n)]), // eslint-disable-line @typescript-eslint/no-explicit-any
+    ...[0, 1, 100].map((n): [string, (d: any) => void] => [`lapWeight ${n}`, (d) => (d.training.configuration.fitness.lapWeight = n)]), // eslint-disable-line @typescript-eslint/no-explicit-any
+    ...[0.1, 30, 1000].map((n): [string, (d: any) => void] => [`referenceLapSeconds ${n}`, (d) => (d.training.configuration.fitness.referenceLapSeconds = n)]), // eslint-disable-line @typescript-eslint/no-explicit-any
+  ];
+  it.each(edits)('%s: validates only if it can be set up and replayed', (_name, edit) => {
+    const doc = JSON.parse(JSON.stringify(base));
+    edit(doc);
+    const result = validateModel(doc, registry);
+    if (!result.ok) return;
+    const compat = compatibility(result.model);
+    if (!compat.drivable) return;
+    expect(() => {
+      const { replay } = replayForModel(result.model);
+      for (let i = 0; i < 300 && !replay.done(); i += 1) replay.step();
+    }).not.toThrow();
   });
 });

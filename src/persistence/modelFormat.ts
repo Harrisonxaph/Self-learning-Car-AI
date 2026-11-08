@@ -21,6 +21,11 @@ const OUTPUT_ACTIVATIONS = Object.freeze(['tanh', 'sigmoid', 'sigmoid'] as const
 const OUTPUT_NAMES = Object.freeze(['steering', 'throttle', 'brake'] as const);
 /** The largest relative difference allowed between a stored `maxSpeed` and the speed recomputed from the other physics fields. */
 const MAX_SPEED_TOLERANCE = 1e-9;
+/** Bounds a saved run's settings must lie within; they mirror what the trainer accepts, so a model that validates can be set up. */
+export const MAX_POPULATION_SIZE = 100_000;
+export const MIN_TIMESTEP_SECONDS = 0.001;
+export const MAX_TIMESTEP_SECONDS = 0.1;
+const MAX_LIMIT_SECONDS = 1_000_000;
 
 // Persistence handles saved data only (docs/ARCHITECTURE.md), so it does not import the training code: the settings it
 // stores are described here, and a run's `TrainingRecord` satisfies `RunRecord` structurally. The track registry is passed in.
@@ -233,7 +238,10 @@ type Obj = Readonly<Record<string, unknown>>;
 const isObj = (v: unknown): v is Obj => typeof v === 'object' && v !== null && !Array.isArray(v);
 const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
 const isInt = (v: unknown): v is number => isNum(v) && Number.isInteger(v);
-const same = (a: unknown, b: unknown): boolean => JSON.stringify(a) === JSON.stringify(b);
+/** Equal as ordered lists of plain values (arrays of strings or numbers). */
+const same = (a: unknown, b: unknown): boolean => Array.isArray(a) && Array.isArray(b) && a.length === b.length && a.every((v, i) => Object.is(v, b[i]));
+/** Equal on the named fields only: key order and unknown extra fields do not matter. */
+const sameFields = (a: unknown, b: unknown, keys: readonly string[]): boolean => isObj(a) && isObj(b) && keys.every((key) => Object.is(a[key], b[key]));
 
 /**
  * Checks a parsed value against the v1 format, with `registry` the registered training tracks (id, version, content hash) and returns the model or every error found, in a fixed order. It changes
@@ -322,20 +330,30 @@ function validateTraining(t: Obj, brakeEnabled: boolean | null, registry: readon
     fail('"training.configuration" must be an object.');
     return;
   }
-  if (!isNum(c.timestepSeconds) || c.timestepSeconds <= 0) fail('"training.configuration.timestepSeconds" must be a number above 0.');
+  if (!isNum(c.timestepSeconds) || c.timestepSeconds < MIN_TIMESTEP_SECONDS || c.timestepSeconds > MAX_TIMESTEP_SECONDS) fail(`"training.configuration.timestepSeconds" must be a number from ${MIN_TIMESTEP_SECONDS} to ${MAX_TIMESTEP_SECONDS} seconds.`);
   const prng = c.prng;
   if (!isObj(prng) || prng.algorithm !== RNG_ALGORITHM || prng.version !== PRNG_VERSION) fail(`"training.configuration.prng" must be { algorithm: "${RNG_ALGORITHM}", version: ${PRNG_VERSION} }.`);
   if (c.generations !== null && (!isInt(c.generations) || c.generations < 1)) fail('"training.configuration.generations" must be a positive integer, or null for an open-ended run.');
-  for (const key of ['populationSize', 'eliteCount', 'maxLaps'] as const) {
-    if (!isInt(c[key]) || (c[key] as number) < 0) fail(`"training.configuration.${key}" must be an integer of at least 0.`);
-  }
+  if (!isInt(c.populationSize) || c.populationSize < 2 || c.populationSize > MAX_POPULATION_SIZE) fail(`"training.configuration.populationSize" must be an integer from 2 to ${MAX_POPULATION_SIZE}.`);
+  if (!isInt(c.eliteCount) || c.eliteCount < 0 || (isInt(c.populationSize) && c.eliteCount > c.populationSize)) fail('"training.configuration.eliteCount" must be an integer from 0 to the population size.');
+  if (!isInt(c.maxLaps) || c.maxLaps < 1) fail('"training.configuration.maxLaps" must be an integer of at least 1.');
   for (const key of ['maxEpisodeSeconds', 'stallSeconds'] as const) {
-    if (!isNum(c[key]) || (c[key] as number) <= 0) fail(`"training.configuration.${key}" must be a number above 0.`);
+    if (!isNum(c[key]) || (c[key] as number) <= 0 || (c[key] as number) > MAX_LIMIT_SECONDS) fail(`"training.configuration.${key}" must be a number above 0 and at most ${MAX_LIMIT_SECONDS}.`);
   }
   if (typeof c.brakeEnabled !== 'boolean') fail('"training.configuration.brakeEnabled" must be true or false.');
   else if (brakeEnabled !== null && c.brakeEnabled !== brakeEnabled) fail('"training.configuration.brakeEnabled" must agree with "architecture.brakeEnabled".');
-  for (const key of ['selection', 'crossover', 'mutation'] as const) {
-    if (!isObj(c[key])) fail(`"training.configuration.${key}" must be an object.`);
+  const populationSize = isInt(c.populationSize) ? c.populationSize : MAX_POPULATION_SIZE;
+  const selection = c.selection;
+  if (!isObj(selection) || selection.type !== 'tournament') fail('"training.configuration.selection.type" must be "tournament".');
+  else if (!isInt(selection.size) || selection.size < 1 || selection.size > populationSize) fail('"training.configuration.selection.size" must be an integer from 1 to the population size.');
+  const crossover = c.crossover;
+  if (!isObj(crossover) || crossover.type !== 'uniform') fail('"training.configuration.crossover.type" must be "uniform".');
+  else if (!isNum(crossover.rate) || crossover.rate < 0 || crossover.rate > 1) fail('"training.configuration.crossover.rate" must be a number from 0 to 1.');
+  const mutation = c.mutation;
+  if (!isObj(mutation)) fail('"training.configuration.mutation" must be an object.');
+  else {
+    if (!isNum(mutation.rate) || mutation.rate < 0 || mutation.rate > 1) fail('"training.configuration.mutation.rate" must be a number from 0 to 1.');
+    if (!isNum(mutation.scale) || mutation.scale < 0) fail('"training.configuration.mutation.scale" must be a finite number of at least 0.');
   }
   if (c.inputContract !== INPUT_CONTRACT) fail(`"training.configuration.inputContract" must be "${INPUT_CONTRACT}".`);
   if (c.outputContract !== OUTPUT_CONTRACT) fail(`"training.configuration.outputContract" must be "${OUTPUT_CONTRACT}".`);
@@ -350,8 +368,13 @@ function validateTraining(t: Obj, brakeEnabled: boolean | null, registry: readon
     if (missing.length > 0) {
       fail(`"training.configuration.physics" needs a finite number for ${missing.join(', ')}.`);
     } else {
+      const positive = ['wheelbase', 'engineAcceleration', 'brakeDeceleration', 'maxSteerRadians', 'maxLateralAcceleration', 'vehicleLength', 'vehicleWidth', 'maxSpeed'] as const;
+      const nonNegative = ['quadraticDrag', 'rollingResistance', 'stopSpeed'] as const;
+      for (const key of positive) if ((physics[key] as number) <= 0) fail(`"training.configuration.physics.${key}" must be above 0.`);
+      for (const key of nonNegative) if ((physics[key] as number) < 0) fail(`"training.configuration.physics.${key}" must be at least 0.`);
+      if (isNum(physics.maxSteerRadians) && physics.maxSteerRadians >= Math.PI / 2) fail('"training.configuration.physics.maxSteerRadians" must be below pi/2.');
       const derived = terminalSpeed(physics as unknown as VehiclePhysics);
-      if (!(Math.abs((physics.maxSpeed as number) - derived) <= MAX_SPEED_TOLERANCE * Math.max(1, Math.abs(derived)))) {
+      if (!Number.isFinite(derived) || !(Math.abs((physics.maxSpeed as number) - derived) <= MAX_SPEED_TOLERANCE * Math.max(1, Math.abs(derived)))) {
         fail(`"training.configuration.physics.maxSpeed" (${String(physics.maxSpeed)}) must equal the terminal speed ${derived} that follows from the engine, drag and rolling resistance.`);
       }
     }
@@ -376,12 +399,22 @@ function validateTraining(t: Obj, brakeEnabled: boolean | null, registry: readon
     for (const key of ['version', 'checkpointWeight', 'partialProgressWeight', 'lapWeight', 'collisionPenalty', 'lapTimeBonusScale', 'referenceLapSeconds', 'maxLapTimeRatio']) {
       if (!isNum(f[key])) fail(`"training.configuration.fitness.${key}" must be a finite number.`);
     }
+    for (const key of ['checkpointWeight', 'partialProgressWeight', 'lapWeight', 'collisionPenalty', 'lapTimeBonusScale']) {
+      if (isNum(f[key]) && (f[key] as number) < 0) fail(`"training.configuration.fitness.${key}" must be at least 0.`);
+    }
+    if (isNum(f.referenceLapSeconds) && f.referenceLapSeconds <= 0) fail('"training.configuration.fitness.referenceLapSeconds" must be above 0.');
+    if (isNum(f.maxLapTimeRatio) && f.maxLapTimeRatio < 1) fail('"training.configuration.fitness.maxLapTimeRatio" must be at least 1.');
     if (isNum(f.partialProgressWeight) && isNum(f.checkpointWeight) && f.partialProgressWeight > f.checkpointWeight) fail('"training.configuration.fitness.partialProgressWeight" must not exceed "checkpointWeight".');
   }
 
   // Top-level summaries must agree with the configuration they summarise.
-  for (const key of ['populationSize', 'eliteCount', 'selection', 'crossover', 'mutation', 'maxEpisodeSeconds'] as const) {
-    if (!same(t[key], c[key])) fail(`"training.${key}" must agree with "training.configuration.${key}".`);
+  for (const key of ['populationSize', 'eliteCount', 'maxEpisodeSeconds'] as const) {
+    if (t[key] !== c[key]) fail(`"training.${key}" must agree with "training.configuration.${key}".`);
+  }
+  // Operator settings are compared field by field, so key order and unknown extra fields do not matter.
+  const operatorFields = { selection: ['type', 'size'], crossover: ['type', 'rate'], mutation: ['rate', 'scale'] } as const;
+  for (const key of ['selection', 'crossover', 'mutation'] as const) {
+    if (!sameFields(t[key], c[key], operatorFields[key])) fail(`"training.${key}" must agree with "training.configuration.${key}".`);
   }
   if (!isObj(f) || t.fitnessVersion !== f.version) fail('"training.fitnessVersion" must agree with "training.configuration.fitness.version".');
 
@@ -433,8 +466,8 @@ export function compatibility(model: ModelDocument): Compatibility {
   const warnings: string[] = [];
   if (model.simulationVersion !== SIMULATION_VERSION) reasons.push(`It was made for simulation version ${model.simulationVersion}; this app runs version ${SIMULATION_VERSION}.`);
   const sensors = model.training.configuration.sensors;
-  if (!same(sensors, DEFAULT_SENSOR_CONFIG)) reasons.push('Its sensor layout differs from the one this app supports.');
-  if (!same(model.training.configuration.physics, DEFAULT_VEHICLE_PHYSICS)) warnings.push('It was trained with different vehicle physics from this build; it is replayed with its own, and its behaviour and old scores may differ.');
+  if (!sameFields(sensors, DEFAULT_SENSOR_CONFIG, ['origin', 'maxDistance']) || !same(sensors.anglesDegrees, DEFAULT_SENSOR_CONFIG.anglesDegrees)) reasons.push('Its sensor layout differs from the one this app supports.');
+  if (!sameFields(model.training.configuration.physics, DEFAULT_VEHICLE_PHYSICS, Object.keys(DEFAULT_VEHICLE_PHYSICS))) warnings.push('It was trained with different vehicle physics from this build; it is replayed with its own, and its behaviour and old scores may differ.');
   if (model.training.configuration.timestepSeconds !== DEFAULT_SIM_CONFIG.timestepSeconds) warnings.push('It was trained with a different timestep from this build; it is replayed with its own.');
   return { drivable: reasons.length === 0, reasons, warnings };
 }

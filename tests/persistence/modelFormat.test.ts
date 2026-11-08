@@ -315,6 +315,96 @@ describe('validateModel: training configuration', () => {
   });
 });
 
+describe('validateModel: nested settings and their ranges', () => {
+  const both = (key: string, edit: (o: Json) => void) => (d: Json) => {
+    edit(d.training.configuration[key]);
+    edit(d.training[key]);
+  };
+  const cfg = (edit: (c: Json) => void) => (d: Json) => edit(d.training.configuration);
+  it.each([
+    ['selection {} in both places', (d: Json) => { d.training.configuration.selection = {}; d.training.selection = {}; }, 'selection.type'],
+    ['selection type unknown', both('selection', (o) => (o.type = 'roulette')), 'selection.type'],
+    ['selection size 0', both('selection', (o) => (o.size = 0)), 'selection.size'],
+    ['selection size above the population', both('selection', (o) => (o.size = 9)), 'selection.size'],
+    ['selection size fractional', both('selection', (o) => (o.size = 2.5)), 'selection.size'],
+    ['crossover type unknown', both('crossover', (o) => (o.type = 'one-point')), 'crossover.type'],
+    ['crossover rate above 1', both('crossover', (o) => (o.rate = 1.5)), 'crossover.rate'],
+    ['crossover rate negative', both('crossover', (o) => (o.rate = -0.1)), 'crossover.rate'],
+    ['mutation rate above 1', both('mutation', (o) => (o.rate = 2)), 'mutation.rate'],
+    ['mutation scale negative', both('mutation', (o) => (o.scale = -1)), 'mutation.scale'],
+    ['mutation scale NaN', both('mutation', (o) => (o.scale = Number.NaN)), 'mutation.scale'],
+    ['populationSize 0 in both places', (d: Json) => { d.training.configuration.populationSize = 0; d.training.populationSize = 0; }, 'populationSize'],
+    ['populationSize 1', (d: Json) => { d.training.configuration.populationSize = 1; d.training.populationSize = 1; }, 'populationSize'],
+    ['populationSize above the limit', (d: Json) => { d.training.configuration.populationSize = 100_001; d.training.populationSize = 100_001; }, 'populationSize'],
+    ['eliteCount above the population', (d: Json) => { d.training.configuration.eliteCount = 99; d.training.eliteCount = 99; }, 'eliteCount'],
+    ['eliteCount negative', (d: Json) => { d.training.configuration.eliteCount = -1; d.training.eliteCount = -1; }, 'eliteCount'],
+    ['maxLaps 0', cfg((c) => (c.maxLaps = 0)), 'maxLaps'],
+    ['maxEpisodeSeconds beyond the limit', (d: Json) => { d.training.configuration.maxEpisodeSeconds = 1e9; d.training.maxEpisodeSeconds = 1e9; }, 'maxEpisodeSeconds'],
+    ['stallSeconds beyond the limit', cfg((c) => (c.stallSeconds = 1e9)), 'stallSeconds'],
+    ['timestep too small', cfg((c) => (c.timestepSeconds = 0.0001)), 'timestepSeconds'],
+    ['timestep too large', cfg((c) => (c.timestepSeconds = 1)), 'timestepSeconds'],
+    ['wheelbase negative', cfg((c) => (c.physics.wheelbase = -1)), 'physics.wheelbase'],
+    ['wheelbase zero', cfg((c) => (c.physics.wheelbase = 0)), 'physics.wheelbase'],
+    ['engine acceleration zero', cfg((c) => (c.physics.engineAcceleration = 0)), 'engineAcceleration'],
+    ['brake deceleration negative', cfg((c) => (c.physics.brakeDeceleration = -1)), 'brakeDeceleration'],
+    ['drag negative', cfg((c) => (c.physics.quadraticDrag = -0.01)), 'quadraticDrag'],
+    ['rolling resistance negative', cfg((c) => (c.physics.rollingResistance = -0.1)), 'rollingResistance'],
+    ['steer angle at a right angle', cfg((c) => (c.physics.maxSteerRadians = Math.PI / 2)), 'maxSteerRadians'],
+    ['lateral acceleration zero', cfg((c) => (c.physics.maxLateralAcceleration = 0)), 'maxLateralAcceleration'],
+    ['vehicle length zero', cfg((c) => (c.physics.vehicleLength = 0)), 'vehicleLength'],
+    ['vehicle width negative', cfg((c) => (c.physics.vehicleWidth = -2)), 'vehicleWidth'],
+    ['stop speed negative', cfg((c) => (c.physics.stopSpeed = -1)), 'stopSpeed'],
+    ['fitness weight negative', cfg((c) => (c.fitness.lapWeight = -1)), 'fitness.lapWeight'],
+    ['fitness reference lap time zero', cfg((c) => (c.fitness.referenceLapSeconds = 0)), 'referenceLapSeconds'],
+    ['fitness lap ratio below 1', cfg((c) => (c.fitness.maxLapTimeRatio = 0.5)), 'maxLapTimeRatio'],
+  ])('rejects %s, naming the field', (_name, edit, fragment) => {
+    expect(errorsOf(broken(edit)).join(' ')).toContain(fragment);
+  });
+
+  it('rejects physics with no drag at all, whose top speed is not finite', () => {
+    expect(errorsOf(broken(cfg((c) => { c.physics.quadraticDrag = 0; c.physics.rollingResistance = 0; }))).join(' ')).toContain('maxSpeed');
+  });
+});
+
+describe('validateModel and compatibility: key order and extra fields do not matter', () => {
+  const reorder = (value: Json): Json => Object.fromEntries(Object.entries(value).reverse());
+  const compatOf = (doc: unknown) => {
+    const result = validateModelWith(doc);
+    if (!result.ok) throw new Error(result.errors.join('; '));
+    return compatibility(result.model);
+  };
+  it('accepts the sensors, physics and operators with their keys in another order, and still drives them without a warning', () => {
+    const doc = broken((d) => {
+      const c = d.training.configuration;
+      c.sensors = reorder(c.sensors);
+      c.physics = reorder(c.physics);
+      c.selection = reorder(c.selection);
+      c.crossover = reorder(c.crossover);
+      c.mutation = reorder(c.mutation);
+      d.training.selection = reorder(d.training.selection);
+      d.training.crossover = reorder(d.training.crossover);
+      d.training.mutation = reorder(d.training.mutation);
+      c.fitness = reorder(c.fitness);
+    });
+    expect(compatOf(doc)).toEqual({ drivable: true, reasons: [], warnings: [] });
+  });
+  it('ignores unknown extra fields in the sensors, physics and operators', () => {
+    const doc = broken((d) => {
+      const c = d.training.configuration;
+      c.sensors.futureField = 'x';
+      c.physics.futureField = 1;
+      c.selection.futureField = true;
+      d.training.selection.futureField = false;
+      d.extra = { anything: 1 };
+    });
+    expect(compatOf(doc)).toEqual({ drivable: true, reasons: [], warnings: [] });
+  });
+  it('still refuses a different angle order, which is a different sensor layout', () => {
+    const doc = broken((d) => d.training.configuration.sensors.anglesDegrees.reverse());
+    expect(compatOf(doc).drivable).toBe(false);
+  });
+});
+
 describe('validateModel: physics, sensors and fitness', () => {
   const phys = (edit: (p: Json) => void) => (d: Json) => edit(d.training.configuration.physics);
   it.each(Object.keys(DEFAULT_VEHICLE_PHYSICS))('requires a finite physics field %s, with no default', (key) => {
