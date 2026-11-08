@@ -82,6 +82,22 @@ if (pageMode(window.location.search) === 'train') {
       },
       drawCap: element<HTMLSelectElement>('#draw-cap'),
     },
+    replay: {
+      details: element<HTMLDetailsElement>('#champion-replay'),
+      generation: element<HTMLInputElement>('#replay-generation'),
+      start: element<HTMLButtonElement>('#replay-start'),
+      stop: element<HTMLButtonElement>('#replay-stop'),
+      note: element<HTMLElement>('#replay-note'),
+      outputs: {
+        inputs: [...document.querySelectorAll<HTMLElement>('#champion-replay [data-input]')],
+        steering: element('#replay-steering'),
+        throttle: element('#replay-throttle'),
+        brake: element('#replay-brake'),
+        decision: element('#replay-decision'),
+        result: element('#replay-result'),
+        status: element('#replay-status'),
+      },
+    },
     graph: {
       details: element<HTMLDetailsElement>('#training-graph'),
       canvas: graphCanvas,

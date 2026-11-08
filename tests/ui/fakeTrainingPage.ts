@@ -1,5 +1,6 @@
 // Fake DOM objects with just enough behaviour for `startTrainingPage` to run in Node: the canvas and status line, the
 // dashboard and graph elements, and the speed controls, whose click and change handlers the tests can fire.
+import { INPUT_COUNT } from '../../src/ai/inputs';
 import stadiumOval from '../../src/data/tracks/stadium-oval.json';
 import type { ViewportEnvironment } from '../../src/render/viewport';
 import { DEFAULT_SIM_CONFIG, DEFAULT_VEHICLE_PHYSICS } from '../../src/sim/config';
@@ -23,6 +24,10 @@ export class FakeControl {
   setAttribute(name: string, value: string) {
     this.attributes[name] = value;
   }
+  getAttribute(name: string) {
+    return this.attributes[name] ?? null;
+  }
+  disabled = false;
   fire(type: string) {
     for (const listener of this.listeners.get(type) ?? []) listener();
   }
@@ -32,6 +37,24 @@ export class FakeControl {
   choose(value: string) {
     this.value = value;
     this.fire('change');
+  }
+}
+
+/** A `<details>`: toggling it sets `open` and fires the page's `toggle` listeners, as the browser does. */
+export class FakeDetails {
+  open = false;
+  hidden = true;
+  private readonly listeners: (() => void)[] = [];
+  addEventListener(_type: string, listener: () => void) {
+    this.listeners.push(listener);
+  }
+  closest() {
+    return null;
+  }
+  /** Opens or closes it as a person would, and fires the toggle listeners. */
+  toggle(open: boolean) {
+    this.open = open;
+    for (const listener of this.listeners) listener();
   }
 }
 
@@ -69,6 +92,22 @@ export function fakePage(frames: FakeFrames, options: FakePageOptions | { ms: nu
     drawCap: new FakeControl(),
   };
   controls.group.hidden = true;
+  const replay = {
+    details: new FakeDetails(),
+    generation: Object.assign(new FakeControl(), { value: '1' }),
+    start: new FakeControl(),
+    stop: new FakeControl(),
+    note: { textContent: '' },
+    outputs: {
+      inputs: Array.from({ length: INPUT_COUNT }, () => ({ textContent: '—' as string | null })),
+      steering: { textContent: '—' as string | null },
+      throttle: { textContent: '—' as string | null },
+      brake: { textContent: '—' as string | null },
+      decision: { textContent: '' as string | null },
+      result: { textContent: '' as string | null },
+      status: { textContent: '' as string | null },
+    },
+  };
   const fps = opts.fps ? { hidden: true, textContent: '' } : undefined;
   const viewport: ViewportEnvironment = { measure: () => ({ width: 390, height: 600 }), devicePixelRatio: () => 1, subscribe: () => () => {} };
   const page = {
@@ -78,6 +117,7 @@ export function fakePage(frames: FakeFrames, options: FakePageOptions | { ms: nu
     hide: [hidden],
     dashboard: { panel, outputs: dashboard.outputs },
     controls,
+    replay,
     fps,
     isPhone: opts.isPhone ?? false,
     // No track layer yet: the frame draws nothing, which leaves the per-frame paths under test.
@@ -91,5 +131,5 @@ export function fakePage(frames: FakeFrames, options: FakePageOptions | { ms: nu
     graphViewportEnvironment: viewport,
     now: opts.now ?? (opts.clock ? () => opts.clock!.ms : undefined),
   } as unknown as TrainingPage;
-  return { page, canvas, dashboard, panel, hidden, graph, controls, status, fps };
+  return { page, canvas, dashboard, panel, hidden, graph, controls, replay, status, fps };
 }

@@ -222,6 +222,42 @@ body {
   touch-action: pan-y;
 }
 
+/* Champion replay (P3-04): shares the graph's panel rules (it is a .training-graph), so at most one is open. */
+.replay-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.replay-input {
+  /* At least 44 CSS pixels tall and wide (AGENTS.md touch targets). */
+  width: 4.5rem;
+  min-width: 44px;
+  min-height: max(44px, 2.75rem);
+  padding: 0 0.4rem;
+  border: 2px solid #4a5a6a;
+  border-radius: 0.6rem;
+  background: #1b2733;
+  color: inherit;
+  font: inherit;
+}
+
+.replay-button {
+  padding: 0 0.7rem;
+}
+
+.tc-button:disabled,
+.replay-input:disabled,
+.tc-cap:disabled {
+  opacity: 0.5;
+}
+
+.replay-values {
+  gap: 0.1rem 0.8rem;
+  font-size: 0.85rem;
+}
+
 #graph-canvas {
   display: block;
   width: 100%;

@@ -6,12 +6,16 @@
 // Shown: the cars, one status line and (P3-01) the dashboard of live counts and last-completed-generation figures.
 // (P3-03) speed, pause and drawing controls change only how many ticks run per frame and how many cars are drawn.
 // Saving, champion replay and performance readouts belong to later Phase 3 items.
+import { INPUT_COUNT } from '../ai/inputs';
 import { drawCars } from '../render/raceView';
+import { drawSensors } from '../render/sensorView';
 import type { TrackLayer } from '../render/trackLayer';
 import { browserViewportEnvironment, createViewport, type Viewport, type ViewportEnvironment, type ViewportSize } from '../render/viewport';
 import type { SimConfig, VehiclePhysics } from '../sim/config';
 import type { Track } from '../sim/track';
+import { createChampionReplay, type ChampionReplay, type ReplayFrame } from '../training/championReplay';
 import { createTrainer, DEFAULT_TRAINING_CONFIG, type Generation } from '../training/trainer';
+import { emptyReplayText, renderReplay, replayText, type ReplayOutputs } from './championReplayView';
 import { browserFrameEnvironment, startFrameLoop, type FrameEnvironment, type FrameLoop } from './frameLoop';
 import { createRateMeter, formatRateReadout } from './rateMeter';
 import { createTrainingChart, type GraphContext } from './trainingChart';
@@ -61,6 +65,18 @@ export interface TrainingPage {
     readonly canvas: HTMLCanvasElement;
     readonly context: GraphContext;
     readonly summary: HTMLElement;
+  };
+  /**
+   * The champion replay (P3-04): a collapsible block. A replay pauses training (the trainer is not stepped), draws only the
+   * replayed car with its rays, and runs at 1× on the same fixed-step clock; Back to training restores the run unchanged.
+   */
+  readonly replay: {
+    readonly details: HTMLDetailsElement;
+    readonly generation: HTMLInputElement;
+    readonly start: HTMLButtonElement;
+    readonly stop: HTMLButtonElement;
+    readonly note: HTMLElement;
+    readonly outputs: ReplayOutputs;
   };
   /** The browser's frame, size and clock sources by default; tests pass fakes to drive the real page wiring in Node. */
   readonly frames?: FrameEnvironment;
@@ -179,12 +195,94 @@ export function startTrainingPage(page: TrainingPage): void {
     now: page.now ?? (() => performance.now()),
   });
   graphView.viewport = createViewport(graph.canvas, page.graphViewportEnvironment ?? browserViewportEnvironment(graph.canvas), () => chart.invalidate());
+  // The graph and the replay share the side panel's layout, so at most one of them is open (see style.css).
+  const replayPanel = page.replay;
+  const syncPanelLayout = () => {
+    // The page lays out differently with a panel open on a short landscape screen.
+    graph.details.closest?.('.app')?.classList.toggle('graph-open', graph.details.open || replayPanel.details.open);
+  };
   graph.details.addEventListener('toggle', () => {
-    // The page lays out differently with the graph open on a short landscape screen (see style.css).
-    graph.details.closest?.('.app')?.classList.toggle('graph-open', graph.details.open);
+    if (graph.details.open) replayPanel.details.open = false;
+    syncPanelLayout();
     graphView.viewport?.update();
     chart.invalidate();
   });
+
+  // Champion replay (P3-04). A replay runs one recorded champion alone, at 1×, through the same per-tick code as training,
+  // and the trainer is not stepped meanwhile, so what is trained does not depend on whether a replay was watched.
+  interface ActiveReplay {
+    readonly replay: ChampionReplay;
+    readonly generation: number;
+    frame: ReplayFrame | null;
+    readonly restore: { readonly mode: SpeedMode; readonly paused: boolean };
+  }
+  let active: ActiveReplay | null = null;
+  let replayCount = 0;
+  const replayOutputs = replayPanel.outputs;
+  const syncReplayControls = () => {
+    const count = session.generations.length;
+    const chosen = replayPanel.generation;
+    chosen.disabled = count === 0;
+    replayPanel.start.disabled = count === 0;
+    replayPanel.stop.disabled = active === null;
+    replayPanel.start.textContent = active ? 'Restart' : 'Replay';
+    if (count > 0) {
+      chosen.setAttribute('min', '1');
+      chosen.setAttribute('max', String(count));
+    }
+    replayPanel.note.textContent =
+      count === 0 ? 'No generation completed yet, so there is no champion to replay.' : `Replays the best car of a completed generation, 1 to ${count}, alone on the track at normal speed. Training waits meanwhile.`;
+    // The speed and cars-drawn controls are for training; a replay always runs at 1×.
+    for (const mode of SPEED_MODES) controls.speeds[mode].disabled = active !== null;
+    controls.drawCap.disabled = active !== null;
+  };
+  /** The generation field's value as a whole number from 1 to the number of completed generations, written back clamped. */
+  const chosenGeneration = (): number => {
+    const count = session.generations.length;
+    const typed = replayPanel.generation.value.trim();
+    const parsed = typed === '' ? Number.NaN : Math.floor(Number(typed));
+    const clamped = Number.isFinite(parsed) ? Math.min(Math.max(parsed, 1), Math.max(count, 1)) : count;
+    replayPanel.generation.value = String(clamped);
+    return clamped;
+  };
+  const startReplay = () => {
+    const count = session.generations.length;
+    if (count === 0) return;
+    const generation = chosenGeneration();
+    const stats = session.generations[generation - 1]!;
+    const restore = active ? active.restore : { mode: speed.mode, paused: speed.paused };
+    speed.setMode('normal');
+    speed.setPaused(false);
+    active = { replay: createChampionReplay(stats.champion, trainer.setup), generation, frame: null, restore };
+    running.loop?.resync();
+    syncControls();
+    syncReplayControls();
+  };
+  const stopReplay = () => {
+    if (!active) return;
+    const { restore } = active;
+    active = null;
+    speed.setMode(restore.mode);
+    speed.setPaused(restore.paused);
+    running.loop?.resync();
+    renderReplay(replayOutputs, emptyReplayText(INPUT_COUNT));
+    syncControls();
+    syncReplayControls();
+  };
+  replayPanel.start.addEventListener('click', startReplay);
+  replayPanel.stop.addEventListener('click', stopReplay);
+  replayPanel.generation.addEventListener('change', () => {
+    chosenGeneration();
+  });
+  replayPanel.details.addEventListener('toggle', () => {
+    if (replayPanel.details.open) graph.details.open = false;
+    else stopReplay();
+    syncPanelLayout();
+    graphView.viewport?.update();
+    syncReplayControls();
+  });
+  replayPanel.details.hidden = false;
+  syncReplayControls();
 
   const draw = (size: ViewportSize) => {
     const layer = trackLayer.get(track, size);
@@ -192,6 +290,19 @@ export function startTrainingPage(page: TrainingPage): void {
     context.clearRect(0, 0, size.width, size.height);
     if (!layer) return;
     context.drawImage(layer.canvas, 0, 0);
+    if (active) {
+      // Only the replayed car. It is drawn in the DECISION state, with the rays that decision was made from; once the
+      // episode has ended it is drawn in its result state, without rays (there is no further decision).
+      const { replay, frame } = active;
+      const pose = replay.done() ? replay.state() : frame ? frame.before : replay.start;
+      drawCars(context, size, layer.view, [{ car: pose.racer.car, finished: pose.episode.outcome !== null }], physics);
+      if (!replay.done() && frame) drawSensors(context, size, layer.view, frame.decision.readings);
+      const { dataset } = canvas;
+      dataset.trackScale = String(layer.view.scale);
+      dataset.trackOffsetX = String(layer.view.offsetX);
+      dataset.trackOffsetY = String(layer.view.offsetY);
+      return;
+    }
     const shown = pickCars(trainer.generation().cars, effectiveDrawCap(speed.mode, drawCap, population));
     const cars = shown.map((car) => ({ car: car.racer.car, finished: car.episode.outcome !== null }));
     drawCars(context, size, layer.view, cars, physics);
@@ -205,7 +316,7 @@ export function startTrainingPage(page: TrainingPage): void {
   const show = () => {
     const generation = trainer.generation();
     const drawn = effectiveDrawCap(speed.mode, drawCap, population);
-    const text = trainingStatus(generation, speedStatus(speed.mode, speed.paused));
+    const text = trainingStatus(generation, speedStatus(speed.mode, speed.paused) + (active ? ` · replaying generation ${active.generation}` : ''));
     if (status.textContent !== text) status.textContent = text;
     const { live, completed } = session.frame();
     Object.assign(canvas.dataset, {
@@ -224,7 +335,23 @@ export function startTrainingPage(page: TrainingPage): void {
       chartPoints: String(session.history.length),
       chartDraws: String(chart.draws),
       tick: String(ticks),
+      replay: active ? (active.replay.done() ? 'done' : 'running') : 'off',
     });
+    if (active) {
+      const { replay, frame } = active;
+      canvas.dataset.replayGeneration = String(active.generation);
+      canvas.dataset.replayTick = String(replay.ticks());
+      if (replay.done()) canvas.dataset.replayOutcome = replay.state().episode.outcome!;
+      else delete canvas.dataset.replayOutcome;
+      renderReplay(replayOutputs, replayText(frame, replay.state(), replay.ticks(), config.timestepSeconds, active.generation, INPUT_COUNT));
+    } else {
+      for (const name of ['replayGeneration', 'replayTick', 'replayOutcome']) delete canvas.dataset[name];
+    }
+    // The generation field's range follows the completed generations (a cheap check, written only on a change).
+    if (session.generations.length !== replayCount) {
+      replayCount = session.generations.length;
+      syncReplayControls();
+    }
     // The last completed generation's recorded values, unformatted, for the browser tests; absent before the first.
     const last: Record<string, string | null> = {
       lastGeneration: completed ? String(completed.generation) : null,
@@ -251,7 +378,17 @@ export function startTrainingPage(page: TrainingPage): void {
     now: page.now ?? (() => performance.now()),
   });
   running.loop = startFrameLoop(page.frames ?? browserFrameEnvironment(), speed, {
-    step: () => stepper.step(),
+    step: () => {
+      if (active) {
+        const frame = active.replay.step();
+        if (frame) {
+          active.frame = frame;
+          ticksThisFrame += 1;
+        }
+        return;
+      }
+      return stepper.step();
+    },
     render: () => {
       draw(viewport.current());
       show();

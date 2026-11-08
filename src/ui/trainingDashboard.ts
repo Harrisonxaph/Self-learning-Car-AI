@@ -4,7 +4,7 @@
 // exactly that path without a browser.
 import { historyPoint, type HistoryPoint } from '../training/generationHistory';
 import { completedMetrics, liveCounts, type CompletedMetrics, type LiveCounts } from '../training/generationMetrics';
-import type { Trainer } from '../training/trainer';
+import type { GenerationStats, Trainer } from '../training/trainer';
 
 /** What the dashboard writes to: an element's text, or any object with the same property in a test. */
 export interface TextTarget {
@@ -81,6 +81,12 @@ export interface TrainingSession {
    * generation ends and is read without copying, so reading it never costs more as training goes on.
    */
   readonly history: readonly HistoryPoint[];
+  /**
+   * The statistics of every completed generation, in order (entry 0 is generation 0), kept by reference as the trainer
+   * returned them, so the champion replay (P3-04) can look a champion up without calling `trainer.record()`, which copies
+   * the whole history. It adds no copy beyond the champion arrays the trainer already holds.
+   */
+  readonly generations: readonly GenerationStats[];
 }
 
 /**
@@ -91,12 +97,15 @@ export interface TrainingSession {
 export function createTrainingSession(trainer: DashboardTrainer, outputs: DashboardOutputs): TrainingSession {
   let last: ReturnType<DashboardTrainer['step']> = null;
   const history: HistoryPoint[] = [];
+  const generations: GenerationStats[] = [];
   return {
     history,
+    generations,
     step() {
       const stats = trainer.step();
       if (stats) {
         last = stats;
+        generations.push(stats);
         // `fitness` holds one entry per car, so its length is the population the generation was scored over.
         history.push(historyPoint(stats, stats.fitness.length));
       }
