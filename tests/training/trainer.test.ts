@@ -32,7 +32,9 @@ import {
   type TrainingSetup,
 } from '../../src/training/trainer';
 import { startFrameLoop } from '../../src/ui/frameLoop';
+import { createTrainingSession } from '../../src/ui/trainingDashboard';
 import { createRng, RNG_ALGORITHM } from '../../src/utils/rng';
+import { fakeDashboard } from '../ui/dashboardFakes';
 import { FakeFrames } from '../ui/fakeFrames';
 
 const track = loadTrack(stadiumOval);
@@ -331,6 +333,68 @@ describe('determinism', () => {
       loop.stop();
       expect(trainer.record()).toEqual(headless);
       expect(draws).toBeGreaterThan(10);
+    }
+  });
+});
+
+describe('the training dashboard does not change what is trained (P3-01)', () => {
+  /**
+   * The dashboard path may use only the trainer's step and current generation; anything else throws. `steps` counts the
+   * calls to `step`, so a dashboard that stepped the trainer itself would show up as more steps than the loop ran.
+   */
+  const dashboardView = (trainer: ReturnType<typeof createTrainer>, counter: { steps: number }) =>
+    new Proxy(trainer, {
+      get(target, property) {
+        if (property === 'step') return () => ((counter.steps += 1), target.step());
+        if (property !== 'generation') throw new Error(`The dashboard path read trainer.${String(property)}`);
+        return target[property];
+      },
+    });
+
+  it('gives the full trainer record of a headless run when the real dashboard update runs every rendered frame, at several render schedules', () => {
+    const headless = trainHeadless(SMALL, ENV, 3);
+    const context = nullContext();
+    const size = computeViewportSize(390, 600, 3);
+    const view = { scale: 2.5, offsetX: 195, offsetY: 300 };
+    // Frames of 1, 3 and 7 ticks' time at 60 Hz (the frame clock runs at most 5 ticks in a frame), 30 and 144 Hz frames and an awkward 73 ms frame.
+    for (const frameMs of [1000 / 60, 3000 / 60, 7000 / 60, 1000 / 30, 1000 / 144, 73]) {
+      const env = new FakeFrames();
+      const trainer = createTrainer(SMALL, ENV);
+      const dashboard = fakeDashboard();
+      const counter = { steps: 0 };
+      const session = createTrainingSession(dashboardView(trainer, counter), dashboard.outputs);
+      let ticksRun = 0;
+      let stepsThisFrame = 0;
+      let boundaryFrames = 0;
+      let lastIndex = 0;
+      const loop = startFrameLoop(env, createFixedStepClock(DEFAULT_SIM_CONFIG), {
+        step: () => {
+          if (trainer.record().generations.length < 3) {
+            session.step();
+            ticksRun += 1;
+            stepsThisFrame += 1;
+          }
+        },
+        render: () => {
+          const cars = trainer.generation().cars.map((c) => ({ car: c.racer.car, finished: c.episode.outcome !== null }));
+          drawCars(context, size, view, cars, DEFAULT_VEHICLE_PHYSICS);
+          session.frame();
+          // A frame that ran several ticks and crossed into the next generation.
+          const index = trainer.generation().index;
+          if (index !== lastIndex && stepsThisFrame > 1) boundaryFrames += 1;
+          lastIndex = index;
+          stepsThisFrame = 0;
+        },
+      });
+      for (let t = 0; trainer.record().generations.length < 3; t += frameMs) env.fire(t);
+      loop.stop();
+      expect(trainer.record(), `frame ${frameMs.toFixed(1)} ms`).toEqual(headless);
+      // The dashboard added no ticks of its own: the trainer stepped exactly as often as the frame loop asked.
+      expect(counter.steps, `frame ${frameMs.toFixed(1)} ms`).toBe(ticksRun);
+      // The dashboard really ran: it shows the last completed generation of the run it did not change.
+      expect(dashboard.text().lastGeneration).toBe('3');
+      expect(dashboard.text().bestFitness).toBe(headless.generations[2]!.bestFitness.toFixed(2));
+      if (frameMs > 100) expect(boundaryFrames).toBeGreaterThan(0);
     }
   });
 });

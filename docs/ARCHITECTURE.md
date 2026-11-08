@@ -63,6 +63,7 @@ src/
     debugFlags.ts         debug views switched on from the address, e.g. ?debug=rays (P2-01)
     pageMode.ts           manual driving by default, training view with ?mode=train (P2-05)
     trainingPage.ts       rendered training: the trainer under the frame loop, all cars drawn (P2-05)
+    trainingDashboard.ts  dashboard text and the per-frame dashboard session; reads only (P3-01)
     dashboard/            stats, fitness graph
     editor/               track editor
   utils/
@@ -375,10 +376,11 @@ Seven rays fanned across the car's front (−90°, −60°, −30°, 0°, 30°, 
 - **Randomness:** the trainer owns one run generator, `createRng(seed)`. Its first draw seeds the initial-population generator, which fills genomes in index order. `trainerStreams(seed)` is the only place these two streams are derived (P2-08's A8 baseline continues the same `initial` stream; see [the baseline design](experiments/p2-08-baselines-design.md)). Each generation transition takes exactly three more draws, through `createEvolutionRngs`. Episodes use no randomness, so stepping order and drawing cannot change any stream.
 - **Headless:** `runGeneration` and `trainHeadless(config, environment, generations)` run in Node. `npm run demo:train` prints 50 generations with the default configuration, in about 80 s here.
 - **Rendered (`?mode=train`, `ui/trainingPage.ts`):**
-  - The page's frame loop calls `trainer.step()` once per fixed tick, at most `maxStepsPerFrame` per frame. Drawing (`drawCars`) only reads car state, so results match a headless run; a test drives the loop at several frame rates.
+  - The page's frame loop calls `trainer.step()` once per fixed tick, at most `maxStepsPerFrame` per frame. Drawing (`drawCars`) and the dashboard only read state, so results match a headless run; tests drive the loop at several frame rates, with the real dashboard update running every frame.
   - Running cars are blue, crashed cars red and other finished cars grey. One status line names the generation and how many cars are still running, and the manual controls and lap display are hidden.
   - The default page is still manual driving.
-  - There is no dashboard, graph, speed control, saving or replay; those are P3-01 to P3-05.
+  - **Dashboard (P3-01):** `training/generationMetrics.ts` is pure and headless: `liveCounts(generation)` counts the cars by outcome (running = outcome `null`, crashed, stalled, finished = `completed` or `timeout`; the four sum to the population), and `completedMetrics(stats, population)` gives best and mean fitness, the crash rate (crashes only, `outcomes.crashed / population`), stalls separately, and the lap-completion rate (`carsWithLap / population`) for the last completed generation, or null before the first. `ui/trainingDashboard.ts` formats them and writes the panel's `<output>` elements, touching a text node only when its text changes. Its session keeps the `GenerationStats` that `trainer.step()` returns when a generation ends, and sees only the trainer's `step` and `generation`, so the per-frame dashboard path never calls `trainer.record()`, whose result copies the whole history. The page's own `completedGenerations` data attribute still reads `record()` each frame, as before.
+  - There is no graph, speed control, saving, replay or frame-rate and step-time readout; those are P3-02 to P3-07.
 - **Observed with the defaults:** 3 laps of the oval (about 1,474 m) cannot fit in 60 s at the 23.7 m/s top speed. So `completed` is unreachable on this track with these limits, and lapping cars end as `timeout`. This is a configuration fact, not a result.
 - **Separation:** the trainer imports `ai`, `evolution`, `sensors`, `sim`, `utils` and `training` only. Lint forbids rendering, UI, persistence and the DOM, and a test checks the imports.
 
