@@ -11,14 +11,23 @@ export interface FrameEnvironment {
 }
 
 export interface FrameLoopHandlers {
-  /** Runs one fixed simulation tick. It is never told the frame time. */
-  step(): void;
+  /**
+   * Runs one fixed simulation tick. It is never told the frame time. Returning `false` stops this frame's remaining
+   * ticks (a time budget ran out); the ticks not run are not made up later, they are simply not due.
+   */
+  step(): void | boolean;
   /** Draws the current state once per frame. */
   render(): void;
 }
 
 export interface FrameLoop {
   stop(): void;
+  /**
+   * Forgets the time of the last frame and any part-tick, as if the loop had just started: the next frame only records
+   * its time and runs no tick. For a pause that the page chooses (the loop keeps drawing), so that time spent paused is
+   * never counted as time to run when it ends.
+   */
+  resync(): void;
 }
 
 export function startFrameLoop(env: FrameEnvironment, clock: FixedStepClock, handlers: FrameLoopHandlers): FrameLoop {
@@ -30,7 +39,9 @@ export function startFrameLoop(env: FrameEnvironment, clock: FixedStepClock, han
     // The first frame after starting or returning only records the time, so time spent hidden never counts.
     const steps = lastTimeMs === undefined ? 0 : clock.advance((timeMs - lastTimeMs) / 1000);
     lastTimeMs = timeMs;
-    for (let i = 0; i < steps; i += 1) handlers.step();
+    for (let i = 0; i < steps; i += 1) {
+      if (handlers.step() === false) break;
+    }
     handlers.render();
     handle = env.requestFrame(frame);
   };
@@ -53,6 +64,10 @@ export function startFrameLoop(env: FrameEnvironment, clock: FixedStepClock, han
     stop() {
       unsubscribe();
       pause();
+    },
+    resync() {
+      lastTimeMs = undefined;
+      clock.reset();
     },
   };
 }
