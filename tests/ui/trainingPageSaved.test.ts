@@ -6,11 +6,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import stadiumOval from '../../src/data/tracks/stadium-oval.json';
 import { INDEX_KEY, MODEL_KEY_PREFIX, MAX_SAVES } from '../../src/persistence/modelStore';
 import { validateModel } from '../../src/persistence/modelFormat';
-import { DEFAULT_SIM_CONFIG, DEFAULT_VEHICLE_PHYSICS } from '../../src/sim/config';
+import { DEFAULT_SIM_CONFIG, DEFAULT_VEHICLE_PHYSICS, terminalSpeed } from '../../src/sim/config';
 import { loadTrack } from '../../src/sim/track';
 import { createChampionReplay } from '../../src/training/championReplay';
 import { tracksIn } from '../../src/training/trackSplits';
 import { createTrainer, DEFAULT_TRAINING_CONFIG, evaluateGenome } from '../../src/training/trainer';
+import { replayForModel } from '../../src/ui/savedReplay';
 import { startTrainingPage } from '../../src/ui/trainingPage';
 import { FakeFrames } from './fakeFrames';
 import { FakeLocalStorage, fakePage, type FakeNode } from './fakeTrainingPage';
@@ -286,5 +287,45 @@ describe('browser storage that fails', () => {
     storage.data.clear();
     p.replay.details.toggle(true);
     expect(p.rows()).toHaveLength(0);
+  });
+});
+
+describe('a saved champion keeps its own recorded setup', () => {
+  it('replays with the physics and timestep it was saved with while the page trains under its own', () => {
+    const storage = new FakeLocalStorage();
+    const p = setup({ storage: () => storage });
+    p.completeGenerations(1);
+    p.saved.save.click();
+    const key = `${MODEL_KEY_PREFIX}saved-1`;
+    const doc = JSON.parse(storage.data.get(key)!);
+    const physics = { ...doc.training.configuration.physics, engineAcceleration: 6 };
+    doc.training.configuration.physics = { ...physics, maxSpeed: terminalSpeed(physics) };
+    storage.data.set(key, JSON.stringify(doc));
+    p.replay.details.toggle(true);
+    expect(p.rows()[0]!.attributes['data-status']).toBe('ok');
+    expect(p.rows()[0]!.find((n) => n.attributes.class === 'saved-warning')[0]!.textContent).toContain('different vehicle physics');
+
+    // The reference: the same document replayed under its own setup. The live champion's replay differs.
+    const { trainer, stats } = independent(1);
+    const saved = replayForModel(doc);
+    const live = createChampionReplay(stats[0]!.champion, trainer.setup);
+    p.button(p.rows()[0]!, 'Replay').click();
+    p.run();
+    let frames = 0;
+    for (let guard = 0; guard < 100_000 && p.canvas.dataset.replay === 'running'; guard += 1) {
+      p.run();
+      while (frames < Number(p.canvas.dataset.replayTick)) {
+        saved.replay.step();
+        live.step();
+        frames += 1;
+      }
+    }
+    expect(p.canvas.dataset.replay).toBe('done');
+    expect(Number(p.canvas.dataset.replayTick)).toBe(saved.replay.ticks());
+    expect(saved.replay.state().episode.outcome).toBe(p.canvas.dataset.replayOutcome);
+    // Slower acceleration changes the drive, so a replay under the page's own setup would have ended differently.
+    expect(saved.replay.state()).not.toEqual(live.state());
+    // Training did not take the saved physics.
+    expect(trainer.setup.environment.physics.engineAcceleration).toBe(DEFAULT_VEHICLE_PHYSICS.engineAcceleration);
   });
 });

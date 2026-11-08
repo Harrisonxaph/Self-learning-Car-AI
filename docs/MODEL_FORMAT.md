@@ -399,6 +399,7 @@ Authorised by the owner on [#25](https://github.com/Harrisonxaph/Self-learning-C
 - **Negative zero:** JSON cannot store it, so a parameter of -0 is saved as 0; a network behaves the same with either (tested).
 - **`id`** is 1 to 100 letters, digits, dots, dashes or underscores (it becomes a storage key). It comes from `crypto.randomUUID()`, then `crypto.getRandomValues`, then the clock and `Math.random`, and never from a simulation or evolution stream.
 - **`codeVersion` and `appVersion`** are injected at build time: the commit from `VERCEL_GIT_COMMIT_SHA` or `GITHUB_SHA` (else `dev`) and the `package.json` version.
+- **Seed:** `training.seed` is an unsigned 32-bit integer, or `null` for legacy unseeded data, which requires a non-empty `training.seedUnavailableReason`; the app lists such a save as "seed unavailable, not reproducible".
 - **Unknown extra fields** are ignored when reading and are not kept when saving.
 - **Storage details:** the index `sdae:models:index` is a JSON array of ids in saving order. It is a hint: the store also finds model keys that are not in it, shows an index entry whose model is gone as damaged, and rebuilds a damaged index from the model keys. The cap is 20 saves; a 21st asks the person to delete one (damaged entries count, and can be deleted).
 - **Export JSON next to every save** (the storage section above) is **not yet met**: export is P3-06. Until then the page says that saves live in this browser only and can be cleared, and that exporting arrives later.

@@ -39,6 +39,8 @@ export interface EntrySummary {
   readonly generation: number;
   readonly fitness: number;
   readonly createdAt: string;
+  /** False when the run's seed is unavailable (legacy unseeded data), so the run cannot be reproduced. */
+  readonly reproducible: boolean;
 }
 
 export type StoreEntry =
@@ -163,7 +165,7 @@ export function createModelStore(options: ModelStoreOptions): ModelStore {
     return {
       id,
       status: 'ok',
-      summary: { name: model.name ?? null, generation: model.training.generation, fitness: model.fitness, createdAt: model.createdAt },
+      summary: { name: model.name ?? null, generation: model.training.generation, fitness: model.fitness, createdAt: model.createdAt, reproducible: model.training.seed !== null },
       warnings: c.drivable ? c.warnings : [...c.reasons],
       drivable: c.drivable,
     };

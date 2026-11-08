@@ -294,6 +294,18 @@ describe('validateModel: training configuration', () => {
     expect(errorsOf(broken(edit)).join(' ')).toContain(fragment);
   });
 
+  it.each([0, 1, 4_294_967_295])('accepts the seed %i, the ends of the unsigned 32-bit range included', (seed) => {
+    expect(validateModelWith(broken((d) => (d.training.seed = seed))).ok).toBe(true);
+  });
+  it.each([['a string', '7'], ['negative', -1], ['fractional', 0.5], ['2^32', 4_294_967_296], ['NaN', Number.NaN], ['an object', {}]])('rejects a seed that is %s', (_name, seed) => {
+    expect(errorsOf(broken((d) => (d.training.seed = seed))).join(' ')).toContain('training.seed');
+  });
+  it.each([['empty', ''], ['a number', 5], ['missing', undefined]])('rejects a null seed whose reason is %s', (_name, reason) => {
+    expect(errorsOf(broken((d) => {
+      d.training.seed = null;
+      d.training.seedUnavailableReason = reason;
+    })).join(' ')).toContain('seedUnavailableReason');
+  });
   it('accepts a null seed with a reason, and a positive generation budget', () => {
     expect(validateModelWith(broken((d) => {
       d.training.seed = null;

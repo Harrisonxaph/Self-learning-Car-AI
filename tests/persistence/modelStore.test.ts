@@ -331,6 +331,19 @@ describe('compatibility on load', () => {
   });
 });
 
+describe('seeds and reproducibility', () => {
+  it('lists a seeded save as reproducible and a legacy unseeded one as not', () => {
+    const { store, storage } = setup();
+    store.save(model('seeded'));
+    store.save(model('legacy'));
+    const doc = JSON.parse(storage.data.get(`${MODEL_KEY_PREFIX}legacy`)!);
+    doc.training.seed = null;
+    doc.training.seedUnavailableReason = 'imported from an unseeded run';
+    storage.data.set(`${MODEL_KEY_PREFIX}legacy`, JSON.stringify(doc));
+    expect(store.list()).toMatchObject({ entries: [{ id: 'seeded', summary: { reproducible: true } }, { id: 'legacy', status: 'ok', summary: { reproducible: false } }] });
+  });
+});
+
 describe('remove', () => {
   it('removes the model and its index entry only', () => {
     const { store, storage } = setup();
