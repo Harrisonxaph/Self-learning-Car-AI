@@ -4,17 +4,28 @@
 // headless run with the same configuration (tests/training/trainer.test.ts checks this).
 //
 // Shown: the cars, one status line and (P3-01) the dashboard of live counts and last-completed-generation figures.
-// Graphs, speed controls, saving, champion replay and performance readouts belong to later Phase 3 items.
+// (P3-03) speed, pause and drawing controls change only how many ticks run per frame and how many cars are drawn.
+// Saving, champion replay and performance readouts belong to later Phase 3 items.
 import { drawCars } from '../render/raceView';
 import type { TrackLayer } from '../render/trackLayer';
 import { browserViewportEnvironment, createViewport, type Viewport, type ViewportEnvironment, type ViewportSize } from '../render/viewport';
 import type { SimConfig, VehiclePhysics } from '../sim/config';
-import { createFixedStepClock } from '../sim/fixedStep';
 import type { Track } from '../sim/track';
 import { createTrainer, DEFAULT_TRAINING_CONFIG, type Generation } from '../training/trainer';
 import { browserFrameEnvironment, startFrameLoop, type FrameEnvironment } from './frameLoop';
 import { createTrainingChart, type GraphContext } from './trainingChart';
 import { createTrainingSession, type DashboardOutputs } from './trainingDashboard';
+import {
+  createFrameStepper,
+  createSpeedControl,
+  DRAW_CAPS,
+  defaultDrawCap,
+  effectiveDrawCap,
+  pickCars,
+  SPEED_MODES,
+  speedStatus,
+  type SpeedMode,
+} from './trainingSpeed';
 
 export interface TrainingPage {
   readonly canvas: HTMLCanvasElement;
@@ -29,6 +40,15 @@ export interface TrainingPage {
   readonly track: Track;
   readonly physics: VehiclePhysics;
   readonly config: SimConfig;
+  /** The speed, pause and cars-drawn controls (P3-03), shown in training mode. */
+  readonly controls: {
+    readonly group: HTMLElement;
+    readonly pause: HTMLButtonElement;
+    readonly speeds: Readonly<Record<SpeedMode, HTMLButtonElement>>;
+    readonly drawCap: HTMLSelectElement;
+  };
+  /** Whether this is a phone, which starts with fewer cars drawn. The browser is asked by default. */
+  readonly isPhone?: boolean;
   /** The training graph (P3-02): a collapsible block that is shown in training mode, with its canvas and text summary. */
   readonly graph: {
     readonly details: HTMLDetailsElement;
@@ -43,10 +63,18 @@ export interface TrainingPage {
   readonly now?: () => number;
 }
 
-/** The status line for a generation: its number (from 1), and how many of its cars are still running. */
-export function trainingStatus(generation: Generation): string {
+/**
+ * The status line for a generation: its number (from 1), and how many of its cars are still running, followed by
+ * the speed, pause and drawing note (empty at 1× with every car drawn).
+ */
+export function trainingStatus(generation: Generation, note = ''): string {
   const running = generation.cars.filter((car) => car.episode.outcome === null).length;
-  return `Training · generation ${generation.index + 1} · ${running} of ${generation.cars.length} cars running`;
+  return `Training · generation ${generation.index + 1} · ${running} of ${generation.cars.length} cars running${note}`;
+}
+
+/** A phone: a touch screen with a small shorter side. Fewer cars are drawn there by default. */
+function browserIsPhone(): boolean {
+  return window.matchMedia('(pointer: coarse)').matches && Math.min(window.screen.width, window.screen.height) < 600;
 }
 
 export function startTrainingPage(page: TrainingPage): void {
@@ -58,6 +86,33 @@ export function startTrainingPage(page: TrainingPage): void {
   const trainer = createTrainer(DEFAULT_TRAINING_CONFIG, { track, physics, timestepSeconds: config.timestepSeconds });
   const session = createTrainingSession(trainer, page.dashboard.outputs);
   let ticks = 0;
+
+  // Speed, pause and the number of cars drawn (P3-03). None of these changes what the trainer computes.
+  const { controls } = page;
+  const population = trainer.generation().cars.length;
+  const speed = createSpeedControl(config);
+  let drawCap = defaultDrawCap(page.isPhone ?? browserIsPhone(), population);
+  controls.group.hidden = false;
+  controls.drawCap.value = String(drawCap);
+  const syncControls = () => {
+    for (const mode of SPEED_MODES) controls.speeds[mode].setAttribute('aria-pressed', String(speed.mode === mode));
+    controls.pause.textContent = speed.paused ? 'Resume' : 'Pause';
+  };
+  for (const mode of SPEED_MODES) {
+    controls.speeds[mode].addEventListener('click', () => {
+      speed.setMode(mode);
+      syncControls();
+    });
+  }
+  controls.pause.addEventListener('click', () => {
+    speed.setPaused(!speed.paused);
+    syncControls();
+  });
+  controls.drawCap.addEventListener('change', () => {
+    const chosen = Number(controls.drawCap.value);
+    if (DRAW_CAPS.includes(chosen)) drawCap = chosen;
+  });
+  syncControls();
 
   // The graph reads the session's history and is redrawn at most a few times a second, only while it is open.
   const { graph } = page;
@@ -86,7 +141,8 @@ export function startTrainingPage(page: TrainingPage): void {
     context.clearRect(0, 0, size.width, size.height);
     if (!layer) return;
     context.drawImage(layer.canvas, 0, 0);
-    const cars = trainer.generation().cars.map((car) => ({ car: car.racer.car, finished: car.episode.outcome !== null }));
+    const shown = pickCars(trainer.generation().cars, effectiveDrawCap(speed.mode, drawCap, population));
+    const cars = shown.map((car) => ({ car: car.racer.car, finished: car.episode.outcome !== null }));
     drawCars(context, size, layer.view, cars, physics);
     const { dataset } = canvas;
     dataset.trackScale = String(layer.view.scale);
@@ -97,7 +153,8 @@ export function startTrainingPage(page: TrainingPage): void {
   /** Writes the status line, plus data attributes for the browser tests. */
   const show = () => {
     const generation = trainer.generation();
-    const text = trainingStatus(generation);
+    const drawn = effectiveDrawCap(speed.mode, drawCap, population);
+    const text = trainingStatus(generation, speedStatus(speed.mode, speed.paused));
     if (status.textContent !== text) status.textContent = text;
     const { live, completed } = session.frame();
     Object.assign(canvas.dataset, {
@@ -110,6 +167,9 @@ export function startTrainingPage(page: TrainingPage): void {
       stalled: String(live.stalled),
       finished: String(live.finished),
       completedGenerations: String(trainer.record().generations.length),
+      speed: speed.mode,
+      paused: String(speed.paused),
+      drawn: String(drawn),
       chartPoints: String(session.history.length),
       chartDraws: String(chart.draws),
       tick: String(ticks),
@@ -130,15 +190,21 @@ export function startTrainingPage(page: TrainingPage): void {
   };
 
   const viewport = createViewport(canvas, page.viewportEnvironment ?? browserViewportEnvironment(canvas), draw);
-  startFrameLoop(page.frames ?? browserFrameEnvironment(), createFixedStepClock(config), {
-    step: () => {
+  const stepper = createFrameStepper({
+    runTick: () => {
       ticks += 1;
       session.step();
     },
+    mode: () => speed.mode,
+    now: page.now ?? (() => performance.now()),
+  });
+  startFrameLoop(page.frames ?? browserFrameEnvironment(), speed, {
+    step: () => stepper.step(),
     render: () => {
       draw(viewport.current());
       show();
       chart.frame();
+      stepper.endFrame();
     },
   });
 }

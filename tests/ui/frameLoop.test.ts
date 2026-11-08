@@ -68,6 +68,45 @@ describe('startFrameLoop', () => {
     expect(renders()).toBe(31);
   });
 
+  it('stops a frame\'s remaining ticks when the step handler returns false, and the next frame is not owed them', () => {
+    const env = new FakeFrames();
+    let ticks = 0;
+    let renders = 0;
+    // A frame at 15 Hz is due 4 ticks; the handler stops after 2 on every frame.
+    startFrameLoop(env, createFixedStepClock(DEFAULT_SIM_CONFIG), {
+      step: () => {
+        ticks += 1;
+        return ticks % 2 === 0 ? false : undefined;
+      },
+      render: () => {
+        renders += 1;
+      },
+    });
+    env.fire(0);
+    env.fire(1000 / 15);
+    expect(renders).toBe(2);
+    // Tick 1 returns nothing (carry on), tick 2 returns false (stop): 2 of the 4 due ticks ran.
+    expect(ticks).toBe(2);
+    env.fire(2000 / 15);
+    // The stopped ticks were not queued: the next frame is due its own 4 and runs 2 again (ticks 3 and 4).
+    expect(ticks).toBe(4);
+  });
+
+  it('keeps running every tick when the step handler returns true or nothing', () => {
+    const env = new FakeFrames();
+    let ticks = 0;
+    startFrameLoop(env, createFixedStepClock(DEFAULT_SIM_CONFIG), {
+      step: () => {
+        ticks += 1;
+        return ticks % 2 === 0 ? true : undefined;
+      },
+      render: () => {},
+    });
+    env.fire(0);
+    env.fire(1000 / 15);
+    expect(ticks).toBe(4);
+  });
+
   it('runs no ticks on the first frame, which only records the time', () => {
     const { env, world, renders } = setup();
     env.fire(5000);

@@ -11,8 +11,11 @@ export interface FrameEnvironment {
 }
 
 export interface FrameLoopHandlers {
-  /** Runs one fixed simulation tick. It is never told the frame time. */
-  step(): void;
+  /**
+   * Runs one fixed simulation tick. It is never told the frame time. Returning `false` stops this frame's remaining
+   * ticks (a time budget ran out); the ticks not run are not made up later, they are simply not due.
+   */
+  step(): void | boolean;
   /** Draws the current state once per frame. */
   render(): void;
 }
@@ -30,7 +33,9 @@ export function startFrameLoop(env: FrameEnvironment, clock: FixedStepClock, han
     // The first frame after starting or returning only records the time, so time spent hidden never counts.
     const steps = lastTimeMs === undefined ? 0 : clock.advance((timeMs - lastTimeMs) / 1000);
     lastTimeMs = timeMs;
-    for (let i = 0; i < steps; i += 1) handlers.step();
+    for (let i = 0; i < steps; i += 1) {
+      if (handlers.step() === false) break;
+    }
     handlers.render();
     handle = env.requestFrame(frame);
   };

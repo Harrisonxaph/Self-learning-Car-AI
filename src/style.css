@@ -103,6 +103,46 @@ body {
   height: 100%;
 }
 
+.training-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.2rem 0.5rem;
+}
+
+.tc-speeds {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.tc-button,
+.tc-cap {
+  /* At least 44 × 44 CSS pixels (AGENTS.md touch targets). */
+  min-width: 2.75rem;
+  min-height: 2.75rem;
+  padding: 0 0.4rem;
+  border: 2px solid #4a5a6a;
+  border-radius: 0.6rem;
+  background: #243240;
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.tc-button[aria-pressed='true'] {
+  background: #3f6f9f;
+  border-color: #8ab4ff;
+}
+
+.tc-cap {
+  width: 5rem;
+  min-width: 0;
+  padding: 0 0.2rem;
+  font-size: 0.9rem;
+}
+
 .training-graph {
   padding: 0 0.75rem 0.4rem;
   font-size: 0.95rem;
@@ -253,9 +293,18 @@ body {
     grid-row: 2;
   }
 
+  .app.graph-open {
+    grid-template-rows: auto minmax(0, 1fr) auto;
+  }
+
+  .app.graph-open > .training-controls {
+    grid-column: 1;
+    grid-row: 3;
+  }
+
   .app.graph-open > .training-graph {
     grid-column: 2;
-    grid-row: 2;
+    grid-row: 2 / 4;
     min-height: 0;
     max-height: none;
   }

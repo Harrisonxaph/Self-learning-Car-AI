@@ -187,6 +187,94 @@ test('the training graph draws a point for each completed generation and keeps a
   expect(text).not.toMatch(/learn|improv|better|smarter/i);
 });
 
+test('the speed controls are real buttons of at least 44 px, and pause, resume and change the speed of the run', async ({ page }) => {
+  await installPausedClock(page);
+  await page.goto('/?mode=train');
+  await page.clock.runFor(200);
+  await expect(page.locator('#sim-canvas')).toHaveAttribute('data-mode', 'train');
+  await expect(page.locator('#training-controls')).toBeVisible();
+
+  // Every control is at least 44 x 44 CSS pixels and on screen.
+  const boxes = await page.locator('#training-controls button, #training-controls select').evaluateAll((els) =>
+    els.map((el) => {
+      const b = el.getBoundingClientRect();
+      return { name: el.id || (el as HTMLElement).dataset.speed, w: b.width, h: b.height, inside: b.left >= 0 && b.right <= innerWidth && b.top >= 0 && b.bottom <= innerHeight };
+    }),
+  );
+  expect(boxes).toHaveLength(5);
+  for (const box of boxes) {
+    expect(box.w, box.name).toBeGreaterThanOrEqual(44);
+    expect(box.h, box.name).toBeGreaterThanOrEqual(44);
+    expect(box.inside, box.name).toBe(true);
+  }
+
+  const tick = async () => Number(await data(page, 'tick'));
+  const ticksIn = async (ms: number) => {
+    const before = await tick();
+    await page.clock.runFor(ms);
+    return (await tick()) - before;
+  };
+  // At 1× about 60 ticks pass in a second of page time.
+  const normal = await ticksIn(1000);
+  expect(normal).toBeGreaterThanOrEqual(55);
+  expect(normal).toBeLessThanOrEqual(65);
+
+  // Pause: nothing advances, the button says Resume and the status line says so; a real-time wait changes nothing either.
+  await page.locator('#speed-pause').click();
+  await expect(page.locator('#speed-pause')).toHaveText('Resume');
+  // The status line and page data follow on the next rendered frame, and the page's clock only moves when told to.
+  await page.clock.runFor(100);
+  await expect(page.locator('#sim-canvas')).toHaveAttribute('data-paused', 'true');
+  expect(await ticksIn(5000)).toBe(0);
+  await expect(page.locator('#hud-message')).toHaveText(/ · paused$/);
+  // Resume: it carries on at the same pace, with no burst of catch-up ticks.
+  await page.locator('#speed-pause').click();
+  await expect(page.locator('#speed-pause')).toHaveText('Pause');
+  const resumed = await ticksIn(1000);
+  expect(resumed).toBeGreaterThanOrEqual(55);
+  expect(resumed).toBeLessThanOrEqual(65);
+
+  // 4× is about four times as fast.
+  await page.locator('[data-speed="fast"]').click();
+  await expect(page.locator('[data-speed="fast"]')).toHaveAttribute('aria-pressed', 'true');
+  await page.clock.runFor(100);
+  await expect(page.locator('#hud-message')).toHaveText(/ · 4×$/);
+  const fast = await ticksIn(1000);
+  expect(fast).toBeGreaterThanOrEqual(4 * 55);
+  expect(fast).toBeLessThanOrEqual(4 * 65);
+
+  // Max runs far more ticks per frame (here the page's clock is frozen during a frame, so the cap per frame applies).
+  await page.locator('[data-speed="max"]').click();
+  await page.clock.runFor(100);
+  await expect(page.locator('#hud-message')).toHaveText(/ · max$/);
+  expect(await ticksIn(500)).toBeGreaterThan(10 * 30);
+  await expect(page.locator('#sim-canvas')).toHaveAttribute('data-speed', 'max');
+});
+
+test('the cars-drawn choice changes how many cars are drawn, defaulting lower on a phone, and never what is trained', async ({ page }, testInfo) => {
+  await installPausedClock(page);
+  await page.goto('/?mode=train');
+  await page.clock.runFor(200);
+  await expect(page.locator('#sim-canvas')).toHaveAttribute('data-mode', 'train');
+  const phone = /phone/.test(testInfo.project.name);
+  // A phone starts with fewer cars drawn than a desktop; the population is 50 either way.
+  await expect(page.locator('#sim-canvas')).toHaveAttribute('data-cars', '50');
+  await expect(page.locator('#sim-canvas')).toHaveAttribute('data-drawn', phone ? '25' : '50');
+  await expect(page.locator('#draw-cap')).toHaveValue(phone ? '25' : '50');
+
+  await page.locator('#draw-cap').selectOption('10');
+  await page.clock.runFor(100);
+  await expect(page.locator('#sim-canvas')).toHaveAttribute('data-drawn', '10');
+  // At max speed no more than 10 are drawn.
+  await page.locator('#draw-cap').selectOption('50');
+  await page.locator('[data-speed="max"]').click();
+  await page.clock.runFor(100);
+  await expect(page.locator('#sim-canvas')).toHaveAttribute('data-drawn', '10');
+  await page.locator('[data-speed="normal"]').click();
+  await page.clock.runFor(100);
+  await expect(page.locator('#sim-canvas')).toHaveAttribute('data-drawn', '50');
+});
+
 test('the dashboard stays inside the screen without scrolling the page, in portrait and landscape', async ({ page }, testInfo) => {
   test.skip(!/phone|tablet/.test(testInfo.project.name), 'a small-screen check');
   await page.goto('/?mode=train');

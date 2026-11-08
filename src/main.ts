@@ -71,6 +71,16 @@ if (pageMode(window.location.search) === 'train') {
     context,
     status: hud.message,
     hide: [element<HTMLElement>('.hud'), element<HTMLElement>('.controls'), element<HTMLElement>('.keys-help')],
+    controls: {
+      group: element<HTMLElement>('#training-controls'),
+      pause: element<HTMLButtonElement>('#speed-pause'),
+      speeds: {
+        normal: element<HTMLButtonElement>('[data-speed="normal"]'),
+        fast: element<HTMLButtonElement>('[data-speed="fast"]'),
+        max: element<HTMLButtonElement>('[data-speed="max"]'),
+      },
+      drawCap: element<HTMLSelectElement>('#draw-cap'),
+    },
     graph: {
       details: element<HTMLDetailsElement>('#training-graph'),
       canvas: graphCanvas,

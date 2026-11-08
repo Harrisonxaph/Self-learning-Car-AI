@@ -44,6 +44,19 @@
       <div class="stage">
         <canvas id="sim-canvas" role="img" aria-label="Racetrack with your car"></canvas>
       </div>
+      <div id="training-controls" class="training-controls" role="group" aria-label="Training speed and display" hidden>
+        <button type="button" id="speed-pause" class="tc-button">Pause</button>
+        <div class="tc-speeds" role="group" aria-label="Speed">
+          <button type="button" class="tc-button" data-speed="normal" aria-pressed="true">1×</button>
+          <button type="button" class="tc-button" data-speed="fast" aria-pressed="false">4×</button>
+          <button type="button" class="tc-button" data-speed="max" aria-pressed="false">Max</button>
+        </div>
+        <select id="draw-cap" class="tc-cap" aria-label="Cars drawn">
+          <option value="10">10 cars</option>
+          <option value="25">25 cars</option>
+          <option value="50">50 cars</option>
+        </select>
+      </div>
       <details id="training-graph" class="training-graph" hidden>
         <summary>Training graph</summary>
         <canvas
