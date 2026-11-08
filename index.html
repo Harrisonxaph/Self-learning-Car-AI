@@ -67,6 +67,35 @@
         ></canvas>
         <p id="graph-summary" class="graph-summary">No generation completed yet, so there is nothing to plot.</p>
       </details>
+      <details id="champion-replay" class="training-graph champion-replay" hidden>
+        <summary>Champion replay</summary>
+        <div class="replay-controls">
+          <label class="replay-field" for="replay-generation">Generation</label>
+          <input id="replay-generation" class="replay-input" type="number" inputmode="numeric" min="1" step="1" value="1" disabled />
+          <button type="button" id="replay-start" class="tc-button replay-button" disabled>Replay</button>
+          <button type="button" id="replay-stop" class="tc-button replay-button" disabled>Back to training</button>
+        </div>
+        <p id="replay-note" class="graph-summary">No generation completed yet, so there is no champion to replay.</p>
+        <dl class="hud replay-values" aria-label="Network inputs at the decision shown">
+            <div><dt>Ray −90°</dt><dd><output aria-live="off" data-input="ray-90">—</output></dd></div>
+            <div><dt>Ray −60°</dt><dd><output aria-live="off" data-input="ray-60">—</output></dd></div>
+            <div><dt>Ray −30°</dt><dd><output aria-live="off" data-input="ray-30">—</output></dd></div>
+            <div><dt>Ray 0°</dt><dd><output aria-live="off" data-input="ray0">—</output></dd></div>
+            <div><dt>Ray 30°</dt><dd><output aria-live="off" data-input="ray30">—</output></dd></div>
+            <div><dt>Ray 60°</dt><dd><output aria-live="off" data-input="ray60">—</output></dd></div>
+            <div><dt>Ray 90°</dt><dd><output aria-live="off" data-input="ray90">—</output></dd></div>
+            <div><dt>Speed</dt><dd><output aria-live="off" data-input="speed">—</output></dd></div>
+            <div><dt>Heading error</dt><dd><output aria-live="off" data-input="headingError">—</output></dd></div>
+        </dl>
+        <dl class="hud replay-values" aria-label="Network outputs at the decision shown">
+          <div><dt>Steering</dt><dd><output aria-live="off" id="replay-steering">—</output></dd></div>
+          <div><dt>Throttle</dt><dd><output aria-live="off" id="replay-throttle">—</output></dd></div>
+          <div><dt>Brake</dt><dd><output aria-live="off" id="replay-brake">—</output></dd></div>
+        </dl>
+        <p class="graph-summary"><output aria-live="off" id="replay-decision">No decision yet</output></p>
+        <p class="graph-summary"><output aria-live="off" id="replay-result"></output></p>
+        <p id="replay-status" class="graph-summary" role="status"></p>
+      </details>
       <div class="controls" aria-label="Driving controls">
         <div class="pad">
           <button type="button" class="hold" data-action="left" aria-label="Steer left">◀</button>

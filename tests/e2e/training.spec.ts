@@ -486,6 +486,166 @@ test('the first completed generation shows as a visible dot on the graph, not on
   expect(dots.length, JSON.stringify(blobs.found)).toBeGreaterThanOrEqual(1);
 });
 
+test('the champion replay pauses training, shows the decision for each tick, ends with an outcome and goes back to training', async ({ page }) => {
+  await installPausedClock(page);
+  await page.goto('/?mode=train');
+  await page.clock.runFor(100);
+  await expect(page.locator('#sim-canvas')).toHaveAttribute('data-mode', 'train');
+  // Closed by default, with nothing to replay before the first generation completes.
+  await expect(page.locator('#champion-replay')).toBeVisible();
+  await expect(page.locator('#champion-replay')).not.toHaveAttribute('open', '');
+  await page.locator('#champion-replay > summary').click();
+  await expect(page.locator('#replay-start')).toBeDisabled();
+  await expect(page.locator('#replay-note')).toContainText('No generation completed yet');
+  await page.locator('#champion-replay > summary').click();
+  await advanceUntil(page, (v) => v.data.chartPoints === '1');
+  await page.locator('#champion-replay > summary').click();
+  await expect(page.locator('#replay-start')).toBeEnabled();
+  // The graph and the replay are never open together.
+  await expect(page.locator('#training-graph')).not.toHaveAttribute('open', '');
+
+  await page.locator('#replay-generation').fill('1');
+  await page.locator('#replay-start').click();
+  await page.clock.runFor(500);
+  await expect(page.locator('#sim-canvas')).toHaveAttribute('data-replay', 'running');
+  await expect(page.locator('#replay-start')).toHaveText('Restart');
+  await expect(page.locator('#speed-pause')).toBeEnabled();
+  await expect(page.locator('[data-speed="max"]')).toBeDisabled();
+  const training = async () => [await data(page, 'generation'), await data(page, 'generation-tick'), await data(page, 'tick')];
+  const before = await training();
+  // Values update as it runs: nine inputs, three outputs and a decision label for the tick drawn.
+  const first = await page.locator('#replay-decision').textContent();
+  await page.clock.runFor(1000);
+  expect(await page.locator('#replay-decision').textContent()).not.toBe(first);
+  await expect(page.locator('#champion-replay [data-input]')).toHaveCount(9);
+  for (const value of await page.locator('#champion-replay [data-input]').allTextContents()) expect(value).toMatch(/^-?\d+\.\d{3}$/);
+  for (const id of ['replay-steering', 'replay-throttle', 'replay-brake']) await expect(page.locator(`#${id}`)).toHaveText(/^-?\d+\.\d{3}$/);
+  // The canvas shows the replayed car and its rays: drawn pixels in the car colour and in the ray colours.
+  const colours = await page.evaluate(() => {
+    const canvas = document.getElementById('sim-canvas') as HTMLCanvasElement;
+    const { data: px } = canvas.getContext('2d')!.getImageData(0, 0, canvas.width, canvas.height);
+    const near = (i: number, r: number, g: number, b: number) => Math.abs(px[i]! - r) < 20 && Math.abs(px[i + 1]! - g) < 20 && Math.abs(px[i + 2]! - b) < 20;
+    let rays = 0;
+    for (let i = 0; i < px.length; i += 4) if (near(i, 0xff, 0x00, 0xd4) || near(i, 0xff, 0xb0, 0x00)) rays += 1;
+    return rays;
+  });
+  expect(colours).toBeGreaterThan(0);
+
+  // Training waited while it ran.
+  expect(await training()).toEqual(before);
+  // It runs to an outcome, and says so once.
+  await advanceUntil(page, (v) => v.data.replay === 'done', 1000, 120);
+  expect(['completed', 'crashed', 'stalled', 'timeout']).toContain(await data(page, 'replay-outcome'));
+  await expect(page.locator('#replay-status')).toContainText('Replay of generation 1 finished');
+  await expect(page.locator('#replay-result')).toContainText(/after \d+\.\d{2} s/);
+  expect(await training()).toEqual(before);
+
+  // Back to training: the same run carries on.
+  await page.locator('#replay-stop').click();
+  await page.clock.runFor(1500);
+  await expect(page.locator('#sim-canvas')).toHaveAttribute('data-replay', 'off');
+  await expect(page.locator('#replay-status')).toHaveText('');
+  await expect(page.locator('[data-speed="max"]')).toBeEnabled();
+  expect(await training()).not.toEqual(before);
+});
+
+test('with the champion replay open, the track keeps its space, the page does not scroll and its controls are big enough', async ({ page }, testInfo) => {
+  test.skip(!/phone|tablet/.test(testInfo.project.name), 'a small-screen check');
+  await installPausedClock(page);
+  await page.goto('/?mode=train');
+  await page.clock.runFor(100);
+  await expect(page.locator('#sim-canvas')).toHaveAttribute('data-mode', 'train');
+  await advanceUntil(page, (v) => v.data.chartPoints === '1');
+  await page.locator('#champion-replay > summary').click();
+  await page.locator('#replay-start').click();
+  const original = page.viewportSize()!;
+  const sizes = [original, { width: original.height, height: original.width }, { width: 568, height: 320 }, { width: 320, height: 568 }];
+  // The CI runner's fonts differ from a developer's, so the narrow portrait size is also checked with other font families
+  // and larger text (generic families, so no installed font can hide a wrap).
+  const styles = ['', 'html, body, button, select, input { font-family: serif !important; }', 'html, body, button, select, input { font-family: monospace !important; } html { font-size: 112.5% !important; }'];
+  const cases = sizes.flatMap((size) => (size.width === 320 ? styles : ['']).map((css) => ({ size, css })));
+  for (const { size, css } of cases) {
+    await page.setViewportSize(size);
+    const handle = css ? await page.addStyleTag({ content: css }) : null;
+    await page.clock.runFor(400);
+    const fit = await page.evaluate(() => {
+      const rect = (id: string) => document.getElementById(id)!.getBoundingClientRect();
+      const panel = document.getElementById('champion-replay')!;
+      const box = panel.getBoundingClientRect();
+      panel.scrollTop = panel.scrollHeight;
+      const status = rect('replay-status');
+      const after = panel.getBoundingClientRect();
+      const root = document.documentElement;
+      const small = ['replay-generation', 'replay-start', 'replay-stop'].filter((id) => {
+        const r = rect(id);
+        return r.width < 44 || r.height < 44;
+      });
+      return {
+        viewport: window.innerHeight,
+        trackHeight: rect('sim-canvas').height,
+        panelInside: box.left >= 0 && box.right <= window.innerWidth && box.top >= 0 && box.bottom <= window.innerHeight,
+        lastReachable: status.top >= after.top - 1 && status.bottom <= after.bottom + 1,
+        noScrollX: root.scrollWidth <= root.clientWidth,
+        noScrollY: root.scrollHeight <= root.clientHeight,
+        small,
+      };
+    });
+    const label = `${size.width}x${size.height} ${css ? css.slice(0, 40) : 'default'}`;
+    expect(fit.trackHeight, label).toBeGreaterThanOrEqual(Math.max(80, 0.2 * fit.viewport));
+    expect(fit, label).toMatchObject({ panelInside: true, lastReachable: true, noScrollX: true, noScrollY: true, small: [] });
+    await handle?.evaluate((el) => (el as Element).remove());
+  }
+});
+
+test('the graph and replay summaries never overlap and can always be tapped, in portrait and landscape, with either panel open', async ({ page }, testInfo) => {
+  test.skip(!/phone|tablet/.test(testInfo.project.name), 'a small-screen check');
+  await installPausedClock(page);
+  await page.goto('/?mode=train');
+  await page.clock.runFor(100);
+  await expect(page.locator('#sim-canvas')).toHaveAttribute('data-mode', 'train');
+  await advanceUntil(page, (v) => v.data.chartPoints === '1');
+  const original = page.viewportSize()!;
+  const sizes = [original, { width: original.height, height: original.width }, { width: 568, height: 320 }, { width: 320, height: 568 }, { width: 667, height: 375 }];
+  const probe = () =>
+    page.evaluate(() => {
+      const summaries = ['#training-graph > summary', '#champion-replay > summary'].map((selector) => document.querySelector(selector)!);
+      const rects = summaries.map((el) => el.getBoundingClientRect());
+      const [a, b] = rects as [DOMRect, DOMRect];
+      return {
+        apart: a.right <= b.left + 1 || b.right <= a.left + 1 || a.bottom <= b.top + 1 || b.bottom <= a.top + 1,
+        inside: rects.every((r) => r.left >= 0 && r.right <= window.innerWidth && r.top >= 0 && r.bottom <= window.innerHeight),
+        big: rects.every((r) => r.width >= 44 && r.height >= 44),
+        // A tap at each summary's centre reaches that summary, not the other panel.
+        hit: summaries.every((el) => {
+          const r = el.getBoundingClientRect();
+          const top = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+          return top === el || el.contains(top);
+        }),
+      };
+    });
+  for (const size of sizes) {
+    await page.setViewportSize(size);
+    await page.clock.runFor(300);
+    const label = `${size.width}x${size.height}`;
+    expect(await probe(), `${label} none open`).toEqual({ apart: true, inside: true, big: true, hit: true });
+    await page.locator('#training-graph > summary').click();
+    await page.clock.runFor(300);
+    expect(await probe(), `${label} graph open`).toEqual({ apart: true, inside: true, big: true, hit: true });
+    // A real tap on the other summary switches panels (it is reachable, and the first closes).
+    await page.locator('#champion-replay > summary').click();
+    await page.clock.runFor(300);
+    await expect(page.locator('#champion-replay'), label).toHaveAttribute('open', '');
+    await expect(page.locator('#training-graph'), label).not.toHaveAttribute('open', '');
+    expect(await probe(), `${label} replay open`).toEqual({ apart: true, inside: true, big: true, hit: true });
+    await page.locator('#training-graph > summary').click();
+    await page.clock.runFor(300);
+    await expect(page.locator('#training-graph'), label).toHaveAttribute('open', '');
+    await expect(page.locator('#champion-replay'), label).not.toHaveAttribute('open', '');
+    await page.locator('#training-graph > summary').click();
+    await page.clock.runFor(300);
+  }
+});
+
 test('the default page is still manual driving', async ({ page }) => {
   await page.goto('/');
   await expect(page.locator('.controls')).toBeVisible();

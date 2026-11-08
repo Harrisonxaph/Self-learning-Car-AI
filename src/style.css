@@ -222,6 +222,42 @@ body {
   touch-action: pan-y;
 }
 
+/* Champion replay (P3-04): shares the graph's panel rules (it is a .training-graph), so at most one is open. */
+.replay-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.replay-input {
+  /* At least 44 CSS pixels tall and wide (AGENTS.md touch targets). */
+  width: 4.5rem;
+  min-width: 44px;
+  min-height: max(44px, 2.75rem);
+  padding: 0 0.4rem;
+  border: 2px solid #4a5a6a;
+  border-radius: 0.6rem;
+  background: #1b2733;
+  color: inherit;
+  font: inherit;
+}
+
+.replay-button {
+  padding: 0 0.7rem;
+}
+
+.tc-button:disabled,
+.replay-input:disabled,
+.tc-cap:disabled {
+  opacity: 0.5;
+}
+
+.replay-values {
+  gap: 0.1rem 0.8rem;
+  font-size: 0.85rem;
+}
+
 #graph-canvas {
   display: block;
   width: 100%;
@@ -333,6 +369,13 @@ body {
     max-height: 28vh;
     max-height: 28dvh;
   }
+
+  /* The replay lists a dozen values; it scrolls inside a smaller share than the graph, so the track keeps its room even
+     where a device's font wraps the header and the controls onto more lines. */
+  .champion-replay[open] {
+    max-height: 24vh;
+    max-height: 24dvh;
+  }
 }
 
 /* Short landscape screens (phones on their side): a tighter header so the track keeps its height. */
@@ -363,11 +406,19 @@ body {
     grid-row: 3;
   }
 
-  .app.graph-open > .training-graph {
+  /* The two panels (graph, replay) share column 2. The open one fills the track's row; the closed one keeps its summary on
+     the controls' row beneath it, so both summaries stay on screen and tappable and never overlap. */
+  .app.graph-open > .training-graph[open] {
     grid-column: 2;
-    grid-row: 2 / 4;
+    grid-row: 2;
     min-height: 0;
     max-height: none;
+  }
+
+  .app.graph-open > .training-graph:not([open]) {
+    grid-column: 2;
+    grid-row: 3;
+    align-self: end;
   }
 
   .app-header h1 {
