@@ -7,12 +7,12 @@
 // Graphs, speed controls, saving, champion replay and performance readouts belong to later Phase 3 items.
 import { drawCars } from '../render/raceView';
 import type { TrackLayer } from '../render/trackLayer';
-import { browserViewportEnvironment, createViewport, type ViewportSize } from '../render/viewport';
+import { browserViewportEnvironment, createViewport, type ViewportEnvironment, type ViewportSize } from '../render/viewport';
 import type { SimConfig, VehiclePhysics } from '../sim/config';
 import { createFixedStepClock } from '../sim/fixedStep';
 import type { Track } from '../sim/track';
 import { createTrainer, DEFAULT_TRAINING_CONFIG, type Generation } from '../training/trainer';
-import { browserFrameEnvironment, startFrameLoop } from './frameLoop';
+import { browserFrameEnvironment, startFrameLoop, type FrameEnvironment } from './frameLoop';
 import { createTrainingSession, type DashboardOutputs } from './trainingDashboard';
 
 export interface TrainingPage {
@@ -28,6 +28,9 @@ export interface TrainingPage {
   readonly track: Track;
   readonly physics: VehiclePhysics;
   readonly config: SimConfig;
+  /** The browser's frame and size sources by default; tests pass fakes to drive the real page wiring in Node. */
+  readonly frames?: FrameEnvironment;
+  readonly viewportEnvironment?: ViewportEnvironment;
 }
 
 /** The status line for a generation: its number (from 1), and how many of its cars are still running. */
@@ -93,8 +96,8 @@ export function startTrainingPage(page: TrainingPage): void {
     }
   };
 
-  const viewport = createViewport(canvas, browserViewportEnvironment(canvas), draw);
-  startFrameLoop(browserFrameEnvironment(), createFixedStepClock(config), {
+  const viewport = createViewport(canvas, page.viewportEnvironment ?? browserViewportEnvironment(canvas), draw);
+  startFrameLoop(page.frames ?? browserFrameEnvironment(), createFixedStepClock(config), {
     step: () => {
       ticks += 1;
       session.step();

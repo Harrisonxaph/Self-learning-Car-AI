@@ -54,30 +54,60 @@ const snapshot = (page: Page) =>
     };
   });
 
+/**
+ * Moves the page's clock on in steps of `stepMs` until `done` holds. The page runs on Playwright's fake clock, so this
+ * advances simulated time, not wall-clock time: the test needs no real waiting and has no deadline that depends on how
+ * fast the runner is. It fails after `maxSteps` steps instead of waiting forever.
+ */
+async function advanceUntil(page: Page, done: (value: Awaited<ReturnType<typeof snapshot>>) => boolean, stepMs = 1000, maxSteps = 60) {
+  for (let step = 0; step < maxSteps; step += 1) {
+    await page.clock.runFor(stepMs);
+    const value = await snapshot(page);
+    if (done(value)) return value;
+  }
+  throw new Error(`The condition was not reached after ${maxSteps * stepMs} ms of page time.`);
+}
+
 test('the training dashboard shows live counts that sum to the population and updates as generations finish', async ({ page }) => {
+  // The page runs on a fake clock that only moves when the test moves it, so every state below is reached
+  // deterministically: the first rendered frame, the placeholders before any generation ends, and each generation end.
+  await page.clock.install({ time: 0 });
   await page.goto('/?mode=train');
   await expect(page.locator('#training-dashboard')).toBeVisible();
   await expect(page.locator('.app-header > .hud')).toBeHidden();
+  // Visibility is not readiness: the values stay "—" until the first frame has rendered, which sets data-mode.
+  await page.clock.runFor(100);
+  await expect(page.locator('#sim-canvas')).toHaveAttribute('data-mode', 'train');
 
-  // Before the first generation ends: placeholders and the note, and live counts that already sum to 50.
+  // None of the new outputs is a live region: the status line stays the one polite announcement channel.
+  const live = await page.evaluate(() => ({
+    outputs: [...document.querySelectorAll('#training-dashboard output')].map((o) => o.getAttribute('aria-live')),
+    panel: document.getElementById('training-dashboard')!.getAttribute('aria-live'),
+    status: document.getElementById('hud-message')!.getAttribute('aria-live'),
+  }));
+  expect(live.outputs).toEqual(Array(11).fill('off'));
+  expect(live.panel).toBeNull();
+  expect(live.status).toBe('polite');
+
+  // About 6 ticks in: no generation has ended, so the last-completed group shows placeholders and the note.
   const first = await snapshot(page);
+  expect(first.data.completedGenerations).toBe('0');
   expect(first.running + first.crashed + first.stalled + first.finished).toBe(50);
   expect(first.generation).toBe('1');
-  if (first.data.completedGenerations === '0') {
-    expect([first.lastGeneration, first.best, first.mean, first.crashRate, first.stalls, first.lapRate]).toEqual(Array(6).fill('—'));
-    expect(first.note).toBe('No generation completed yet');
-  }
+  expect([first.lastGeneration, first.best, first.mean, first.crashRate, first.stalls, first.lapRate]).toEqual(Array(6).fill('—'));
+  expect(first.note).toBe('No generation completed yet');
 
   // Running cars fall as cars crash, and every snapshot stays a partition of the population.
-  await expect.poll(async () => (await snapshot(page)).running, { timeout: 30_000 }).toBeLessThan(50);
+  const crashing = await advanceUntil(page, (v) => v.running < 50);
+  expect(crashing.running).toBeLessThan(50);
   for (let i = 0; i < 5; i += 1) {
+    await page.clock.runFor(200);
     const now = await snapshot(page);
     expect(now.running + now.crashed + now.stalled + now.finished).toBe(50);
   }
 
   // After the first generation ends, the last-completed group equals the recorded values the page exposes.
-  await expect.poll(async () => (await snapshot(page)).data.lastGeneration, { timeout: 30_000 }).toBe('1');
-  const done = await snapshot(page);
+  const done = await advanceUntil(page, (v) => v.data.lastGeneration === '1');
   expect(done.lastGeneration).toBe('1');
   expect(done.best).toBe(Number(done.data.lastBest).toFixed(2));
   expect(done.mean).toBe(Number(done.data.lastMean).toFixed(2));
@@ -87,8 +117,7 @@ test('the training dashboard shows live counts that sum to the population and up
   expect(done.note).toBe('');
 
   // It moves on to the next completed generation.
-  await expect.poll(async () => (await snapshot(page)).data.lastGeneration, { timeout: 30_000 }).toBe('2');
-  const later = await snapshot(page);
+  const later = await advanceUntil(page, (v) => v.data.lastGeneration === '2');
   expect(later.lastGeneration).toBe('2');
   expect(Number(later.data.lastBest)).not.toBeNaN();
 });
@@ -97,6 +126,8 @@ test('the dashboard stays inside the screen without scrolling the page, in portr
   test.skip(!/phone|tablet/.test(testInfo.project.name), 'a small-screen check');
   await page.goto('/?mode=train');
   await expect(page.locator('#training-dashboard')).toBeVisible();
+  // Wait for the first rendered frame, so the measured layout holds real values, not the initial placeholders.
+  await expect(page.locator('#sim-canvas')).toHaveAttribute('data-mode', 'train');
   const original = page.viewportSize()!;
   for (const size of [original, { width: original.height, height: original.width }]) {
     await page.setViewportSize(size);
