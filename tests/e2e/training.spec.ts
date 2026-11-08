@@ -55,9 +55,20 @@ const snapshot = (page: Page) =>
   });
 
 /**
- * Moves the page's clock on in steps of `stepMs` until `done` holds. The page runs on Playwright's fake clock, so this
- * advances simulated time, not wall-clock time: the test needs no real waiting and has no deadline that depends on how
- * fast the runner is. It fails after `maxSteps` steps instead of waiting forever.
+ * Installs Playwright's fake clock and pauses it before the page loads. `install` alone leaves the clock running, so
+ * animation frames, and with them training, would keep advancing between the test's commands. Once paused, the page's
+ * time moves only through `page.clock.runFor`.
+ */
+async function installPausedClock(page: Page) {
+  await page.clock.install({ time: 0 });
+  await page.clock.pauseAt(0);
+}
+
+/**
+ * Moves the page's clock on in steps of `stepMs` until `done` holds. The page runs on Playwright's fake clock, which the
+ * test pauses before loading the page (`installPausedClock`), so time moves only here: this advances simulated time, not
+ * wall-clock time, and has no deadline that depends on how fast the runner is. It fails after `maxSteps` steps instead
+ * of waiting forever.
  */
 async function advanceUntil(page: Page, done: (value: Awaited<ReturnType<typeof snapshot>>) => boolean, stepMs = 1000, maxSteps = 60) {
   for (let step = 0; step < maxSteps; step += 1) {
@@ -69,15 +80,21 @@ async function advanceUntil(page: Page, done: (value: Awaited<ReturnType<typeof 
 }
 
 test('the training dashboard shows live counts that sum to the population and updates as generations finish', async ({ page }) => {
-  // The page runs on a fake clock that only moves when the test moves it, so every state below is reached
-  // deterministically: the first rendered frame, the placeholders before any generation ends, and each generation end.
-  await page.clock.install({ time: 0 });
+  // The page runs on a fake clock that is paused before the page loads and moves only when the test moves it, so every
+  // state below is reached deterministically: the first rendered frame, the placeholders before any generation ends,
+  // and each generation end.
+  await installPausedClock(page);
   await page.goto('/?mode=train');
   await expect(page.locator('#training-dashboard')).toBeVisible();
   await expect(page.locator('.app-header > .hud')).toBeHidden();
-  // Visibility is not readiness: the values stay "—" until the first frame has rendered, which sets data-mode.
+  // Visibility is not readiness: the values stay "—" until a frame has rendered, which sets data-mode.
+  // Advance a few frames and wait for it.
   await page.clock.runFor(100);
   await expect(page.locator('#sim-canvas')).toHaveAttribute('data-mode', 'train');
+  // Proof that the clock is paused: an ordinary real-time wait does not advance training.
+  const tickBefore = await data(page, 'tick');
+  await page.waitForTimeout(400);
+  expect(await data(page, 'tick')).toBe(tickBefore);
 
   // None of the new outputs is a live region: the status line stays the one polite announcement channel.
   const live = await page.evaluate(() => ({
