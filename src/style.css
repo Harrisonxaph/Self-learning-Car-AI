@@ -103,6 +103,41 @@ body {
   height: 100%;
 }
 
+.training-graph {
+  padding: 0 0.75rem 0.4rem;
+  font-size: 0.95rem;
+}
+
+.training-graph summary {
+  display: flex;
+  align-items: center;
+  /* At least 44 CSS pixels tall (AGENTS.md touch targets). */
+  min-height: 2.75rem;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+/* Open, the graph takes at most a share of the screen and scrolls inside itself, so the track keeps room (P3-02). */
+.training-graph[open] {
+  max-height: 32vh;
+  max-height: 32dvh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+}
+
+#graph-canvas {
+  display: block;
+  width: 100%;
+  height: 11rem;
+}
+
+.graph-summary {
+  margin: 0.25rem 0 0;
+  font-size: 0.85rem;
+  color: #9fb0c0;
+}
+
 .controls {
   display: flex;
   align-items: center;
@@ -187,8 +222,44 @@ body {
   }
 }
 
+/* Narrow portrait screens: with the graph open, a more compact header leaves room for the track. */
+@media (max-width: 480px) {
+  .app.graph-open .app-header h1 {
+    display: none;
+  }
+
+  .training-dashboard .hud {
+    gap: 0.1rem 0.6rem;
+    font-size: 0.85rem;
+  }
+}
+
 /* Short landscape screens (phones on their side): a tighter header so the track keeps its height. */
 @media (orientation: landscape) and (max-height: 500px) {
+  /* With the graph open, it sits beside the track instead of under it, so neither is squeezed out. */
+  .app.graph-open {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 46%);
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+
+  .app.graph-open > .app-header {
+    grid-column: 1 / -1;
+    grid-row: 1;
+  }
+
+  .app.graph-open > .stage {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  .app.graph-open > .training-graph {
+    grid-column: 2;
+    grid-row: 2;
+    min-height: 0;
+    max-height: none;
+  }
+
   .app-header h1 {
     display: none;
   }

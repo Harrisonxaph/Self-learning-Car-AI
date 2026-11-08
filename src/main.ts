@@ -63,11 +63,20 @@ const trackLayer = createTrackLayer(() => {
 });
 
 if (pageMode(window.location.search) === 'train') {
+  const graphCanvas = element<HTMLCanvasElement>('#graph-canvas');
+  const graphContext = graphCanvas.getContext('2d');
+  if (!graphContext) throw new Error('Canvas 2D drawing is not supported.');
   startTrainingPage({
     canvas,
     context,
     status: hud.message,
     hide: [element<HTMLElement>('.hud'), element<HTMLElement>('.controls'), element<HTMLElement>('.keys-help')],
+    graph: {
+      details: element<HTMLDetailsElement>('#training-graph'),
+      canvas: graphCanvas,
+      context: graphContext,
+      summary: element<HTMLElement>('#graph-summary'),
+    },
     dashboard: {
       panel: element<HTMLElement>('#training-dashboard'),
       outputs: {

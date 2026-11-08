@@ -7,12 +7,13 @@
 // Graphs, speed controls, saving, champion replay and performance readouts belong to later Phase 3 items.
 import { drawCars } from '../render/raceView';
 import type { TrackLayer } from '../render/trackLayer';
-import { browserViewportEnvironment, createViewport, type ViewportEnvironment, type ViewportSize } from '../render/viewport';
+import { browserViewportEnvironment, createViewport, type Viewport, type ViewportEnvironment, type ViewportSize } from '../render/viewport';
 import type { SimConfig, VehiclePhysics } from '../sim/config';
 import { createFixedStepClock } from '../sim/fixedStep';
 import type { Track } from '../sim/track';
 import { createTrainer, DEFAULT_TRAINING_CONFIG, type Generation } from '../training/trainer';
 import { browserFrameEnvironment, startFrameLoop, type FrameEnvironment } from './frameLoop';
+import { createTrainingChart, type GraphContext } from './trainingChart';
 import { createTrainingSession, type DashboardOutputs } from './trainingDashboard';
 
 export interface TrainingPage {
@@ -28,9 +29,18 @@ export interface TrainingPage {
   readonly track: Track;
   readonly physics: VehiclePhysics;
   readonly config: SimConfig;
-  /** The browser's frame and size sources by default; tests pass fakes to drive the real page wiring in Node. */
+  /** The training graph (P3-02): a collapsible block that is shown in training mode, with its canvas and text summary. */
+  readonly graph: {
+    readonly details: HTMLDetailsElement;
+    readonly canvas: HTMLCanvasElement;
+    readonly context: GraphContext;
+    readonly summary: HTMLElement;
+  };
+  /** The browser's frame, size and clock sources by default; tests pass fakes to drive the real page wiring in Node. */
   readonly frames?: FrameEnvironment;
   readonly viewportEnvironment?: ViewportEnvironment;
+  readonly graphViewportEnvironment?: ViewportEnvironment;
+  readonly now?: () => number;
 }
 
 /** The status line for a generation: its number (from 1), and how many of its cars are still running. */
@@ -48,6 +58,27 @@ export function startTrainingPage(page: TrainingPage): void {
   const trainer = createTrainer(DEFAULT_TRAINING_CONFIG, { track, physics, timestepSeconds: config.timestepSeconds });
   const session = createTrainingSession(trainer, page.dashboard.outputs);
   let ticks = 0;
+
+  // The graph reads the session's history and is redrawn at most a few times a second, only while it is open.
+  const { graph } = page;
+  graph.details.hidden = false;
+  graph.canvas.setAttribute('aria-describedby', 'graph-summary');
+  const graphView: { viewport?: Viewport } = {};
+  const chart = createTrainingChart({
+    history: () => session.history,
+    context: graph.context,
+    summary: graph.summary,
+    isOpen: () => graph.details.open,
+    size: () => graphView.viewport?.current() ?? null,
+    now: page.now ?? (() => performance.now()),
+  });
+  graphView.viewport = createViewport(graph.canvas, page.graphViewportEnvironment ?? browserViewportEnvironment(graph.canvas), () => chart.invalidate());
+  graph.details.addEventListener('toggle', () => {
+    // The page lays out differently with the graph open on a short landscape screen (see style.css).
+    graph.details.closest?.('.app')?.classList.toggle('graph-open', graph.details.open);
+    graphView.viewport?.update();
+    chart.invalidate();
+  });
 
   const draw = (size: ViewportSize) => {
     const layer = trackLayer.get(track, size);
@@ -79,6 +110,8 @@ export function startTrainingPage(page: TrainingPage): void {
       stalled: String(live.stalled),
       finished: String(live.finished),
       completedGenerations: String(trainer.record().generations.length),
+      chartPoints: String(session.history.length),
+      chartDraws: String(chart.draws),
       tick: String(ticks),
     });
     // The last completed generation's recorded values, unformatted, for the browser tests; absent before the first.
@@ -105,6 +138,7 @@ export function startTrainingPage(page: TrainingPage): void {
     render: () => {
       draw(viewport.current());
       show();
+      chart.frame();
     },
   });
 }

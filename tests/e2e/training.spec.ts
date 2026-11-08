@@ -57,11 +57,13 @@ const snapshot = (page: Page) =>
 /**
  * Installs Playwright's fake clock and pauses it before the page loads. `install` alone leaves the clock running, so
  * animation frames, and with them training, would keep advancing between the test's commands. Once paused, the page's
- * time moves only through `page.clock.runFor`.
+ * time moves only through `page.clock.runFor`. The pause instant is 10 seconds in, not 0: the installed clock runs in
+ * real time until it is paused, so a pause at 0 throws "Cannot fast-forward to the past" whenever the host takes any
+ * time to get there (seen on WebKit). Nothing has loaded yet, so moving the clock forward costs nothing.
  */
 async function installPausedClock(page: Page) {
   await page.clock.install({ time: 0 });
-  await page.clock.pauseAt(0);
+  await page.clock.pauseAt(10_000);
 }
 
 /**
@@ -139,6 +141,52 @@ test('the training dashboard shows live counts that sum to the population and up
   expect(Number(later.data.lastBest)).not.toBeNaN();
 });
 
+test('the training graph draws a point for each completed generation and keeps a text summary', async ({ page }) => {
+  await installPausedClock(page);
+  await page.goto('/?mode=train');
+  await page.clock.runFor(100);
+  await expect(page.locator('#sim-canvas')).toHaveAttribute('data-mode', 'train');
+  // Shown in training mode, collapsed by default, with nothing to plot yet.
+  await expect(page.locator('#training-graph')).toBeVisible();
+  expect(await page.locator('#training-graph').evaluate((d: HTMLDetailsElement) => d.open)).toBe(false);
+  await expect(page.locator('#sim-canvas')).toHaveAttribute('data-chart-points', '0');
+  await expect(page.locator('#graph-summary')).toHaveText('No generation completed yet, so there is nothing to plot.');
+  // The canvas names its text summary for assistive technology.
+  await expect(page.locator('#graph-canvas')).toHaveAttribute('aria-describedby', 'graph-summary');
+
+  await page.locator('#training-graph > summary').click();
+  expect(await page.locator('#training-graph').evaluate((d: HTMLDetailsElement) => d.open)).toBe(true);
+
+  const inked = () =>
+    page.evaluate(() => {
+      const canvas = document.getElementById('graph-canvas') as HTMLCanvasElement;
+      const { data } = canvas.getContext('2d')!.getImageData(0, 0, canvas.width, canvas.height);
+      let count = 0;
+      for (let i = 3; i < data.length; i += 4) if (data[i]! > 0) count += 1;
+      return count;
+    });
+
+  // One point after the first generation ends: a summary and a drawing appear.
+  const first = await advanceUntil(page, (v) => v.data.chartPoints === '1');
+  await page.clock.runFor(400);
+  expect(first.data.lastGeneration).toBe('1');
+  await expect(page.locator('#graph-summary')).toHaveText(/^1 completed generation is plotted\. Latest, generation 1: best fitness /);
+  expect(Number(await data(page, 'chart-draws'))).toBeGreaterThanOrEqual(1);
+  const afterOne = await inked();
+  expect(afterOne).toBeGreaterThan(50);
+
+  // And a second point after the second.
+  const second = await advanceUntil(page, (v) => v.data.chartPoints === '2');
+  await page.clock.runFor(400);
+  const text = (await page.locator('#graph-summary').textContent())!;
+  expect(text).toMatch(/^2 completed generations are plotted\. Latest, generation 2:/);
+  expect(text).toContain(`best fitness ${Number(second.data.lastBest).toFixed(2)}`);
+  expect(text).toContain(`mean fitness ${Number(second.data.lastMean).toFixed(2)}`);
+  expect(await inked()).toBeGreaterThan(50);
+  // The page never shows a learning claim in the summary.
+  expect(text).not.toMatch(/learn|improv|better|smarter/i);
+});
+
 test('the dashboard stays inside the screen without scrolling the page, in portrait and landscape', async ({ page }, testInfo) => {
   test.skip(!/phone|tablet/.test(testInfo.project.name), 'a small-screen check');
   await page.goto('/?mode=train');
@@ -164,6 +212,89 @@ test('the dashboard stays inside the screen without scrolling the page, in portr
     // The track keeps a useful share of the screen (the cars stay visible).
     expect(fit.canvasShare, `${size.width}x${size.height}`).toBeGreaterThan(0.3);
   }
+});
+
+test('with the populated graph open, the track keeps its space, the page does not scroll and the graph stays reachable', async ({ page }, testInfo) => {
+  test.skip(!/phone|tablet/.test(testInfo.project.name), 'a small-screen check');
+  await installPausedClock(page);
+  await page.goto('/?mode=train');
+  await page.clock.runFor(100);
+  await expect(page.locator('#sim-canvas')).toHaveAttribute('data-mode', 'train');
+  // Populated: one completed generation, so the dashboard, the charts and the wrapped text summary all exist.
+  await advanceUntil(page, (v) => v.data.chartPoints === '1');
+  await page.locator('#training-graph > summary').click();
+  const original = page.viewportSize()!;
+  const sizes = [original, { width: original.height, height: original.width }, { width: 568, height: 320 }, { width: 320, height: 568 }];
+  for (const size of sizes) {
+    await page.setViewportSize(size);
+    await page.clock.runFor(400);
+    const fit = await page.evaluate(() => {
+      const rect = (id: string) => document.getElementById(id)!.getBoundingClientRect();
+      const graph = document.getElementById('training-graph')!;
+      const track = rect('sim-canvas');
+      const box = graph.getBoundingClientRect();
+      // Scroll the graph block to its end: the text summary must then be fully inside the block.
+      graph.scrollTop = graph.scrollHeight;
+      const summary = rect('graph-summary');
+      const after = graph.getBoundingClientRect();
+      const root = document.documentElement;
+      return {
+        viewport: window.innerHeight,
+        trackHeight: track.height,
+        graphInside: box.left >= 0 && box.right <= window.innerWidth && box.top >= 0 && box.bottom <= window.innerHeight,
+        summaryReachable: summary.top >= after.top - 1 && summary.bottom <= after.bottom + 1,
+        graphCanvasWide: rect('graph-canvas').width >= 150,
+        noScrollX: root.scrollWidth <= root.clientWidth,
+        noScrollY: root.scrollHeight <= root.clientHeight,
+      };
+    });
+    const label = `${size.width}x${size.height}`;
+    // The track is still there to watch the cars: a usable share of the screen, not a sliver.
+    expect(fit.trackHeight, label).toBeGreaterThanOrEqual(Math.max(80, 0.2 * fit.viewport));
+    expect(fit, label).toMatchObject({ graphInside: true, summaryReachable: true, graphCanvasWide: true, noScrollX: true, noScrollY: true });
+  }
+});
+
+test('the first completed generation shows as a visible dot on the graph, not only axes and legend', async ({ page }) => {
+  await installPausedClock(page);
+  await page.goto('/?mode=train');
+  await page.clock.runFor(100);
+  await expect(page.locator('#sim-canvas')).toHaveAttribute('data-mode', 'train');
+  await page.locator('#training-graph > summary').click();
+  await advanceUntil(page, (v) => v.data.chartPoints === '1');
+  await page.clock.runFor(400);
+  // Find the best-fitness colour (#7fe0bd) and group touching pixels. The legend sample is a thin line (a few pixels
+  // tall) and the labels are another colour, so a blob that is as tall as it is wide is the data dot.
+  const blobs = await page.evaluate(() => {
+    const canvas = document.getElementById('graph-canvas') as HTMLCanvasElement;
+    const { width, height } = canvas;
+    const { data } = canvas.getContext('2d')!.getImageData(0, 0, width, height);
+    const near = (i: number) => data[i + 3]! > 200 && Math.abs(data[i]! - 0x7f) < 24 && Math.abs(data[i + 1]! - 0xe0) < 24 && Math.abs(data[i + 2]! - 0xbd) < 24;
+    const seen = new Uint8Array(width * height);
+    const found: { w: number; h: number; n: number }[] = [];
+    for (let start = 0; start < width * height; start += 1) {
+      if (seen[start] || !near(start * 4)) continue;
+      const stack = [start];
+      seen[start] = 1;
+      let minX = width, maxX = 0, minY = height, maxY = 0, n = 0;
+      while (stack.length > 0) {
+        const at = stack.pop()!;
+        const x = at % width, y = (at - x) / width;
+        n += 1;
+        minX = Math.min(minX, x); maxX = Math.max(maxX, x); minY = Math.min(minY, y); maxY = Math.max(maxY, y);
+        for (let dy = -1; dy <= 1; dy += 1) for (let dx = -1; dx <= 1; dx += 1) {
+          const nx = x + dx, ny = y + dy;
+          if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
+          const next = ny * width + nx;
+          if (!seen[next] && near(next * 4)) { seen[next] = 1; stack.push(next); }
+        }
+      }
+      found.push({ w: maxX - minX + 1, h: maxY - minY + 1, n });
+    }
+    return { found, ratio: width / canvas.getBoundingClientRect().width };
+  });
+  const dots = blobs.found.filter((b) => b.h >= 4 * blobs.ratio && b.w >= 4 * blobs.ratio && b.w <= 14 * blobs.ratio && b.h <= 14 * blobs.ratio && b.n >= 12);
+  expect(dots.length, JSON.stringify(blobs.found)).toBeGreaterThanOrEqual(1);
 });
 
 test('the default page is still manual driving', async ({ page }) => {
