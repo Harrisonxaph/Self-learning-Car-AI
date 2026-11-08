@@ -369,6 +369,13 @@ body {
     max-height: 28vh;
     max-height: 28dvh;
   }
+
+  /* The replay lists a dozen values; it scrolls inside a smaller share than the graph, so the track keeps its room even
+     where a device's font wraps the header and the controls onto more lines. */
+  .champion-replay[open] {
+    max-height: 24vh;
+    max-height: 24dvh;
+  }
 }
 
 /* Short landscape screens (phones on their side): a tighter header so the track keeps its height. */

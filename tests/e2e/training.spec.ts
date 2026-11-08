@@ -560,8 +560,13 @@ test('with the champion replay open, the track keeps its space, the page does no
   await page.locator('#replay-start').click();
   const original = page.viewportSize()!;
   const sizes = [original, { width: original.height, height: original.width }, { width: 568, height: 320 }, { width: 320, height: 568 }];
-  for (const size of sizes) {
+  // The CI runner's fonts differ from a developer's, so the narrow portrait size is also checked with other font families
+  // and larger text (generic families, so no installed font can hide a wrap).
+  const styles = ['', 'html, body, button, select, input { font-family: serif !important; }', 'html, body, button, select, input { font-family: monospace !important; } html { font-size: 112.5% !important; }'];
+  const cases = sizes.flatMap((size) => (size.width === 320 ? styles : ['']).map((css) => ({ size, css })));
+  for (const { size, css } of cases) {
     await page.setViewportSize(size);
+    const handle = css ? await page.addStyleTag({ content: css }) : null;
     await page.clock.runFor(400);
     const fit = await page.evaluate(() => {
       const rect = (id: string) => document.getElementById(id)!.getBoundingClientRect();
@@ -585,9 +590,10 @@ test('with the champion replay open, the track keeps its space, the page does no
         small,
       };
     });
-    const label = `${size.width}x${size.height}`;
+    const label = `${size.width}x${size.height} ${css ? css.slice(0, 40) : 'default'}`;
     expect(fit.trackHeight, label).toBeGreaterThanOrEqual(Math.max(80, 0.2 * fit.viewport));
     expect(fit, label).toMatchObject({ panelInside: true, lastReachable: true, noScrollX: true, noScrollY: true, small: [] });
+    await handle?.evaluate((el) => (el as Element).remove());
   }
 });
 
