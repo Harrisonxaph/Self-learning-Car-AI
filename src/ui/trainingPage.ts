@@ -15,7 +15,12 @@ import type { SimConfig, VehiclePhysics } from '../sim/config';
 import type { Track } from '../sim/track';
 import { createChampionReplay, type ChampionReplay, type ReplayFrame } from '../training/championReplay';
 import { createTrainer, DEFAULT_TRAINING_CONFIG, type Generation } from '../training/trainer';
+import { createModelStore, type StorageLike } from '../persistence/modelStore';
+import { buildModel } from '../persistence/modelFormat';
+import { tracksIn } from '../training/trackSplits';
 import { emptyReplayText, renderReplay, replayText, type ReplayOutputs } from './championReplayView';
+import { renderSavedList, type UiFactory, type UiList } from './savedChampionsView';
+import { replayForModel } from './savedReplay';
 import { browserFrameEnvironment, startFrameLoop, type FrameEnvironment, type FrameLoop } from './frameLoop';
 import { createRateMeter, formatRateReadout } from './rateMeter';
 import { createTrainingChart, type GraphContext } from './trainingChart';
@@ -77,6 +82,25 @@ export interface TrainingPage {
     readonly stop: HTMLButtonElement;
     readonly note: HTMLElement;
     readonly outputs: ReplayOutputs;
+  };
+  /**
+   * Saved champions (P3-05): a name field, a Save button, a status sentence, a list, and what saving needs. Saved brains are
+   * stored in localStorage on this browser and are replayed, never trained on.
+   */
+  readonly saved: {
+    readonly name: HTMLInputElement;
+    readonly save: HTMLButtonElement;
+    readonly status: HTMLElement;
+    readonly list: UiList;
+    readonly ui: UiFactory;
+    /** The browser's localStorage, or throws if it is denied. Called on every operation. */
+    readonly storage: () => StorageLike | null;
+    /** A fresh id (a UUID); it must not draw from a simulation or evolution random stream. */
+    readonly newId: () => string;
+    /** The current time as an ISO 8601 UTC string. */
+    readonly isoNow: () => string;
+    readonly codeVersion: string;
+    readonly appVersion: string;
   };
   /** The browser's frame, size and clock sources by default; tests pass fakes to drive the real page wiring in Node. */
   readonly frames?: FrameEnvironment;
@@ -212,7 +236,12 @@ export function startTrainingPage(page: TrainingPage): void {
   // and the trainer is not stepped meanwhile, so what is trained does not depend on whether a replay was watched.
   interface ActiveReplay {
     readonly replay: ChampionReplay;
-    readonly generation: number;
+    /** What is being replayed, in words: "generation 3" or a saved champion's name. */
+    readonly label: string;
+    /** The generation number for a live champion, or null for a saved one. */
+    readonly generation: number | null;
+    /** The vehicle size to draw with: the physics the replay ran under. */
+    readonly physics: typeof physics;
     frame: ReplayFrame | null;
     readonly restore: { readonly mode: SpeedMode; readonly paused: boolean };
   }
@@ -224,6 +253,7 @@ export function startTrainingPage(page: TrainingPage): void {
     const chosen = replayPanel.generation;
     chosen.disabled = count === 0;
     replayPanel.start.disabled = count === 0;
+    page.saved.save.disabled = count === 0;
     replayPanel.stop.disabled = active === null;
     replayPanel.start.textContent = active ? 'Restart' : 'Replay';
     if (count > 0) {
@@ -250,10 +280,14 @@ export function startTrainingPage(page: TrainingPage): void {
     if (count === 0) return;
     const generation = chosenGeneration();
     const stats = session.generations[generation - 1]!;
+    beginReplay({ replay: createChampionReplay(stats.champion, trainer.setup), label: `generation ${generation}`, generation, physics });
+  };
+  /** Starts (or restarts) a replay at 1×, unpaused, remembering the speed and pause state to restore afterwards. */
+  const beginReplay = (next: Pick<ActiveReplay, 'replay' | 'label' | 'generation' | 'physics'>) => {
     const restore = active ? active.restore : { mode: speed.mode, paused: speed.paused };
     speed.setMode('normal');
     speed.setPaused(false);
-    active = { replay: createChampionReplay(stats.champion, trainer.setup), generation, frame: null, restore };
+    active = { ...next, frame: null, restore };
     running.loop?.resync();
     syncControls();
     syncReplayControls();
@@ -275,14 +309,101 @@ export function startTrainingPage(page: TrainingPage): void {
     chosenGeneration();
   });
   replayPanel.details.addEventListener('toggle', () => {
-    if (replayPanel.details.open) graph.details.open = false;
-    else stopReplay();
+    if (replayPanel.details.open) {
+      graph.details.open = false;
+      pendingDelete = null;
+      refreshSaved();
+    } else {
+      stopReplay();
+    }
     syncPanelLayout();
     graphView.viewport?.update();
     syncReplayControls();
   });
   replayPanel.details.hidden = false;
   syncReplayControls();
+
+  // Saved champions (P3-05). Reading and writing localStorage never throws out of here: the store turns every failure into a
+  // message. The list is rebuilt only when something changes (start, save, delete, the block opening), never per frame.
+  const savedPanel = page.saved;
+  const store = createModelStore({ storage: savedPanel.storage, registry: tracksIn('training') });
+  let pendingDelete: string | null = null;
+  const say = (text: string) => {
+    if (savedPanel.status.textContent !== text) savedPanel.status.textContent = text;
+  };
+  const refreshSaved = () => {
+    const listing = store.list();
+    if (!listing.available) say(listing.message);
+    renderSavedList(savedPanel.list, savedPanel.ui, listing, pendingDelete, {
+      replay: replaySaved,
+      requestDelete: (id) => {
+        pendingDelete = id;
+        refreshSaved();
+      },
+      confirmDelete: (id) => {
+        pendingDelete = null;
+        const removed = store.remove(id);
+        say(removed.ok ? 'Deleted.' : removed.message);
+        refreshSaved();
+      },
+      cancelDelete: () => {
+        pendingDelete = null;
+        refreshSaved();
+      },
+    });
+    savedPanel.save.disabled = session.generations.length === 0;
+  };
+  const replaySaved = (id: string) => {
+    pendingDelete = null;
+    const loaded = store.load(id);
+    if (!loaded.ok) {
+      say(loaded.message);
+      refreshSaved();
+      return;
+    }
+    const { model } = loaded;
+    if (!model.training.trackIds.includes(track.id)) {
+      say(`This champion was trained on ${model.training.trackIds.join(', ')}; this view shows ${track.id}, so it cannot be replayed here.`);
+      return;
+    }
+    try {
+      const prepared = replayForModel(model);
+      const name = model.name ?? 'unnamed champion';
+      beginReplay({ replay: prepared.replay, label: `saved champion "${name}"`, generation: null, physics: prepared.setup.environment.physics });
+      say([`Replaying "${name}" from generation ${model.training.generation + 1}.`, ...loaded.warnings, ...prepared.warnings].join(' '));
+    } catch {
+      say("This saved champion can't be replayed.");
+    }
+    refreshSaved();
+  };
+  savedPanel.save.addEventListener('click', () => {
+    if (session.generations.length === 0) return;
+    const generation = chosenGeneration();
+    const stats = session.generations[generation - 1]!;
+    const typed = savedPanel.name.value.trim();
+    const name = typed === '' ? `Generation ${generation} champion` : typed.slice(0, 60);
+    // `record()` copies the whole history, so it is called once per save, never per frame.
+    const model = buildModel({
+      champion: stats.champion,
+      fitness: stats.bestFitness,
+      generation: stats.generation,
+      record: trainer.record(),
+      id: savedPanel.newId(),
+      createdAt: savedPanel.isoNow(),
+      codeVersion: savedPanel.codeVersion,
+      appVersion: savedPanel.appVersion,
+      name,
+    });
+    const result = store.save(model);
+    if (result.ok) {
+      say(`Saved "${name}" (generation ${generation}).${result.indexed ? '' : ' It may not be listed in order until your next save.'}`);
+      savedPanel.name.value = '';
+    } else {
+      say(result.message);
+    }
+    refreshSaved();
+  });
+  refreshSaved();
 
   const draw = (size: ViewportSize) => {
     const layer = trackLayer.get(track, size);
@@ -295,7 +416,7 @@ export function startTrainingPage(page: TrainingPage): void {
       // episode has ended it is drawn in its result state, without rays (there is no further decision).
       const { replay, frame } = active;
       const pose = replay.done() ? replay.state() : frame ? frame.before : replay.start;
-      drawCars(context, size, layer.view, [{ car: pose.racer.car, finished: pose.episode.outcome !== null }], physics);
+      drawCars(context, size, layer.view, [{ car: pose.racer.car, finished: pose.episode.outcome !== null }], active.physics);
       if (!replay.done() && frame) drawSensors(context, size, layer.view, frame.decision.readings);
       const { dataset } = canvas;
       dataset.trackScale = String(layer.view.scale);
@@ -316,7 +437,7 @@ export function startTrainingPage(page: TrainingPage): void {
   const show = () => {
     const generation = trainer.generation();
     const drawn = effectiveDrawCap(speed.mode, drawCap, population);
-    const text = trainingStatus(generation, speedStatus(speed.mode, speed.paused) + (active ? ` · replaying generation ${active.generation}` : ''));
+    const text = trainingStatus(generation, speedStatus(speed.mode, speed.paused) + (active ? ` · replaying ${active.label}` : ''));
     if (status.textContent !== text) status.textContent = text;
     const { live, completed } = session.frame();
     Object.assign(canvas.dataset, {
@@ -339,13 +460,15 @@ export function startTrainingPage(page: TrainingPage): void {
     });
     if (active) {
       const { replay, frame } = active;
-      canvas.dataset.replayGeneration = String(active.generation);
+      if (active.generation === null) delete canvas.dataset.replayGeneration;
+      else canvas.dataset.replayGeneration = String(active.generation);
+      canvas.dataset.replaySource = active.generation === null ? 'saved' : 'generation';
       canvas.dataset.replayTick = String(replay.ticks());
       if (replay.done()) canvas.dataset.replayOutcome = replay.state().episode.outcome!;
       else delete canvas.dataset.replayOutcome;
-      renderReplay(replayOutputs, replayText(frame, replay.state(), replay.ticks(), config.timestepSeconds, active.generation, INPUT_COUNT));
+      renderReplay(replayOutputs, replayText(frame, replay.state(), replay.ticks(), config.timestepSeconds, active.label, INPUT_COUNT));
     } else {
-      for (const name of ['replayGeneration', 'replayTick', 'replayOutcome']) delete canvas.dataset[name];
+      for (const name of ['replayGeneration', 'replayTick', 'replayOutcome', 'replaySource']) delete canvas.dataset[name];
     }
     // The generation field's range follows the completed generations (a cheap check, written only on a change).
     if (session.generations.length !== replayCount) {

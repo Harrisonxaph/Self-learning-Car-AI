@@ -1,6 +1,6 @@
 # Saved model format
 
-> Status: **specification only**. Implementation is roadmap items P3-05 (ST1) and P3-06. Nothing reads or writes this format yet.
+> Status: **P3-05 implements saving, listing, loading and validating this format in localStorage** (`src/persistence/modelFormat.ts`, `src/persistence/modelStore.ts`). File export and import, and migrations, are P3-06. The "Amendments made in P3-05" section at the end lists what the implementation added or clarified.
 
 A saved model ("brain") is a single JSON document. The same document is used for localStorage, file export and file import.
 
@@ -387,3 +387,19 @@ Phase 3 P3-08 compares saved metadata/configuration and compatible replays; Phas
 A brain stores one controller and its provenance. It can be inspected, replayed and evaluated; it does not reproduce the full evolutionary population or resume training exactly. P3-07 defines a separate versioned generation-boundary checkpoint with population genomes, champion, next-generation index, all PRNG stream states (including Gaussian sampler cache), configuration, track versions and metrics. Test uninterrupted-versus-resumed equivalence. Save periodically while active rather than relying on tab-hide delivery; unavailable/quota-limited storage must leave training usable and allow file export.
 
 Newer-version files are rejected safely; older versions require an explicit tested migration before activation. No migration is claimed to exist in this documentation-only repository.
+
+## Amendments made in P3-05
+
+Authorised by the owner on [#25](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/25#issuecomment-6727944973) as defaults proposed in `docs/plans/p3-05-plan.md`.
+
+- **`training.configuration.generations`** is a positive integer for a batch run **or `null` for an open-ended interactive run** (the training page has no generation budget). The page saves `null`.
+- **`training.trackHashes`** (new, required): the `sha256:` content hash of each training track, keyed by track id like `trackVersions`. A reader checks the hash and version against the track-splits manifest.
+- **`training.configuration.prng`** is `{ "algorithm": "sfc32-splitmix32-v1", "version": 1 }`: the algorithm this app uses (the example above shows a different, synthetic name). A reader accepts only the algorithm it implements.
+- **Sensor layout:** version 1 is driven only with the default layout (seven rays at -90, -60, -30, 0, 30, 60, 90 degrees, 50 m). Another layout validates but is reported as not drivable.
+- **Negative zero:** JSON cannot store it, so a parameter of -0 is saved as 0; a network behaves the same with either (tested).
+- **`id`** is 1 to 100 letters, digits, dots, dashes or underscores (it becomes a storage key). It comes from `crypto.randomUUID()`, then `crypto.getRandomValues`, then the clock and `Math.random`, and never from a simulation or evolution stream.
+- **`codeVersion` and `appVersion`** are injected at build time: the commit from `VERCEL_GIT_COMMIT_SHA` or `GITHUB_SHA` (else `dev`) and the `package.json` version.
+- **Unknown extra fields** are ignored when reading and are not kept when saving.
+- **Storage details:** the index `sdae:models:index` is a JSON array of ids in saving order. It is a hint: the store also finds model keys that are not in it, shows an index entry whose model is gone as damaged, and rebuilds a damaged index from the model keys. The cap is 20 saves; a 21st asks the person to delete one (damaged entries count, and can be deleted).
+- **Export JSON next to every save** (the storage section above) is **not yet met**: export is P3-06. Until then the page says that saves live in this browser only and can be cleared, and that exporting arrives later.
+

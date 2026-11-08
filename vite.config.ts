@@ -1,8 +1,18 @@
+import { readFileSync } from 'node:fs';
 import { defineConfig } from 'vitest/config';
+
+// Identifiers recorded in a saved model (docs/MODEL_FORMAT.md `codeVersion`, `appVersion`): the commit the build was made
+// from, when the build environment names one (Vercel and GitHub Actions both do), else "dev"; and the package version.
+const packageJson = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')) as { version: string };
+const codeVersion = (process.env.VERCEL_GIT_COMMIT_SHA ?? process.env.GITHUB_SHA ?? 'dev').slice(0, 40);
 
 export default defineConfig({
   // Static site: relative asset paths work on Vercel and on any other static host.
   base: './',
+  define: {
+    __CODE_VERSION__: JSON.stringify(codeVersion),
+    __APP_VERSION__: JSON.stringify(packageJson.version),
+  },
   build: {
     target: 'es2022',
   },

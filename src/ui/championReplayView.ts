@@ -48,7 +48,7 @@ export function resultText(state: EpisodeState, ticks: number, dt: number): stri
  * The panel's text. `frame` is the latest decision (null before the first tick) and `state` the latest state, which is the
  * result state once the replay has ended. After the end the last decision stays on show, labelled with its tick.
  */
-export function replayText(frame: ReplayFrame | null, state: EpisodeState, ticks: number, dt: number, generation: number, inputCount: number): ReplayText {
+export function replayText(frame: ReplayFrame | null, state: EpisodeState, ticks: number, dt: number, label: string, inputCount: number): ReplayText {
   const finished = state.episode.outcome !== null;
   const result = resultText(state, ticks, dt);
   return {
@@ -58,7 +58,7 @@ export function replayText(frame: ReplayFrame | null, state: EpisodeState, ticks
     brake: frame ? value(frame.decision.controls.brake) : REPLAY_NO_VALUE,
     decision: frame ? `Decision ${frame.tick} at ${seconds(frame.tick - 1, dt)}${finished ? ' (the last)' : ''}` : 'No decision yet',
     result,
-    status: finished ? `Replay of generation ${generation} finished: ${result}.` : '',
+    status: finished ? `Replay of ${label} finished: ${result}.` : '',
   };
 }
 
