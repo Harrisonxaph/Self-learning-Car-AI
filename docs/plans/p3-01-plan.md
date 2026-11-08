@@ -1,6 +1,6 @@
 # P3-01 plan: training dashboard metrics
 
-> **Status: implemented in the P3-01 implementation PR (`feat/p3-01-dashboard`), authorised by the owner on #21. Under review; P3-01 stays In Review until the owner's device checks are recorded.**
+> **Status: implemented and merged in [#124](https://github.com/Harrisonxaph/Self-learning-Car-AI/pull/124), authorised by the owner on #21. P3-01 stays In Review until the owner approves completion; the owner's device checks are recorded as passed (owner-reported).**
 > - **Authorisation:** [preparation of this plan only](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/21#issuecomment-6713504223), using the [owner-approved scope](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/21#issuecomment-6713339826). Both are relayed owner instructions on #21.
 > - **Scope change (owner-approved):** fitness and the rates are shown for the **last completed generation** only. The current generation shows live counts. The ROADMAP entry and issue #21 are reconciled to this in the same PR as this plan.
 > - **Design choices (owner, relayed):** the [four live counts and the crash-only collision rate](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/21#issuecomment-6713705745) in §4 are owner-specified, and the existing TESTING.md requirements are retained (§6). The owner's [criterion clarification](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/21#issuecomment-6713856759) (§6.1): P3-01 completion does not require the FPS and step-time instrumentation, which stays in P3-07.

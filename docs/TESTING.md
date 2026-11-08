@@ -152,6 +152,8 @@ Recorded so far (owner-reported, not run by either agent, 2026-10-27, [#12](http
 - iPhone 15, iOS 27.0.1: all four ray-layer checks passed; manual controls and layout worked, training advanced from generation 8 to 9, and rotation and app-switch/resume passed. "The page stays responsive" is not stated separately.
 - iPad Pro 11-inch (3rd generation), iPadOS 26.6.2: the owner confirms all requested training and ray-layer checks passed. The iPad screenshot shows an in-app browser and does not establish standalone Safari testing.
 
+Recorded for the training dashboard (P3-01), owner-reported and not run by either agent, 2026-11-08 ([#21](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/21#issuecomment-6719655761)): "Pass on all" for the five requested checks on `?mode=train` (readable without zoom; the track and cars stay visible; the live counts and last-completed figures appear and update; it lines up after rotation and an app switch; the page stays responsive in low-power mode). They were requested for iPhone 15 and iPad Pro in Safari, in portrait and landscape, on the production URL. The reply did not state device models, OS or browser versions, or the deployed commit, so none are recorded. Frame rate and step time were not measured (P3-07).
+
 These are usability and operation checks, not evidence of learned driving. The low-power check's responsiveness part applies from the dashboard (P3-01); its frame-rate and step-time figures wait for P3-07.
 
 If no real device is available, say so in the pull request and leave the item as an outstanding manual check. Do not mark it done.
