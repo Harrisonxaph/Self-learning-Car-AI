@@ -168,7 +168,7 @@ Playwright's WebKit is an approximation of iOS Safari, not a replacement. For ea
 - Saved champions (P3-05), on iPhone and iPad Safari with `?mode=train`, in portrait and landscape:
   1. Open Champion replay after the first generation: the Saved champions section is readable, the notice says saves live in this browser only, and Save this champion is enabled.
   2. Save a champion with a name, then close the tab and reopen the page: the save is listed, and Replay runs it as before.
-  3. In a Private tab (or with storage blocked), saving shows the "storage is unavailable" message and training and replay keep working.
+  3. In a Private tab, either saving works for that session (and the notice warns that a private window may keep nothing, or only until it closes) or the browser denies storage and saving shows the "storage is unavailable" message. Both are fine; training and replay keep working either way. (Denial is covered deterministically by the injected-denial tests.)
   4. Delete asks twice, and removes only that save.
   5. The panel scrolls inside itself with several saves; the track stays usable; targets are easy to tap.
 - Switch tabs or lock the screen mid-training, then return: the app pauses and resumes without a jump.
