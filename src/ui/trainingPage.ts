@@ -3,16 +3,17 @@
 // cars of the current generation. Drawing only reads the trainer's state, so what is trained is the same as a
 // headless run with the same configuration (tests/training/trainer.test.ts checks this).
 //
-// Only what P2-05 needs is shown: the cars and one status line. Statistics panels, graphs, speed controls,
-// saving and champion replay belong to Phase 3 (P3-01 to P3-05).
+// Shown: the cars, one status line and (P3-01) the dashboard of live counts and last-completed-generation figures.
+// Graphs, speed controls, saving, champion replay and performance readouts belong to later Phase 3 items.
 import { drawCars } from '../render/raceView';
 import type { TrackLayer } from '../render/trackLayer';
-import { browserViewportEnvironment, createViewport, type ViewportSize } from '../render/viewport';
+import { browserViewportEnvironment, createViewport, type ViewportEnvironment, type ViewportSize } from '../render/viewport';
 import type { SimConfig, VehiclePhysics } from '../sim/config';
 import { createFixedStepClock } from '../sim/fixedStep';
 import type { Track } from '../sim/track';
 import { createTrainer, DEFAULT_TRAINING_CONFIG, type Generation } from '../training/trainer';
-import { browserFrameEnvironment, startFrameLoop } from './frameLoop';
+import { browserFrameEnvironment, startFrameLoop, type FrameEnvironment } from './frameLoop';
+import { createTrainingSession, type DashboardOutputs } from './trainingDashboard';
 
 export interface TrainingPage {
   readonly canvas: HTMLCanvasElement;
@@ -21,10 +22,15 @@ export interface TrainingPage {
   readonly status: HTMLElement;
   /** Manual-driving elements that are hidden in training mode. */
   readonly hide: readonly HTMLElement[];
+  /** The dashboard panel, which is shown in training mode, and the elements its values are written to. */
+  readonly dashboard: { readonly panel: HTMLElement; readonly outputs: DashboardOutputs };
   readonly trackLayer: TrackLayer<HTMLCanvasElement>;
   readonly track: Track;
   readonly physics: VehiclePhysics;
   readonly config: SimConfig;
+  /** The browser's frame and size sources by default; tests pass fakes to drive the real page wiring in Node. */
+  readonly frames?: FrameEnvironment;
+  readonly viewportEnvironment?: ViewportEnvironment;
 }
 
 /** The status line for a generation: its number (from 1), and how many of its cars are still running. */
@@ -38,7 +44,9 @@ export function startTrainingPage(page: TrainingPage): void {
   for (const element of page.hide) element.hidden = true;
   canvas.setAttribute('aria-label', 'Racetrack with a population of training cars');
 
+  page.dashboard.panel.hidden = false;
   const trainer = createTrainer(DEFAULT_TRAINING_CONFIG, { track, physics, timestepSeconds: config.timestepSeconds });
+  const session = createTrainingSession(trainer, page.dashboard.outputs);
   let ticks = 0;
 
   const draw = (size: ViewportSize) => {
@@ -60,23 +68,39 @@ export function startTrainingPage(page: TrainingPage): void {
     const generation = trainer.generation();
     const text = trainingStatus(generation);
     if (status.textContent !== text) status.textContent = text;
-    const running = generation.cars.filter((car) => car.episode.outcome === null).length;
+    const { live, completed } = session.frame();
     Object.assign(canvas.dataset, {
       mode: 'train',
       generation: String(generation.index),
       generationTick: String(generation.tick),
       cars: String(generation.cars.length),
-      running: String(running),
+      running: String(live.running),
+      crashed: String(live.crashed),
+      stalled: String(live.stalled),
+      finished: String(live.finished),
       completedGenerations: String(trainer.record().generations.length),
       tick: String(ticks),
     });
+    // The last completed generation's recorded values, unformatted, for the browser tests; absent before the first.
+    const last: Record<string, string | null> = {
+      lastGeneration: completed ? String(completed.generation) : null,
+      lastBest: completed ? String(completed.bestFitness) : null,
+      lastMean: completed ? String(completed.meanFitness) : null,
+      lastCrashed: completed ? String(completed.crashed) : null,
+      lastStalled: completed ? String(completed.stalled) : null,
+      lastLaps: completed ? String(completed.carsWithLap) : null,
+    };
+    for (const [name, value] of Object.entries(last)) {
+      if (value === null) delete canvas.dataset[name];
+      else canvas.dataset[name] = value;
+    }
   };
 
-  const viewport = createViewport(canvas, browserViewportEnvironment(canvas), draw);
-  startFrameLoop(browserFrameEnvironment(), createFixedStepClock(config), {
+  const viewport = createViewport(canvas, page.viewportEnvironment ?? browserViewportEnvironment(canvas), draw);
+  startFrameLoop(page.frames ?? browserFrameEnvironment(), createFixedStepClock(config), {
     step: () => {
       ticks += 1;
-      trainer.step();
+      session.step();
     },
     render: () => {
       draw(viewport.current());

@@ -63,6 +63,17 @@ body {
   margin: 0;
 }
 
+.training-dashboard .hud {
+  margin-top: 0.15rem;
+}
+
+.dash-note {
+  min-height: 1.2em;
+  margin: 0.15rem 0 0;
+  font-size: 0.85rem;
+  color: #9fb0c0;
+}
+
 .hud-message {
   min-height: 1.3em;
   margin: 0.2rem 0 0;
@@ -184,6 +195,10 @@ body {
 
   .hud {
     font-size: 0.85rem;
+  }
+
+  .dash-note {
+    font-size: 0.75rem;
   }
 
   .controls {
