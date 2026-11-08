@@ -153,7 +153,9 @@ describe('the speed controls on the actual page', () => {
     expect(running).toBeGreaterThan(50);
     controls.pause.click();
     expect(controls.pause.textContent).toBe('Play');
-    expect(controls.pause.attributes['aria-label']).toBe('Resume training');
+    expect(controls.pause.attributes['aria-label']).toBe('Play / resume training');
+    // The accessible name contains the visible label, in both states.
+    expect(controls.pause.attributes['aria-label']!.toLowerCase()).toContain(controls.pause.textContent.toLowerCase());
     run(600); // ten seconds of frames
     expect(Number(canvas.dataset.tick)).toBe(running);
     expect(canvas.dataset.paused).toBe('true');
@@ -161,6 +163,7 @@ describe('the speed controls on the actual page', () => {
     controls.pause.click();
     expect(controls.pause.textContent).toBe('Pause');
     expect(controls.pause.attributes['aria-label']).toBe('Pause training');
+    expect(controls.pause.attributes['aria-label']!.toLowerCase()).toContain(controls.pause.textContent.toLowerCase());
     run(1);
     expect(Number(canvas.dataset.tick) - running).toBeLessThanOrEqual(1);
     run(59);

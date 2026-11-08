@@ -111,11 +111,6 @@ body {
   padding: 0.2rem 0.5rem;
 }
 
-.tc-pause {
-  /* The same width whether it says Pause or Play, so the row never reflows. */
-  min-width: 4.2rem;
-}
-
 .tc-speeds {
   display: flex;
   gap: 0.25rem;
@@ -124,8 +119,8 @@ body {
 .tc-button,
 .tc-cap {
   /* At least 44 × 44 CSS pixels (AGENTS.md touch targets). */
-  min-width: 2.75rem;
-  min-height: 2.75rem;
+  min-width: max(44px, 2.75rem);
+  min-height: max(44px, 2.75rem);
   padding: 0 0.4rem;
   border: 2px solid #4a5a6a;
   border-radius: 0.6rem;
@@ -148,6 +143,46 @@ body {
   font-size: 0.9rem;
 }
 
+/* The same width whether it says Pause or Play, so the row never reflows (after .tc-button, and more specific than it). */
+.tc-button.tc-pause {
+  min-width: 4.2rem;
+}
+
+/* Narrow screens, and short landscape screens (where the controls sit in a column beside the graph): the five controls
+   always share one row. They shrink toward their 44 px minimum instead of wrapping, whichever font or native select
+   rendering the device uses. */
+@media (max-width: 480px), (orientation: landscape) and (max-height: 500px) {
+  .training-controls {
+    flex-wrap: nowrap;
+    gap: 0.2rem;
+    padding: 0.2rem 0.35rem;
+  }
+
+  .training-controls > .tc-button {
+    flex: 0 0 auto;
+    padding: 0 0.3rem;
+  }
+
+  .tc-speeds {
+    flex: 1 1 0;
+    min-width: 0;
+    gap: 0.2rem;
+  }
+
+  .tc-speeds > .tc-button {
+    flex: 1 1 0;
+    min-width: max(44px, 2.75rem);
+    padding: 0 0.1rem;
+  }
+
+  .tc-cap {
+    flex: 0 0 4.4rem;
+    width: 4.4rem;
+    padding: 0 0.1rem;
+    font-size: 0.85rem;
+  }
+}
+
 .training-graph {
   padding: 0 0.75rem 0.4rem;
   font-size: 0.95rem;
@@ -157,7 +192,7 @@ body {
   display: flex;
   align-items: center;
   /* At least 44 CSS pixels tall (AGENTS.md touch targets). */
-  min-height: 2.75rem;
+  min-height: max(44px, 2.75rem);
   cursor: pointer;
   font-weight: 600;
 }

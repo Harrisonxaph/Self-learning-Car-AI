@@ -98,7 +98,8 @@ export function startTrainingPage(page: TrainingPage): void {
     for (const mode of SPEED_MODES) controls.speeds[mode].setAttribute('aria-pressed', String(speed.mode === mode));
     // "Play" is no wider than "Pause", so the row does not reflow when the label changes.
     controls.pause.textContent = speed.paused ? 'Play' : 'Pause';
-    controls.pause.setAttribute('aria-label', speed.paused ? 'Resume training' : 'Pause training');
+    // The accessible name contains the visible label ("Pause" or "Play"), so voice control by what is shown works.
+    controls.pause.setAttribute('aria-label', speed.paused ? 'Play / resume training' : 'Pause training');
   };
   for (const mode of SPEED_MODES) {
     controls.speeds[mode].addEventListener('click', () => {

@@ -221,10 +221,13 @@ test('the speed controls are real buttons of at least 44 px, and pause, resume a
   expect(normal).toBeGreaterThanOrEqual(55);
   expect(normal).toBeLessThanOrEqual(65);
 
-  // Pause: nothing advances, the button says Play (its name says Resume training) and the status line says so.
+  // Pause: nothing advances, the button says Play (its name says Play / resume training) and the status line says so.
   await page.locator('#speed-pause').click();
   await expect(page.locator('#speed-pause')).toHaveText('Play');
-  await expect(page.locator('#speed-pause')).toHaveAttribute('aria-label', 'Resume training');
+  await expect(page.locator('#speed-pause')).toHaveAttribute('aria-label', 'Play / resume training');
+  // The accessible name contains the visible label, so voice control by what is shown works.
+  expect(((await page.locator('#speed-pause').getAttribute('aria-label')) ?? '').toLowerCase()).toContain('play');
+  await expect(page.getByRole('button', { name: /play/i })).toHaveCount(1);
   // The status line and page data follow on the next rendered frame, and the page's clock only moves when told to.
   await page.clock.runFor(100);
   await expect(page.locator('#sim-canvas')).toHaveAttribute('data-paused', 'true');
@@ -234,6 +237,7 @@ test('the speed controls are real buttons of at least 44 px, and pause, resume a
   await page.locator('#speed-pause').click();
   await expect(page.locator('#speed-pause')).toHaveText('Pause');
   await expect(page.locator('#speed-pause')).toHaveAttribute('aria-label', 'Pause training');
+  await expect(page.getByRole('button', { name: /pause/i })).toHaveCount(1);
   const resumed = await ticksIn(1000);
   expect(resumed).toBeGreaterThanOrEqual(55);
   expect(resumed).toBeLessThanOrEqual(65);
@@ -364,6 +368,45 @@ test('with the populated graph open, the track keeps its space, the page does no
         await expect(page.locator('#speed-pause')).toHaveText('Pause');
       }
     }
+  }
+});
+
+test('the controls stay on one line, inside the screen and at least 44 px, with other fonts and larger text at 320 px wide', async ({ page }, testInfo) => {
+  test.skip(!/phone|tablet/.test(testInfo.project.name), 'a small-screen check');
+  await installPausedClock(page);
+  await page.goto('/?mode=train');
+  await page.setViewportSize({ width: 320, height: 568 });
+  await page.clock.runFor(200);
+  await expect(page.locator('#sim-canvas')).toHaveAttribute('data-mode', 'train');
+  // The CI runner's fonts differ from a developer's, so check against generic families with different widths, and larger text.
+  const styles = [
+    '',
+    'html, body, button, select { font-family: serif !important; }',
+    'html, body, button, select { font-family: monospace !important; }',
+    'html { font-size: 112.5% !important; }',
+    'html, body, button, select { font-family: monospace !important; } html { font-size: 112.5% !important; }',
+  ];
+  for (const css of styles) {
+    const handle = css ? await page.addStyleTag({ content: css }) : null;
+    await page.clock.runFor(100);
+    for (const state of ['running', 'paused']) {
+      if (state === 'paused') {
+        await page.locator('#speed-pause').click();
+        await page.clock.runFor(100);
+      }
+      const fit = await page.evaluate(() => {
+        const rects = [...document.querySelectorAll('#training-controls button, #training-controls select')].map((el) => el.getBoundingClientRect());
+        return {
+          count: rects.length,
+          oneRow: Math.max(...rects.map((r) => Math.round(r.top))) - Math.min(...rects.map((r) => Math.round(r.top))) <= 2,
+          inside: rects.every((r) => r.left >= 0 && r.right <= window.innerWidth),
+          big: rects.every((r) => r.width >= 44 && r.height >= 44),
+        };
+      });
+      expect(fit, `${css || 'default'} ${state}`).toEqual({ count: 5, oneRow: true, inside: true, big: true });
+      if (state === 'paused') await page.locator('#speed-pause').click();
+    }
+    await handle?.evaluate((el) => (el as Element).remove());
   }
 });
 
