@@ -2,6 +2,7 @@
 // panel's `<output>` elements. It only reads; it never drives the trainer, and it changes a text node only when
 // its text changes. The session below is the one place the page's per-frame dashboard path runs, so tests can drive
 // exactly that path without a browser.
+import { historyPoint, type HistoryPoint } from '../training/generationHistory';
 import { completedMetrics, liveCounts, type CompletedMetrics, type LiveCounts } from '../training/generationMetrics';
 import type { Trainer } from '../training/trainer';
 
@@ -75,18 +76,30 @@ export interface TrainingSession {
   step(): void;
   /** Called once per rendered frame: updates the dashboard and returns the values it showed. */
   frame(): { readonly live: LiveCounts; readonly completed: CompletedMetrics | null };
+  /**
+   * One point per completed generation, in order, for the training graph (P3-02). It grows by one entry when a
+   * generation ends and is read without copying, so reading it never costs more as training goes on.
+   */
+  readonly history: readonly HistoryPoint[];
 }
 
 /**
  * The trainer plus its dashboard. `step()` keeps the `GenerationStats` the trainer returns when a generation ends, so
- * the dashboard reads the last completed generation without touching the trainer's history.
+ * the dashboard reads the last completed generation without touching the trainer's history, and adds one point to the
+ * graph's history.
  */
 export function createTrainingSession(trainer: DashboardTrainer, outputs: DashboardOutputs): TrainingSession {
   let last: ReturnType<DashboardTrainer['step']> = null;
+  const history: HistoryPoint[] = [];
   return {
+    history,
     step() {
       const stats = trainer.step();
-      if (stats) last = stats;
+      if (stats) {
+        last = stats;
+        // `fitness` holds one entry per car, so its length is the population the generation was scored over.
+        history.push(historyPoint(stats, stats.fitness.length));
+      }
     },
     frame() {
       const generation = trainer.generation();

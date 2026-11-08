@@ -139,6 +139,52 @@ test('the training dashboard shows live counts that sum to the population and up
   expect(Number(later.data.lastBest)).not.toBeNaN();
 });
 
+test('the training graph draws a point for each completed generation and keeps a text summary', async ({ page }) => {
+  await installPausedClock(page);
+  await page.goto('/?mode=train');
+  await page.clock.runFor(100);
+  await expect(page.locator('#sim-canvas')).toHaveAttribute('data-mode', 'train');
+  // Shown in training mode, collapsed by default, with nothing to plot yet.
+  await expect(page.locator('#training-graph')).toBeVisible();
+  expect(await page.locator('#training-graph').evaluate((d: HTMLDetailsElement) => d.open)).toBe(false);
+  await expect(page.locator('#sim-canvas')).toHaveAttribute('data-chart-points', '0');
+  await expect(page.locator('#graph-summary')).toHaveText('No generation completed yet, so there is nothing to plot.');
+  // The canvas names its text summary for assistive technology.
+  await expect(page.locator('#graph-canvas')).toHaveAttribute('aria-describedby', 'graph-summary');
+
+  await page.locator('#training-graph > summary').click();
+  expect(await page.locator('#training-graph').evaluate((d: HTMLDetailsElement) => d.open)).toBe(true);
+
+  const inked = () =>
+    page.evaluate(() => {
+      const canvas = document.getElementById('graph-canvas') as HTMLCanvasElement;
+      const { data } = canvas.getContext('2d')!.getImageData(0, 0, canvas.width, canvas.height);
+      let count = 0;
+      for (let i = 3; i < data.length; i += 4) if (data[i]! > 0) count += 1;
+      return count;
+    });
+
+  // One point after the first generation ends: a summary and a drawing appear.
+  const first = await advanceUntil(page, (v) => v.data.chartPoints === '1');
+  await page.clock.runFor(400);
+  expect(first.data.lastGeneration).toBe('1');
+  await expect(page.locator('#graph-summary')).toHaveText(/^1 completed generation is plotted\. Latest, generation 1: best fitness /);
+  expect(Number(await data(page, 'chart-draws'))).toBeGreaterThanOrEqual(1);
+  const afterOne = await inked();
+  expect(afterOne).toBeGreaterThan(50);
+
+  // And a second point after the second.
+  const second = await advanceUntil(page, (v) => v.data.chartPoints === '2');
+  await page.clock.runFor(400);
+  const text = (await page.locator('#graph-summary').textContent())!;
+  expect(text).toMatch(/^2 completed generations are plotted\. Latest, generation 2:/);
+  expect(text).toContain(`best fitness ${Number(second.data.lastBest).toFixed(2)}`);
+  expect(text).toContain(`mean fitness ${Number(second.data.lastMean).toFixed(2)}`);
+  expect(await inked()).toBeGreaterThan(50);
+  // The page never shows a learning claim in the summary.
+  expect(text).not.toMatch(/learn|improv|better|smarter/i);
+});
+
 test('the dashboard stays inside the screen without scrolling the page, in portrait and landscape', async ({ page }, testInfo) => {
   test.skip(!/phone|tablet/.test(testInfo.project.name), 'a small-screen check');
   await page.goto('/?mode=train');
@@ -163,6 +209,28 @@ test('the dashboard stays inside the screen without scrolling the page, in portr
     expect(fit, `${size.width}x${size.height}`).toMatchObject({ insideWidth: true, insideHeight: true, noScrollX: true, noScrollY: true });
     // The track keeps a useful share of the screen (the cars stay visible).
     expect(fit.canvasShare, `${size.width}x${size.height}`).toBeGreaterThan(0.3);
+  }
+});
+
+test('with the graph open the page still does not scroll, and the graph stays on screen, in portrait and landscape', async ({ page }, testInfo) => {
+  test.skip(!/phone|tablet/.test(testInfo.project.name), 'a small-screen check');
+  await page.goto('/?mode=train');
+  await expect(page.locator('#sim-canvas')).toHaveAttribute('data-mode', 'train');
+  await page.locator('#training-graph > summary').click();
+  const original = page.viewportSize()!;
+  for (const size of [original, { width: original.height, height: original.width }]) {
+    await page.setViewportSize(size);
+    const fit = await page.evaluate(() => {
+      const graph = document.getElementById('training-graph')!.getBoundingClientRect();
+      const root = document.documentElement;
+      return {
+        insideWidth: graph.left >= 0 && graph.right <= window.innerWidth,
+        insideHeight: graph.top >= 0 && graph.bottom <= window.innerHeight,
+        noScrollX: root.scrollWidth <= root.clientWidth,
+        noScrollY: root.scrollHeight <= root.clientHeight,
+      };
+    });
+    expect(fit, `${size.width}x${size.height}`).toEqual({ insideWidth: true, insideHeight: true, noScrollX: true, noScrollY: true });
   }
 });
 

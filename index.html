@@ -44,6 +44,15 @@
       <div class="stage">
         <canvas id="sim-canvas" role="img" aria-label="Racetrack with your car"></canvas>
       </div>
+      <details id="training-graph" class="training-graph" hidden>
+        <summary>Training graph</summary>
+        <canvas
+          id="graph-canvas"
+          role="img"
+          aria-label="Line charts by generation: best and mean fitness, and the share of cars that crashed and that completed a lap"
+        ></canvas>
+        <p id="graph-summary" class="graph-summary">No generation completed yet, so there is nothing to plot.</p>
+      </details>
       <div class="controls" aria-label="Driving controls">
         <div class="pad">
           <button type="button" class="hold" data-action="left" aria-label="Steer left">◀</button>

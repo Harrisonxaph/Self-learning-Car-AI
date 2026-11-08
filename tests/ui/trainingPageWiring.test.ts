@@ -9,6 +9,7 @@ import type { ViewportEnvironment } from '../../src/render/viewport';
 import { DEFAULT_SIM_CONFIG, DEFAULT_VEHICLE_PHYSICS } from '../../src/sim/config';
 import { loadTrack } from '../../src/sim/track';
 import { startTrainingPage, type TrainingPage } from '../../src/ui/trainingPage';
+import { recordingContext } from '../render/recordingContext';
 import { fakeDashboard } from './dashboardFakes';
 import { FakeFrames } from './fakeFrames';
 
@@ -29,13 +30,19 @@ vi.mock('../../src/training/generationMetrics', async (importOriginal) => {
 });
 
 /** Just enough of the page's DOM objects for `startTrainingPage` to run in Node. */
-function fakePage(frames: FakeFrames) {
+function fakePage(frames: FakeFrames, clock?: { ms: number }) {
   const dashboard = fakeDashboard();
   const canvas = { width: 0, height: 0, dataset: {} as Record<string, string>, setAttribute() {} };
   const context = { setTransform() {}, clearRect() {} };
   const hidden = { hidden: false };
   const panel = { hidden: true };
   const status = { textContent: '' };
+  const graph = {
+    details: { open: false, hidden: true, addEventListener() {} },
+    canvas: { width: 0, height: 0, setAttribute() {} },
+    context: Object.assign(recordingContext().ctx, { setTransform() {}, clearRect() {} }),
+    summary: { textContent: '' },
+  };
   const viewport: ViewportEnvironment = { measure: () => ({ width: 390, height: 600 }), devicePixelRatio: () => 1, subscribe: () => () => {} };
   const page = {
     canvas,
@@ -48,10 +55,13 @@ function fakePage(frames: FakeFrames) {
     track: loadTrack(stadiumOval),
     physics: DEFAULT_VEHICLE_PHYSICS,
     config: DEFAULT_SIM_CONFIG,
+    graph,
     frames,
     viewportEnvironment: viewport,
+    graphViewportEnvironment: viewport,
+    now: clock ? () => clock.ms : undefined,
   } as unknown as TrainingPage;
-  return { page, canvas, dashboard, panel, hidden };
+  return { page, canvas, dashboard, panel, hidden, graph };
 }
 
 describe('the training page wiring (the actual page, not the test\'s own callbacks)', () => {
@@ -80,7 +90,9 @@ describe('the training page wiring (the actual page, not the test\'s own callbac
       completedBefore = completed;
       // One update per rendered frame so far, whatever happened on it.
       expect(counts.live, `after frame ${frame}`).toBe(rendered);
-      expect(counts.completed, `after frame ${frame}`).toBe(rendered);
+      // The dashboard's call once per frame, plus the graph's history point built from the same definition once for
+      // each generation that has ended.
+      expect(counts.completed, `after frame ${frame}`).toBe(rendered + completed);
     }
     expect(Number(canvas.dataset.completedGenerations)).toBeGreaterThanOrEqual(2);
     expect(Number(canvas.dataset.tick)).toBeGreaterThan(3 * rendered);
@@ -106,5 +118,39 @@ describe('the training page wiring (the actual page, not the test\'s own callbac
     frames.fire(2);
     frames.fire(1000);
     expect(counts.live).toBe(2);
+  });
+});
+
+describe('the training graph on the actual page', () => {
+  it('shows the graph, follows the completed generations, draws only while open, and no faster than four times a second', () => {
+    const frames = new FakeFrames();
+    const clock = { ms: 0 };
+    const { page, canvas, graph } = fakePage(frames, clock);
+    startTrainingPage(page);
+    expect(graph.details.hidden).toBe(false);
+    const frameMs = 4 * DEFAULT_SIM_CONFIG.timestepSeconds * 1000;
+    let closedDraws = 0;
+    let frame = 0;
+    // Closed: the summary still follows the history, but nothing is drawn.
+    for (; Number(canvas.dataset.completedGenerations ?? 0) < 1 && frame < 5000; frame += 1) {
+      clock.ms = frame * frameMs;
+      frames.fire(clock.ms);
+      closedDraws = Number(canvas.dataset.chartDraws);
+    }
+    expect(Number(canvas.dataset.chartPoints)).toBe(1);
+    expect(graph.summary.textContent).toMatch(/^1 completed generation is plotted\./);
+    expect(closedDraws).toBe(0);
+    // Open it (the page redraws on the toggle) and let two more generations finish.
+    graph.details.open = true;
+    const openedAt = clock.ms;
+    for (; Number(canvas.dataset.completedGenerations) < 3 && frame < 20000; frame += 1) {
+      clock.ms = frame * frameMs;
+      frames.fire(clock.ms);
+    }
+    expect(Number(canvas.dataset.chartPoints)).toBe(3);
+    expect(graph.summary.textContent).toMatch(/^3 completed generations are plotted\./);
+    const draws = Number(canvas.dataset.chartDraws);
+    expect(draws).toBeGreaterThan(0);
+    expect(draws).toBeLessThanOrEqual(Math.floor((clock.ms - openedAt) / 250) + 1);
   });
 });
