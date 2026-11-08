@@ -16,6 +16,8 @@ export function recordingContext() {
     beginPath: () => ops.push(['beginPath']),
     moveTo: (x: number, y: number) => ops.push(['moveTo', x, y, ctx.strokeStyle, [...ctx.dash]]),
     lineTo: (x: number, y: number) => ops.push(['lineTo', x, y, ctx.strokeStyle, [...ctx.dash]]),
+    arc: (x: number, y: number, radius: number) => ops.push(['arc', x, y, radius, ctx.fillStyle]),
+    fill: () => ops.push(['fill', ctx.fillStyle]),
     stroke: () => ops.push(['stroke', ctx.strokeStyle]),
     fillText: (text: string) => ops.push(['fillText', text]),
     setLineDash: (dash: number[]) => {

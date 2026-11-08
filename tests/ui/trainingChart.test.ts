@@ -143,7 +143,7 @@ describe('createTrainingChart', () => {
     expect(h.chart.draws).toBe(2);
   });
 
-  it('stays bounded at 500 generations: one draw costs the same as at 5,000, and its summary names the count', () => {
+  it('bounds the Canvas drawing calls of one draw by the plot width, at 500 and at 5,000 generations (not the total work, which still scans the history)', () => {
     const cost = (n: number) => {
       const h = harness();
       for (let g = 1; g <= n; g += 1) h.history.push(point(g));
@@ -154,7 +154,9 @@ describe('createTrainingChart', () => {
     const at500 = cost(500);
     const at5000 = cost(5000);
     expect(at500.summary).toMatch(/^500 completed generations are plotted/);
-    // Each of the four lines keeps at most 2 * (plot width / 2) + 2 points, so the work does not grow with training.
+    // Each of the four lines keeps at most 2 * (plot width / 2) + 2 points, so the number of drawing calls does not grow
+    // with training. This counts Canvas calls only: mapping the history, choosing the axis range and writing the summary
+    // still read every point once per redraw (at most four redraws a second).
     const plotWidth = layoutPanels(SIZE.cssWidth, SIZE.cssHeight).fitness.width;
     expect(at500.ops).toBeLessThanOrEqual(4 * (2 * Math.floor(plotWidth / 2) + 2) + 120);
     expect(at5000.ops).toBeLessThanOrEqual(at500.ops + 10);

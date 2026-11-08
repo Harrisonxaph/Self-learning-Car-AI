@@ -62,24 +62,40 @@ export function yAt(value: number, range: ValueRange, area: PlotArea): number {
 
 /**
  * The positions to draw when there are more points than the plot can show. Up to `buckets` equal runs each keep their
- * lowest and highest value, so peaks and dips survive, and the first and last positions are always kept. The result is
- * in increasing order and has at most `2 * buckets + 2` entries. With few enough points, every position is kept.
+ * lowest and highest finite value, so peaks and dips survive, and the first and last finite positions are always kept.
+ * Values that are not finite (NaN, infinities) are never chosen, so a bucket that starts with one still keeps its finite
+ * extremes, and a bucket with no finite value keeps nothing. The result is in increasing order and has at most
+ * `2 * buckets + 2` entries. With few enough points, every position is kept (the caller drops those that are not finite).
  */
 export function keptIndices(values: readonly number[], buckets: number): number[] {
   const count = values.length;
   if (count <= 2 * buckets + 2) return values.map((_, index) => index);
-  const kept = new Set<number>([0, count - 1]);
+  const kept = new Set<number>();
+  for (let index = 0; index < count; index += 1) {
+    if (Number.isFinite(values[index]!)) {
+      kept.add(index);
+      break;
+    }
+  }
+  for (let index = count - 1; index >= 0; index -= 1) {
+    if (Number.isFinite(values[index]!)) {
+      kept.add(index);
+      break;
+    }
+  }
   for (let bucket = 0; bucket < buckets; bucket += 1) {
     const from = Math.floor((bucket * count) / buckets);
     const to = Math.max(from + 1, Math.floor(((bucket + 1) * count) / buckets));
-    let lowest = from;
-    let highest = from;
+    let lowest = -1;
+    let highest = -1;
     for (let index = from; index < to; index += 1) {
-      if (values[index]! < values[lowest]!) lowest = index;
-      if (values[index]! > values[highest]!) highest = index;
+      const value = values[index]!;
+      if (!Number.isFinite(value)) continue;
+      if (lowest < 0 || value < values[lowest]!) lowest = index;
+      if (highest < 0 || value > values[highest]!) highest = index;
     }
-    kept.add(lowest);
-    kept.add(highest);
+    if (lowest >= 0) kept.add(lowest);
+    if (highest >= 0) kept.add(highest);
   }
   return [...kept].sort((a, b) => a - b);
 }
@@ -102,6 +118,8 @@ export type ChartContext = Pick<
   | 'beginPath'
   | 'moveTo'
   | 'lineTo'
+  | 'arc'
+  | 'fill'
   | 'stroke'
   | 'fillText'
   | 'setLineDash'
@@ -124,6 +142,10 @@ export interface PanelSpec {
 }
 
 export const CHART_COLOURS = Object.freeze({ axis: '#4a5a6a', text: '#9fb0c0' });
+
+/** A series with at most this many positions also gets a dot on each point, so a single point is visible. */
+export const MARKER_LIMIT = 30;
+export const MARKER_RADIUS = 3;
 
 /** Draws a one-line legend from (`x`, `y`): a short sample of each line in its colour and dash, then its label. */
 export function drawLegend(ctx: ChartContext, series: readonly ChartSeries[], x: number, y: number): void {
@@ -175,11 +197,21 @@ export function drawPanel(ctx: ChartContext, panel: PanelSpec): void {
     if (points.length === 0) continue;
     ctx.strokeStyle = line.colour;
     ctx.setLineDash([...line.dash]);
-    ctx.beginPath();
-    points.forEach((point, index) => (index === 0 ? ctx.moveTo(point.x, point.y) : ctx.lineTo(point.x, point.y)));
-    // A single point is a dot, not an invisible zero-length line.
-    if (points.length === 1) ctx.lineTo(points[0]!.x + 0.01, points[0]!.y);
-    ctx.stroke();
+    if (points.length > 1) {
+      ctx.beginPath();
+      points.forEach((point, index) => (index === 0 ? ctx.moveTo(point.x, point.y) : ctx.lineTo(point.x, point.y)));
+      ctx.stroke();
+    }
+    // A short series gets a dot on each point. A lone point has no line to show it, so the dot is what is seen.
+    if (line.values.length <= MARKER_LIMIT) {
+      ctx.setLineDash([]);
+      ctx.fillStyle = line.colour;
+      for (const point of points) {
+        ctx.beginPath();
+        ctx.arc(point.x, point.y, MARKER_RADIUS, 0, 2 * Math.PI);
+        ctx.fill();
+      }
+    }
   }
   ctx.setLineDash([]);
 }

@@ -2,7 +2,7 @@
 // records what it was asked to draw. Plain Node.
 import { describe, expect, it } from 'vitest';
 import { recordingContext } from './recordingContext';
-import { drawLegend, drawPanel, keptIndices, niceRange, seriesPoints, xAt, yAt, type PlotArea, type ValueRange } from '../../src/render/lineChart';
+import { drawLegend, drawPanel, keptIndices, MARKER_LIMIT, MARKER_RADIUS, niceRange, seriesPoints, xAt, yAt, type PlotArea, type ValueRange } from '../../src/render/lineChart';
 
 const AREA: PlotArea = { left: 40, top: 20, width: 300, height: 100 };
 
@@ -69,6 +69,39 @@ describe('keptIndices', () => {
     expect(kept).toContain(4001);
   });
 
+  it('never chooses a value that is not finite, so a bucket that starts with NaN still keeps its finite extremes', () => {
+    const values = Array.from({ length: 20 }, () => 0);
+    values[0] = Number.NaN;
+    values[3] = 100;
+    values[4] = -50;
+    const kept = keptIndices(values, 2);
+    expect(kept).toContain(3);
+    expect(kept).toContain(4);
+    expect(kept.every((i) => Number.isFinite(values[i]!))).toBe(true);
+    // And what is drawn still has them.
+    const range: ValueRange = { min: -60, max: 110, ticks: [] };
+    const drawn = seriesPoints(values, range, AREA, 2).map((p) => p.y);
+    expect(drawn).toContain(yAt(100, range, AREA));
+    expect(drawn).toContain(yAt(-50, range, AREA));
+  });
+
+  it('copes with non-finite values anywhere in a thinned series: buckets with none, a NaN first or last, and all NaN', () => {
+    const values = Array.from({ length: 400 }, (_, i) => Math.sin(i / 7) * 10);
+    for (let i = 100; i < 200; i += 1) values[i] = Number.NaN; // whole buckets without a finite value
+    values[0] = Number.NaN;
+    values[399] = Number.POSITIVE_INFINITY;
+    values[250] = 500;
+    const kept = keptIndices(values, 20);
+    expect(kept.length).toBeLessThanOrEqual(42);
+    expect(kept).toEqual([...kept].sort((a, b) => a - b));
+    expect(kept.every((i) => Number.isFinite(values[i]!))).toBe(true);
+    expect(kept).toContain(250);
+    // The ends are the first and last finite positions.
+    expect(kept[0]).toBe(1);
+    expect(kept[kept.length - 1]).toBe(398);
+    expect(keptIndices(Array.from({ length: 100 }, () => Number.NaN), 5)).toEqual([]);
+  });
+
   it('does not grow with the number of points: 500 and 50,000 points keep about the same', () => {
     const make = (n: number) => Array.from({ length: n }, (_, i) => (i * 7919) % 101);
     expect(keptIndices(make(500), 60).length).toBeLessThanOrEqual(122);
@@ -107,14 +140,30 @@ describe('drawPanel (the graph matches the data)', () => {
     expect(labels).toEqual(expect.arrayContaining(['0', '10', '20', '1', '5']));
   });
 
-  it('draws a single point as a visible dot and an empty series as nothing', () => {
+  it('draws a single point as a filled dot at its scaled position, and an empty series as nothing', () => {
     const { ctx, ops } = recordingContext();
     drawPanel(ctx, { area: AREA, range, series: [series([7], '#ccc'), series([], '#ddd')], formatValue: String, xLabels: { first: '1', last: '1' } });
-    expect(ops.filter((op) => op[0] === 'lineTo' && op[3] === '#ccc')).toHaveLength(1);
-    expect(ops.some((op) => op[3] === '#ddd')).toBe(false);
+    const arcs = ops.filter((op) => op[0] === 'arc' && op[4] === '#ccc');
+    expect(arcs).toEqual([['arc', xAt(0, 1, AREA), yAt(7, range, AREA), MARKER_RADIUS, '#ccc']]);
+    expect(MARKER_RADIUS).toBeGreaterThanOrEqual(2);
+    // The dot is filled (not left as an outline of a zero-length path), and there is no zero-length line.
+    expect(ops.some((op) => op[0] === 'fill' && op[1] === '#ccc')).toBe(true);
+    expect(ops.some((op) => op[0] === 'lineTo' && op[3] === '#ccc')).toBe(false);
+    expect(ops.some((op) => op[3] === '#ddd' || op[4] === '#ddd')).toBe(false);
   });
 
-  it('issues about the same number of drawing calls for 500 points as for 5,000, bounded by the plot width', () => {
+  it('marks every point of a short series, and none of a long one', () => {
+    const arcsFor = (n: number) => {
+      const { ctx, ops } = recordingContext();
+      drawPanel(ctx, { area: AREA, range, series: [series(Array.from({ length: n }, (_, i) => i % 20), '#eee')], formatValue: String, xLabels: { first: '1', last: String(n) } });
+      return ops.filter((op) => op[0] === 'arc').length;
+    };
+    expect(arcsFor(2)).toBe(2);
+    expect(arcsFor(MARKER_LIMIT)).toBe(MARKER_LIMIT);
+    expect(arcsFor(MARKER_LIMIT + 1)).toBe(0);
+  });
+
+  it('issues a number of Canvas drawing calls bounded by the plot width, the same for 500 points as for 5,000', () => {
     const count = (n: number) => {
       const { ctx, ops } = recordingContext();
       const values = Array.from({ length: n }, (_, i) => (i * 37) % 20);

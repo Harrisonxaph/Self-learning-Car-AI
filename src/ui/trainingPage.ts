@@ -74,6 +74,8 @@ export function startTrainingPage(page: TrainingPage): void {
   });
   graphView.viewport = createViewport(graph.canvas, page.graphViewportEnvironment ?? browserViewportEnvironment(graph.canvas), () => chart.invalidate());
   graph.details.addEventListener('toggle', () => {
+    // The page lays out differently with the graph open on a short landscape screen (see style.css).
+    graph.details.closest?.('.app')?.classList.toggle('graph-open', graph.details.open);
     graphView.viewport?.update();
     chart.invalidate();
   });
