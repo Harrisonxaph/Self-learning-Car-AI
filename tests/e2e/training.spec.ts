@@ -57,11 +57,13 @@ const snapshot = (page: Page) =>
 /**
  * Installs Playwright's fake clock and pauses it before the page loads. `install` alone leaves the clock running, so
  * animation frames, and with them training, would keep advancing between the test's commands. Once paused, the page's
- * time moves only through `page.clock.runFor`.
+ * time moves only through `page.clock.runFor`. The pause instant is 10 seconds in, not 0: the installed clock runs in
+ * real time until it is paused, so a pause at 0 throws "Cannot fast-forward to the past" whenever the host takes any
+ * time to get there (seen on WebKit). Nothing has loaded yet, so moving the clock forward costs nothing.
  */
 async function installPausedClock(page: Page) {
   await page.clock.install({ time: 0 });
-  await page.clock.pauseAt(0);
+  await page.clock.pauseAt(10_000);
 }
 
 /**

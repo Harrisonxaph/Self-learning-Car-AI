@@ -119,8 +119,8 @@ body {
 
 /* Open, the graph takes at most a share of the screen and scrolls inside itself, so the track keeps room (P3-02). */
 .training-graph[open] {
-  max-height: 36vh;
-  max-height: 36dvh;
+  max-height: 32vh;
+  max-height: 32dvh;
   overflow-y: auto;
   overscroll-behavior: contain;
   touch-action: pan-y;
@@ -219,6 +219,18 @@ body {
 @media (pointer: coarse) {
   .keys-help {
     display: none;
+  }
+}
+
+/* Narrow portrait screens: with the graph open, a more compact header leaves room for the track. */
+@media (max-width: 480px) {
+  .app.graph-open .app-header h1 {
+    display: none;
+  }
+
+  .training-dashboard .hud {
+    gap: 0.1rem 0.6rem;
+    font-size: 0.85rem;
   }
 }
 
