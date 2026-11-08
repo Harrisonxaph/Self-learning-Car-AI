@@ -5,7 +5,7 @@ export class FakeFrames implements FrameEnvironment {
   hidden = false;
   private pending = new Map<number, (timeMs: number) => void>();
   private nextHandle = 1;
-  private listener: (() => void) | undefined;
+  private listeners = new Set<() => void>();
   requestFrame(callback: (timeMs: number) => void) {
     const handle = this.nextHandle++;
     this.pending.set(handle, callback);
@@ -18,9 +18,9 @@ export class FakeFrames implements FrameEnvironment {
     return this.hidden;
   }
   onVisibilityChange(onChange: () => void) {
-    this.listener = onChange;
+    this.listeners.add(onChange);
     return () => {
-      this.listener = undefined;
+      this.listeners.delete(onChange);
     };
   }
   get pendingFrames() {
@@ -34,6 +34,6 @@ export class FakeFrames implements FrameEnvironment {
   }
   setHidden(hidden: boolean) {
     this.hidden = hidden;
-    this.listener?.();
+    for (const listener of [...this.listeners]) listener();
   }
 }

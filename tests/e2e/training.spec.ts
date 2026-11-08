@@ -395,19 +395,53 @@ test('the controls stay on one line, inside the screen and at least 44 px, with 
         await page.clock.runFor(100);
       }
       const fit = await page.evaluate(() => {
-        const rects = [...document.querySelectorAll('#training-controls button, #training-controls select')].map((el) => el.getBoundingClientRect());
+        const controls = [...document.querySelectorAll('#training-controls button, #training-controls select')];
+        const rects = controls.map((el) => el.getBoundingClientRect());
         return {
           count: rects.length,
           oneRow: Math.max(...rects.map((r) => Math.round(r.top))) - Math.min(...rects.map((r) => Math.round(r.top))) <= 2,
           inside: rects.every((r) => r.left >= 0 && r.right <= window.innerWidth),
           big: rects.every((r) => r.width >= 44 && r.height >= 44),
+          // No two controls overlap (a 1 px tolerance for rounding), and each is what a tap at its centre reaches.
+          apart: rects.every((a, i) => rects.every((b, j) => i >= j || a.right <= b.left + 1 || b.right <= a.left + 1 || a.bottom <= b.top + 1 || b.bottom <= a.top + 1)),
+          hit: controls.every((el) => {
+            const r = el.getBoundingClientRect();
+            const top = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+            return top === el || el.contains(top);
+          }),
         };
       });
-      expect(fit, `${css || 'default'} ${state}`).toEqual({ count: 5, oneRow: true, inside: true, big: true });
+      expect(fit, `${css || 'default'} ${state}`).toEqual({ count: 5, oneRow: true, inside: true, big: true, apart: true, hit: true });
       if (state === 'paused') await page.locator('#speed-pause').click();
     }
     await handle?.evaluate((el) => (el as Element).remove());
   }
+});
+
+test('the frame-rate readout is absent by default and, with ?debug=fps, reports frames and ticks separately', async ({ page }) => {
+  await installPausedClock(page);
+  await page.goto('/?mode=train');
+  await page.clock.runFor(1000);
+  await expect(page.locator('#sim-canvas')).toHaveAttribute('data-mode', 'train');
+  await expect(page.locator('#fps-readout')).toBeHidden();
+  await expect(page.locator('#sim-canvas')).not.toHaveAttribute('data-fps-frames', /.*/);
+  await page.goto('/?mode=train&debug=fps');
+  await page.clock.runFor(2000);
+  await expect(page.locator('#fps-readout')).toBeVisible();
+  await expect(page.locator('#fps-readout')).toContainText(/Render \d+\.\d frames\/s · Simulation \d+\.\d ticks\/s · normal · \d+ cars drawn/);
+  const rate = async () => ({
+    frames: Number(await page.locator('#sim-canvas').getAttribute('data-fps-frames')),
+    ticks: Number(await page.locator('#sim-canvas').getAttribute('data-fps-ticks')),
+  });
+  const normal = await rate();
+  expect(normal.frames).toBeGreaterThan(30);
+  expect(normal.ticks).toBeGreaterThan(30);
+  await page.locator('[data-speed="fast"]').click();
+  await page.clock.runFor(2000);
+  const fast = await rate();
+  expect(fast.ticks).toBeGreaterThan(fast.frames * 2);
+  // A tap on the readout's corner reaches the controls or the track beneath it, never the readout.
+  await expect(page.locator('#fps-readout')).toHaveCSS('pointer-events', 'none');
 });
 
 test('the first completed generation shows as a visible dot on the graph, not only axes and legend', async ({ page }) => {

@@ -42,6 +42,8 @@ export interface FakePageOptions {
   readonly isPhone?: boolean;
   /** Gives the page a track layer, so each frame draws (through `drawCars`) instead of returning early. */
   readonly drawing?: boolean;
+  /** Gives the page the opt-in frame-rate readout element. */
+  readonly fps?: boolean | undefined;
 }
 
 /** Just enough of the page's DOM objects for `startTrainingPage` to run in Node. */
@@ -67,6 +69,7 @@ export function fakePage(frames: FakeFrames, options: FakePageOptions | { ms: nu
     drawCap: new FakeControl(),
   };
   controls.group.hidden = true;
+  const fps = opts.fps ? { hidden: true, textContent: '' } : undefined;
   const viewport: ViewportEnvironment = { measure: () => ({ width: 390, height: 600 }), devicePixelRatio: () => 1, subscribe: () => () => {} };
   const page = {
     canvas,
@@ -75,6 +78,7 @@ export function fakePage(frames: FakeFrames, options: FakePageOptions | { ms: nu
     hide: [hidden],
     dashboard: { panel, outputs: dashboard.outputs },
     controls,
+    fps,
     isPhone: opts.isPhone ?? false,
     // No track layer yet: the frame draws nothing, which leaves the per-frame paths under test.
     trackLayer: { get: () => (opts.drawing ? { canvas: {}, view: { scale: 1, offsetX: 0, offsetY: 0 } } : null) },
@@ -87,5 +91,5 @@ export function fakePage(frames: FakeFrames, options: FakePageOptions | { ms: nu
     graphViewportEnvironment: viewport,
     now: opts.now ?? (opts.clock ? () => opts.clock!.ms : undefined),
   } as unknown as TrainingPage;
-  return { page, canvas, dashboard, panel, hidden, graph, controls, status };
+  return { page, canvas, dashboard, panel, hidden, graph, controls, status, fps };
 }

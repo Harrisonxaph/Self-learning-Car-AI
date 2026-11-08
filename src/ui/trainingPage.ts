@@ -13,6 +13,7 @@ import type { SimConfig, VehiclePhysics } from '../sim/config';
 import type { Track } from '../sim/track';
 import { createTrainer, DEFAULT_TRAINING_CONFIG, type Generation } from '../training/trainer';
 import { browserFrameEnvironment, startFrameLoop, type FrameEnvironment, type FrameLoop } from './frameLoop';
+import { createRateMeter, formatRateReadout } from './rateMeter';
 import { createTrainingChart, type GraphContext } from './trainingChart';
 import { createTrainingSession, type DashboardOutputs } from './trainingDashboard';
 import {
@@ -47,6 +48,11 @@ export interface TrainingPage {
     readonly speeds: Readonly<Record<SpeedMode, HTMLButtonElement>>;
     readonly drawCap: HTMLSelectElement;
   };
+  /**
+   * The optional frame-rate readout (P3-03, opt in with `?debug=fps`). When given, it is shown and updated about four
+   * times a second with the rate of rendered frames and, separately, the rate of simulation ticks. Absent, nothing is measured.
+   */
+  readonly fps?: HTMLElement | undefined;
   /** Whether this is a phone, which starts with fewer cars drawn. The browser is asked by default. */
   readonly isPhone?: boolean;
   /** The training graph (P3-02): a collapsible block that is shown in training mode, with its canvas and text summary. */
@@ -119,6 +125,45 @@ export function startTrainingPage(page: TrainingPage): void {
     if (DRAW_CAPS.includes(chosen)) drawCap = chosen;
   });
   syncControls();
+
+  // Optional frame-rate readout (P3-03). Rendered frames (render callbacks) and simulation ticks are two separate meters:
+  // at Max speed many ticks run per frame, so the two rates differ. Both start again whenever the conditions change
+  // (pause or play, speed, cars drawn, page hidden or shown) and after any gap or backwards clock (see rateMeter.ts).
+  const fpsReadout = page.fps;
+  const frameMeter = createRateMeter();
+  const tickMeter = createRateMeter();
+  let ticksThisFrame = 0;
+  let lastReadoutMs = Number.NEGATIVE_INFINITY;
+  const resetMeters = () => {
+    frameMeter.reset();
+    tickMeter.reset();
+    ticksThisFrame = 0;
+    lastReadoutMs = Number.NEGATIVE_INFINITY;
+  };
+  if (fpsReadout) {
+    fpsReadout.hidden = false;
+    for (const mode of SPEED_MODES) controls.speeds[mode].addEventListener('click', resetMeters);
+    controls.pause.addEventListener('click', resetMeters);
+    controls.drawCap.addEventListener('change', resetMeters);
+    (page.frames ?? browserFrameEnvironment()).onVisibilityChange(resetMeters);
+  }
+  const updateFps = (timeMs: number) => {
+    if (!fpsReadout) return;
+    frameMeter.add(timeMs);
+    tickMeter.add(timeMs, ticksThisFrame);
+    ticksThisFrame = 0;
+    if (timeMs - lastReadoutMs < 250 && timeMs >= lastReadoutMs) return;
+    lastReadoutMs = timeMs;
+    const config = `${speed.paused ? 'paused' : speed.mode} · ${effectiveDrawCap(speed.mode, drawCap, population)} cars drawn`;
+    const frameRate = frameMeter.rate();
+    const tickRate = tickMeter.rate();
+    fpsReadout.textContent = formatRateReadout(frameRate, tickRate, config);
+    const { dataset } = canvas;
+    if (frameRate !== null) dataset.fpsFrames = frameRate.toFixed(1);
+    else delete dataset.fpsFrames;
+    if (tickRate !== null) dataset.fpsTicks = tickRate.toFixed(1);
+    else delete dataset.fpsTicks;
+  };
 
   // The graph reads the session's history and is redrawn at most a few times a second, only while it is open.
   const { graph } = page;
@@ -199,6 +244,7 @@ export function startTrainingPage(page: TrainingPage): void {
   const stepper = createFrameStepper({
     runTick: () => {
       ticks += 1;
+      ticksThisFrame += 1;
       session.step();
     },
     mode: () => speed.mode,
@@ -211,6 +257,7 @@ export function startTrainingPage(page: TrainingPage): void {
       show();
       chart.frame();
       stepper.endFrame();
+      updateFps(page.now ? page.now() : performance.now());
     },
   });
 }
