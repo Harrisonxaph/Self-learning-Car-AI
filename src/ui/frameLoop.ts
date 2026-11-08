@@ -22,6 +22,12 @@ export interface FrameLoopHandlers {
 
 export interface FrameLoop {
   stop(): void;
+  /**
+   * Forgets the time of the last frame and any part-tick, as if the loop had just started: the next frame only records
+   * its time and runs no tick. For a pause that the page chooses (the loop keeps drawing), so that time spent paused is
+   * never counted as time to run when it ends.
+   */
+  resync(): void;
 }
 
 export function startFrameLoop(env: FrameEnvironment, clock: FixedStepClock, handlers: FrameLoopHandlers): FrameLoop {
@@ -58,6 +64,10 @@ export function startFrameLoop(env: FrameEnvironment, clock: FixedStepClock, han
     stop() {
       unsubscribe();
       pause();
+    },
+    resync() {
+      lastTimeMs = undefined;
+      clock.reset();
     },
   };
 }

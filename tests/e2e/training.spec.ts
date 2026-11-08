@@ -188,6 +188,8 @@ test('the training graph draws a point for each completed generation and keeps a
 });
 
 test('the speed controls are real buttons of at least 44 px, and pause, resume and change the speed of the run', async ({ page }) => {
+  // Several stages on a fake clock, with a Max stage that runs a few thousand ticks: bounded, and explicit about it.
+  test.setTimeout(60_000);
   await installPausedClock(page);
   await page.goto('/?mode=train');
   await page.clock.runFor(200);
@@ -219,9 +221,10 @@ test('the speed controls are real buttons of at least 44 px, and pause, resume a
   expect(normal).toBeGreaterThanOrEqual(55);
   expect(normal).toBeLessThanOrEqual(65);
 
-  // Pause: nothing advances, the button says Resume and the status line says so; a real-time wait changes nothing either.
+  // Pause: nothing advances, the button says Play (its name says Resume training) and the status line says so.
   await page.locator('#speed-pause').click();
-  await expect(page.locator('#speed-pause')).toHaveText('Resume');
+  await expect(page.locator('#speed-pause')).toHaveText('Play');
+  await expect(page.locator('#speed-pause')).toHaveAttribute('aria-label', 'Resume training');
   // The status line and page data follow on the next rendered frame, and the page's clock only moves when told to.
   await page.clock.runFor(100);
   await expect(page.locator('#sim-canvas')).toHaveAttribute('data-paused', 'true');
@@ -230,6 +233,7 @@ test('the speed controls are real buttons of at least 44 px, and pause, resume a
   // Resume: it carries on at the same pace, with no burst of catch-up ticks.
   await page.locator('#speed-pause').click();
   await expect(page.locator('#speed-pause')).toHaveText('Pause');
+  await expect(page.locator('#speed-pause')).toHaveAttribute('aria-label', 'Pause training');
   const resumed = await ticksIn(1000);
   expect(resumed).toBeGreaterThanOrEqual(55);
   expect(resumed).toBeLessThanOrEqual(65);
@@ -243,12 +247,17 @@ test('the speed controls are real buttons of at least 44 px, and pause, resume a
   expect(fast).toBeGreaterThanOrEqual(4 * 55);
   expect(fast).toBeLessThanOrEqual(4 * 65);
 
-  // Max runs far more ticks per frame (here the page's clock is frozen during a frame, so the cap per frame applies).
+  // Max runs far more ticks per frame. The page's clock is frozen during a frame here, so the 8 ms budget cannot cut it short
+  // and each frame runs the ceiling of 1,000 ticks (the budget itself is covered by the unit tests); so the workload is kept
+  // to a couple of frames, then the speed goes back to 1×.
   await page.locator('[data-speed="max"]').click();
-  await page.clock.runFor(100);
+  await page.clock.runFor(20);
   await expect(page.locator('#hud-message')).toHaveText(/ · max$/);
-  expect(await ticksIn(500)).toBeGreaterThan(10 * 30);
   await expect(page.locator('#sim-canvas')).toHaveAttribute('data-speed', 'max');
+  expect(await ticksIn(20)).toBeGreaterThanOrEqual(500);
+  await page.locator('[data-speed="normal"]').click();
+  await page.clock.runFor(20);
+  await expect(page.locator('#sim-canvas')).toHaveAttribute('data-speed', 'normal');
 });
 
 test('the cars-drawn choice changes how many cars are drawn, defaulting lower on a phone, and never what is trained', async ({ page }, testInfo) => {
@@ -268,10 +277,10 @@ test('the cars-drawn choice changes how many cars are drawn, defaulting lower on
   // At max speed no more than 10 are drawn.
   await page.locator('#draw-cap').selectOption('50');
   await page.locator('[data-speed="max"]').click();
-  await page.clock.runFor(100);
+  await page.clock.runFor(20);
   await expect(page.locator('#sim-canvas')).toHaveAttribute('data-drawn', '10');
   await page.locator('[data-speed="normal"]').click();
-  await page.clock.runFor(100);
+  await page.clock.runFor(20);
   await expect(page.locator('#sim-canvas')).toHaveAttribute('data-drawn', '50');
 });
 
@@ -316,30 +325,45 @@ test('with the populated graph open, the track keeps its space, the page does no
   for (const size of sizes) {
     await page.setViewportSize(size);
     await page.clock.runFor(400);
-    const fit = await page.evaluate(() => {
-      const rect = (id: string) => document.getElementById(id)!.getBoundingClientRect();
-      const graph = document.getElementById('training-graph')!;
-      const track = rect('sim-canvas');
-      const box = graph.getBoundingClientRect();
-      // Scroll the graph block to its end: the text summary must then be fully inside the block.
-      graph.scrollTop = graph.scrollHeight;
-      const summary = rect('graph-summary');
-      const after = graph.getBoundingClientRect();
-      const root = document.documentElement;
-      return {
-        viewport: window.innerHeight,
-        trackHeight: track.height,
-        graphInside: box.left >= 0 && box.right <= window.innerWidth && box.top >= 0 && box.bottom <= window.innerHeight,
-        summaryReachable: summary.top >= after.top - 1 && summary.bottom <= after.bottom + 1,
-        graphCanvasWide: rect('graph-canvas').width >= 150,
-        noScrollX: root.scrollWidth <= root.clientWidth,
-        noScrollY: root.scrollHeight <= root.clientHeight,
-      };
-    });
-    const label = `${size.width}x${size.height}`;
-    // The track is still there to watch the cars: a usable share of the screen, not a sliver.
-    expect(fit.trackHeight, label).toBeGreaterThanOrEqual(Math.max(80, 0.2 * fit.viewport));
-    expect(fit, label).toMatchObject({ graphInside: true, summaryReachable: true, graphCanvasWide: true, noScrollX: true, noScrollY: true });
+    // Both states of the pause button: its label changes (Pause / Play), and the row must not reflow when it does.
+    for (const state of ['running', 'paused'] as const) {
+      if (state === 'paused') {
+        await page.locator('#speed-pause').click();
+        await page.clock.runFor(100);
+        await expect(page.locator('#speed-pause')).toHaveText('Play');
+      }
+      const fit = await page.evaluate(() => {
+        const rect = (id: string) => document.getElementById(id)!.getBoundingClientRect();
+        const graph = document.getElementById('training-graph')!;
+        const track = rect('sim-canvas');
+        const box = graph.getBoundingClientRect();
+        // Scroll the graph block to its end: the text summary must then be fully inside the block.
+        graph.scrollTop = graph.scrollHeight;
+        const summary = rect('graph-summary');
+        const after = graph.getBoundingClientRect();
+        const root = document.documentElement;
+        const tops = [...document.querySelectorAll('#training-controls button, #training-controls select')].map((el) => Math.round(el.getBoundingClientRect().top));
+        return {
+          viewport: window.innerHeight,
+          trackHeight: track.height,
+          graphInside: box.left >= 0 && box.right <= window.innerWidth && box.top >= 0 && box.bottom <= window.innerHeight,
+          summaryReachable: summary.top >= after.top - 1 && summary.bottom <= after.bottom + 1,
+          graphCanvasWide: rect('graph-canvas').width >= 150,
+          noScrollX: root.scrollWidth <= root.clientWidth,
+          noScrollY: root.scrollHeight <= root.clientHeight,
+          // All five controls on one line (they share a top), whichever way the pause button is labelled.
+          controlsOneRow: tops.length === 5 && Math.max(...tops) - Math.min(...tops) <= 2,
+        };
+      });
+      const label = `${size.width}x${size.height} ${state}`;
+      // The track is still there to watch the cars: a usable share of the screen, not a sliver.
+      expect(fit.trackHeight, label).toBeGreaterThanOrEqual(Math.max(80, 0.2 * fit.viewport));
+      expect(fit, label).toMatchObject({ graphInside: true, summaryReachable: true, graphCanvasWide: true, noScrollX: true, noScrollY: true, controlsOneRow: true });
+      if (state === 'paused') {
+        await page.locator('#speed-pause').click();
+        await expect(page.locator('#speed-pause')).toHaveText('Pause');
+      }
+    }
   }
 });
 

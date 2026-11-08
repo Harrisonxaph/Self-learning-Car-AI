@@ -92,6 +92,44 @@ describe('startFrameLoop', () => {
     expect(ticks).toBe(4);
   });
 
+  it('forgets the last frame\'s time on resync, so the next frame only records its time', () => {
+    const env = new FakeFrames();
+    let ticks = 0;
+    const loop = startFrameLoop(env, createFixedStepClock(DEFAULT_SIM_CONFIG), {
+      step: () => {
+        ticks += 1;
+      },
+      render: () => {},
+    });
+    env.fire(0);
+    env.fire(1000 / 60);
+    expect(ticks).toBe(1);
+    loop.resync();
+    // A second has passed since the last frame, but the loop starts afresh: this frame runs nothing.
+    env.fire(1000 + 1000 / 60);
+    expect(ticks).toBe(1);
+    env.fire(1000 + 2000 / 60);
+    expect(ticks).toBe(2);
+  });
+
+  it('drops a part-tick on resync', () => {
+    const env = new FakeFrames();
+    let ticks = 0;
+    const loop = startFrameLoop(env, createFixedStepClock(DEFAULT_SIM_CONFIG), {
+      step: () => {
+        ticks += 1;
+      },
+      render: () => {},
+    });
+    env.fire(0);
+    env.fire(0.9 * (1000 / 60));
+    expect(ticks).toBe(0);
+    loop.resync();
+    env.fire(100);
+    env.fire(100 + 0.2 * (1000 / 60));
+    expect(ticks).toBe(0);
+  });
+
   it('keeps running every tick when the step handler returns true or nothing', () => {
     const env = new FakeFrames();
     let ticks = 0;

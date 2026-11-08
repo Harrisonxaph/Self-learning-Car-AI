@@ -12,7 +12,7 @@ import { browserViewportEnvironment, createViewport, type Viewport, type Viewpor
 import type { SimConfig, VehiclePhysics } from '../sim/config';
 import type { Track } from '../sim/track';
 import { createTrainer, DEFAULT_TRAINING_CONFIG, type Generation } from '../training/trainer';
-import { browserFrameEnvironment, startFrameLoop, type FrameEnvironment } from './frameLoop';
+import { browserFrameEnvironment, startFrameLoop, type FrameEnvironment, type FrameLoop } from './frameLoop';
 import { createTrainingChart, type GraphContext } from './trainingChart';
 import { createTrainingSession, type DashboardOutputs } from './trainingDashboard';
 import {
@@ -96,7 +96,9 @@ export function startTrainingPage(page: TrainingPage): void {
   controls.drawCap.value = String(drawCap);
   const syncControls = () => {
     for (const mode of SPEED_MODES) controls.speeds[mode].setAttribute('aria-pressed', String(speed.mode === mode));
-    controls.pause.textContent = speed.paused ? 'Resume' : 'Pause';
+    // "Play" is no wider than "Pause", so the row does not reflow when the label changes.
+    controls.pause.textContent = speed.paused ? 'Play' : 'Pause';
+    controls.pause.setAttribute('aria-label', speed.paused ? 'Resume training' : 'Pause training');
   };
   for (const mode of SPEED_MODES) {
     controls.speeds[mode].addEventListener('click', () => {
@@ -104,8 +106,11 @@ export function startTrainingPage(page: TrainingPage): void {
       syncControls();
     });
   }
+  // The frame loop, once it is running: a pause or resume rebases its clock so paused time is never run afterwards.
+  const running: { loop?: FrameLoop } = {};
   controls.pause.addEventListener('click', () => {
     speed.setPaused(!speed.paused);
+    running.loop?.resync();
     syncControls();
   });
   controls.drawCap.addEventListener('change', () => {
@@ -198,7 +203,7 @@ export function startTrainingPage(page: TrainingPage): void {
     mode: () => speed.mode,
     now: page.now ?? (() => performance.now()),
   });
-  startFrameLoop(page.frames ?? browserFrameEnvironment(), speed, {
+  running.loop = startFrameLoop(page.frames ?? browserFrameEnvironment(), speed, {
     step: () => stepper.step(),
     render: () => {
       draw(viewport.current());

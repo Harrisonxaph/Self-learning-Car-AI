@@ -111,6 +111,11 @@ body {
   padding: 0.2rem 0.5rem;
 }
 
+.tc-pause {
+  /* The same width whether it says Pause or Play, so the row never reflows. */
+  min-width: 4.2rem;
+}
+
 .tc-speeds {
   display: flex;
   gap: 0.25rem;
@@ -272,6 +277,11 @@ body {
     gap: 0.1rem 0.6rem;
     font-size: 0.85rem;
   }
+
+  .training-graph[open] {
+    max-height: 28vh;
+    max-height: 28dvh;
+  }
 }
 
 /* Short landscape screens (phones on their side): a tighter header so the track keeps its height. */
@@ -279,7 +289,7 @@ body {
   /* With the graph open, it sits beside the track instead of under it, so neither is squeezed out. */
   .app.graph-open {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 46%);
+    grid-template-columns: minmax(0, 1fr) minmax(0, 40%);
     grid-template-rows: auto minmax(0, 1fr);
   }
 

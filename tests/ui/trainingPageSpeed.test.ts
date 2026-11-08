@@ -140,7 +140,7 @@ describe('the speed controls on the actual page', () => {
     expect(max.canvas.dataset.speed).toBe('max');
   });
 
-  it('pauses and resumes: no ticks while paused, the button says Resume, and resuming does not jump', () => {
+  it('pauses and resumes: no ticks while paused, the button says Play, and resuming does not jump', () => {
     const fake = new FakeFrames();
     const { page, canvas, controls, status } = fakePage(fake, { now: costlyClock() });
     startTrainingPage(page);
@@ -152,19 +152,45 @@ describe('the speed controls on the actual page', () => {
     const running = Number(canvas.dataset.tick);
     expect(running).toBeGreaterThan(50);
     controls.pause.click();
-    expect(controls.pause.textContent).toBe('Resume');
+    expect(controls.pause.textContent).toBe('Play');
+    expect(controls.pause.attributes['aria-label']).toBe('Resume training');
     run(600); // ten seconds of frames
     expect(Number(canvas.dataset.tick)).toBe(running);
     expect(canvas.dataset.paused).toBe('true');
     expect(status.textContent).toMatch(/ · paused$/);
     controls.pause.click();
     expect(controls.pause.textContent).toBe('Pause');
+    expect(controls.pause.attributes['aria-label']).toBe('Pause training');
     run(1);
     expect(Number(canvas.dataset.tick) - running).toBeLessThanOrEqual(1);
     run(59);
     expect(Number(canvas.dataset.tick) - running).toBeLessThanOrEqual(61);
     expect(canvas.dataset.paused).toBe('false');
     expect(status.textContent).not.toMatch(/paused/);
+  });
+
+  it.each([
+    ['1×', 'normal'],
+    ['4×', 'fast'],
+    ['max', 'max'],
+  ] as const)('does not run the time spent paused when resumed between widely spaced frames, at %s', (_label, mode) => {
+    const fake = new FakeFrames();
+    const { page, canvas, controls } = fakePage(fake, { now: costlyClock() });
+    startTrainingPage(page);
+    controls.speeds[mode].click();
+    fake.fire(0);
+    const before = Number(canvas.dataset.tick);
+    controls.pause.click();
+    fake.fire(1000); // a paused frame, a second later
+    // Resume just before the next frame: that second was spent paused, so none of it is time to run.
+    controls.pause.click();
+    fake.fire(2000);
+    expect(Number(canvas.dataset.tick) - before).toBeLessThanOrEqual(1);
+    // Training carries on at its own pace from the frame after that.
+    fake.fire(2000 + FRAME_MS);
+    const ran = Number(canvas.dataset.tick) - before;
+    expect(ran).toBeGreaterThanOrEqual(1);
+    expect(ran).toBeLessThanOrEqual(mode === 'max' ? 20 : mode === 'fast' ? 5 : 2);
   });
 
   it('still draws and updates the dashboard while paused', () => {
