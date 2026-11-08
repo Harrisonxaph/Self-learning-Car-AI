@@ -597,6 +597,55 @@ test('with the champion replay open, the track keeps its space, the page does no
   }
 });
 
+test('the graph and replay summaries never overlap and can always be tapped, in portrait and landscape, with either panel open', async ({ page }, testInfo) => {
+  test.skip(!/phone|tablet/.test(testInfo.project.name), 'a small-screen check');
+  await installPausedClock(page);
+  await page.goto('/?mode=train');
+  await page.clock.runFor(100);
+  await expect(page.locator('#sim-canvas')).toHaveAttribute('data-mode', 'train');
+  await advanceUntil(page, (v) => v.data.chartPoints === '1');
+  const original = page.viewportSize()!;
+  const sizes = [original, { width: original.height, height: original.width }, { width: 568, height: 320 }, { width: 320, height: 568 }, { width: 667, height: 375 }];
+  const probe = () =>
+    page.evaluate(() => {
+      const summaries = ['#training-graph > summary', '#champion-replay > summary'].map((selector) => document.querySelector(selector)!);
+      const rects = summaries.map((el) => el.getBoundingClientRect());
+      const [a, b] = rects as [DOMRect, DOMRect];
+      return {
+        apart: a.right <= b.left + 1 || b.right <= a.left + 1 || a.bottom <= b.top + 1 || b.bottom <= a.top + 1,
+        inside: rects.every((r) => r.left >= 0 && r.right <= window.innerWidth && r.top >= 0 && r.bottom <= window.innerHeight),
+        big: rects.every((r) => r.width >= 44 && r.height >= 44),
+        // A tap at each summary's centre reaches that summary, not the other panel.
+        hit: summaries.every((el) => {
+          const r = el.getBoundingClientRect();
+          const top = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+          return top === el || el.contains(top);
+        }),
+      };
+    });
+  for (const size of sizes) {
+    await page.setViewportSize(size);
+    await page.clock.runFor(300);
+    const label = `${size.width}x${size.height}`;
+    expect(await probe(), `${label} none open`).toEqual({ apart: true, inside: true, big: true, hit: true });
+    await page.locator('#training-graph > summary').click();
+    await page.clock.runFor(300);
+    expect(await probe(), `${label} graph open`).toEqual({ apart: true, inside: true, big: true, hit: true });
+    // A real tap on the other summary switches panels (it is reachable, and the first closes).
+    await page.locator('#champion-replay > summary').click();
+    await page.clock.runFor(300);
+    await expect(page.locator('#champion-replay'), label).toHaveAttribute('open', '');
+    await expect(page.locator('#training-graph'), label).not.toHaveAttribute('open', '');
+    expect(await probe(), `${label} replay open`).toEqual({ apart: true, inside: true, big: true, hit: true });
+    await page.locator('#training-graph > summary').click();
+    await page.clock.runFor(300);
+    await expect(page.locator('#training-graph'), label).toHaveAttribute('open', '');
+    await expect(page.locator('#champion-replay'), label).not.toHaveAttribute('open', '');
+    await page.locator('#training-graph > summary').click();
+    await page.clock.runFor(300);
+  }
+});
+
 test('the default page is still manual driving', async ({ page }) => {
   await page.goto('/');
   await expect(page.locator('.controls')).toBeVisible();

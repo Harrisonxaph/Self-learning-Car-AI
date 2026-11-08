@@ -406,11 +406,19 @@ body {
     grid-row: 3;
   }
 
-  .app.graph-open > .training-graph {
+  /* The two panels (graph, replay) share column 2. The open one fills the track's row; the closed one keeps its summary on
+     the controls' row beneath it, so both summaries stay on screen and tappable and never overlap. */
+  .app.graph-open > .training-graph[open] {
     grid-column: 2;
-    grid-row: 2 / 4;
+    grid-row: 2;
     min-height: 0;
     max-height: none;
+  }
+
+  .app.graph-open > .training-graph:not([open]) {
+    grid-column: 2;
+    grid-row: 3;
+    align-self: end;
   }
 
   .app-header h1 {
