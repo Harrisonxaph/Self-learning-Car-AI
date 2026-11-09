@@ -62,10 +62,12 @@ function setup(options: { storage?: () => FakeLocalStorage | null } = {}) {
   const frames = new FakeFrames();
   const made = fakePage(frames, { now: () => (t += 0.5), drawing: true, ...(options.storage ? { storage: options.storage } : {}) });
   startTrainingPage(made.page);
-  let frame = 0;
+  let lastMs = -FRAME_MS;
   const run = (count = 1) => {
-    for (let i = 0; i < count; i += 1) frames.fire((frame++) * FRAME_MS);
+    for (let i = 0; i < count; i += 1) frames.fire((lastMs += FRAME_MS));
   };
+  /** One frame `ms` after the last, so several ticks are due at once (a slow frame). */
+  const runMs = (ms: number) => frames.fire((lastMs += ms));
   const completeGenerations = (count: number) => {
     made.controls.speeds.max.click();
     run();
@@ -76,7 +78,7 @@ function setup(options: { storage?: () => FakeLocalStorage | null } = {}) {
   };
   const rows = () => made.saved.list.children;
   const button = (row: FakeNode, text: string) => row.find((n) => n.tag === 'button' && n.textContent === text)[0]!;
-  return { ...made, frames, run, completeGenerations, rows, button };
+  return { ...made, frames, run, runMs, completeGenerations, rows, button };
 }
 
 const independent = (generations: number) => {
@@ -492,5 +494,72 @@ describe('storage that cannot be fully read', () => {
     const p = setup({ storage: () => storage });
     expect(p.saved.status.textContent).toContain('Browser storage is unavailable');
     expect(p.rows()).toHaveLength(0);
+  });
+});
+
+describe('startup and restart with what is already in storage', () => {
+  it('lists a save whose metadata holds a hostile value as damaged, and still starts training', () => {
+    const storage = new FakeLocalStorage();
+    const first = setup({ storage: () => storage });
+    first.completeGenerations(1);
+    first.saved.save.click();
+    first.saved.save.click();
+    const key = `${MODEL_KEY_PREFIX}saved-1`;
+    const doc = JSON.parse(storage.data.get(key)!);
+    doc.training.trackVersions['stadium-oval'] = { toString: null };
+    storage.data.set(key, JSON.stringify(doc));
+    const reloaded = setup({ storage: () => storage }); // must not throw while starting
+    reloaded.run(30);
+    expect(reloaded.canvas.dataset.mode).toBe('train');
+    expect(Number(reloaded.canvas.dataset.tick)).toBeGreaterThan(0);
+    expect(reloaded.rows().map((r) => r.attributes['data-status'])).toEqual(['damaged', 'ok']);
+    expect(reloaded.rows()[0]!.find((n) => n.tag === 'button').map((b) => b.textContent)).toEqual(['Delete']);
+  });
+
+  it('keeps Restart saved usable straight after a reload, before any live generation has completed', () => {
+    const storage = new FakeLocalStorage();
+    const first = setup({ storage: () => storage });
+    first.completeGenerations(1);
+    first.saved.save.click();
+    const second = setup({ storage: () => storage });
+    second.run();
+    expect(second.canvas.dataset.completedGenerations).toBe('0');
+    expect(second.replay.start.disabled).toBe(true); // nothing to replay live yet
+    second.button(second.rows()[0]!, 'Replay').click();
+    second.run(40);
+    expect(second.canvas.dataset.replay).toBe('running');
+    expect(second.replay.start.textContent).toBe('Restart saved');
+    expect(second.replay.start.disabled).toBe(false);
+    expect(Number(second.canvas.dataset.replayTick)).toBeGreaterThan(20);
+    second.replay.start.click();
+    second.run();
+    expect(second.canvas.dataset.replaySource).toBe('saved');
+    expect(Number(second.canvas.dataset.replayTick)).toBeLessThanOrEqual(1);
+    // Back to training disables it again until a live generation exists.
+    second.replay.stop.click();
+    second.run();
+    expect(second.replay.start.disabled).toBe(true);
+  });
+});
+
+describe('a replay that fails leaves the training it interrupted exactly as it was', () => {
+  it.each([
+    ['paused', (p: ReturnType<typeof setup>) => { p.controls.pause.click(); }],
+    ['at 4x', (p: ReturnType<typeof setup>) => { p.controls.speeds.fast.click(); }],
+  ])('does not run the frame\'s remaining ticks on the trainer (training %s)', (_name, prepare) => {
+    const { p } = withEditedSave(() => {});
+    prepare(p);
+    p.run();
+    p.button(p.rows()[0]!, 'Replay').click();
+    p.run(30);
+    expect(p.canvas.dataset.replay).toBe('running');
+    const before = [p.canvas.dataset.tick, p.canvas.dataset.generationTick];
+    fault.at = Number(p.canvas.dataset.replayTick) + 1;
+    p.runMs(83); // a slow frame: several ticks are due at once, the replay fails on the second
+    expect(p.canvas.dataset.replay).toBe('off');
+    expect([p.canvas.dataset.tick, p.canvas.dataset.generationTick]).toEqual(before);
+    p.run();
+    // The very next ordinary frame may run training again only if training is not paused.
+    if (p.canvas.dataset.paused === 'true') expect([p.canvas.dataset.tick, p.canvas.dataset.generationTick]).toEqual(before);
   });
 });

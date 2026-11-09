@@ -248,6 +248,15 @@ const sameFields = (a: unknown, b: unknown, keys: readonly string[]): boolean =>
  * nothing and throws nothing. Version and format are checked first so a document from a newer app is refused as such.
  */
 export function validateModel(value: unknown, registry: readonly TrackRegistryEntry[]): ValidationResult {
+  // Stored text is untrusted: whatever it holds, a check that fails unexpectedly is a rejection, never an exception.
+  try {
+    return validateModelUnchecked(value, registry);
+  } catch {
+    return { ok: false, errors: ['The model could not be checked: it holds a value this app cannot read.'] };
+  }
+}
+
+function validateModelUnchecked(value: unknown, registry: readonly TrackRegistryEntry[]): ValidationResult {
   const errors: string[] = [];
   const fail = (message: string) => void errors.push(message);
   if (!isObj(value)) return { ok: false, errors: ['The file is not a model: expected a JSON object.'] };
@@ -375,7 +384,7 @@ function validateTraining(t: Obj, brakeEnabled: boolean | null, registry: readon
       if (isNum(physics.maxSteerRadians) && physics.maxSteerRadians >= Math.PI / 2) fail('"training.configuration.physics.maxSteerRadians" must be below pi/2.');
       const derived = terminalSpeed(physics as unknown as VehiclePhysics);
       if (!Number.isFinite(derived) || !(Math.abs((physics.maxSpeed as number) - derived) <= MAX_SPEED_TOLERANCE * Math.max(1, Math.abs(derived)))) {
-        fail(`"training.configuration.physics.maxSpeed" (${String(physics.maxSpeed)}) must equal the terminal speed ${derived} that follows from the engine, drag and rolling resistance.`);
+        fail(`"training.configuration.physics.maxSpeed" (${physics.maxSpeed as number}) must equal the terminal speed ${derived} that follows from the engine, drag and rolling resistance.`);
       }
     }
   }
@@ -438,8 +447,12 @@ function validateTraining(t: Obj, brakeEnabled: boolean | null, registry: readon
       fail(`Track "${id}" is not a registered training track.`);
       continue;
     }
-    if (versions[id] !== entry.version) fail(`Track "${id}" has version ${String(versions[id])}, but this app has version ${entry.version}.`);
-    if (hashes[id] !== entry.contentHash) fail(`Track "${id}" has a different content hash from this app's track.`);
+    const version = versions[id];
+    if (typeof version !== 'string') fail(`"training.trackVersions.${id}" must be a string.`);
+    else if (version !== entry.version) fail(`Track "${id}" has version ${version}, but this app has version ${entry.version}.`);
+    const hash = hashes[id];
+    if (typeof hash !== 'string') fail(`"training.trackHashes.${id}" must be a string.`);
+    else if (hash !== entry.contentHash) fail(`Track "${id}" has a different content hash from this app's track.`);
   }
 }
 

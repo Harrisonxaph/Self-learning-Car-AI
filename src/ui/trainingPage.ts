@@ -263,7 +263,8 @@ export function startTrainingPage(page: TrainingPage): void {
     const count = session.generations.length;
     const chosen = replayPanel.generation;
     chosen.disabled = count === 0;
-    replayPanel.start.disabled = count === 0;
+    // A running saved champion can always be restarted, whether or not a live generation has completed yet.
+    replayPanel.start.disabled = count === 0 && !(active && active.generation === null);
     page.saved.save.disabled = count === 0;
     replayPanel.stop.disabled = active === null;
     // A running saved champion restarts itself; the generation picker only chooses what a live replay starts from.
@@ -317,7 +318,7 @@ export function startTrainingPage(page: TrainingPage): void {
    * 1/30 s recording takes a tick every second page tick and a 1/120 s one takes two). If running the network throws, the
    * replay is stopped with a message and training carries on, rather than the error escaping the frame.
    */
-  const stepReplay = (current: ActiveReplay) => {
+  const stepReplay = (current: ActiveReplay): boolean => {
     current.credit += config.timestepSeconds;
     for (let taken = 0; taken < MAX_REPLAY_TICKS_PER_STEP && current.credit >= current.timestep - 1e-9 && !current.replay.done(); taken += 1) {
       current.credit -= current.timestep;
@@ -331,10 +332,13 @@ export function startTrainingPage(page: TrainingPage): void {
         const label = current.label;
         stopReplay();
         say(`The replay of ${label} stopped: its network produced numbers too large to compute. Training carries on.`);
-        return;
+        // False ends the rest of this frame's ticks (the frame loop's early stop): they were scheduled for the replay, and
+        // training, which may have been paused or at another speed before it, must not run them.
+        return false;
       }
     }
     if (current.replay.done()) current.credit = 0;
+    return true;
   };
   const stopReplay = () => {
     if (!active) return;
@@ -569,10 +573,7 @@ export function startTrainingPage(page: TrainingPage): void {
   });
   running.loop = startFrameLoop(page.frames ?? browserFrameEnvironment(), speed, {
     step: () => {
-      if (active) {
-        stepReplay(active);
-        return;
-      }
+      if (active) return stepReplay(active) ? undefined : false;
       return stepper.step();
     },
     render: () => {

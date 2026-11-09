@@ -478,6 +478,43 @@ describe('validateModel: reporting', () => {
   });
 });
 
+describe('validateModel never throws, whatever hostile value sits wherever in the document', () => {
+  // JSON can hold values whose conversion to text or number would throw ({"toString":null}); every position of a valid
+  // document is replaced in turn, and the answer must be an ordinary list of errors, never an exception or a swallowed one.
+  const hostile: unknown[] = [null, { toString: null }, { valueOf: null, toString: null }, {}, [], [[]], [{}], 'x', '', 1e308, -1, 0, true, { length: 5 }, { length: 1e9 }];
+  const paths = (value: unknown, prefix: (string | number)[] = []): (string | number)[][] => {
+    if (value === null || typeof value !== 'object') return [prefix];
+    const entries = Array.isArray(value) ? value.slice(0, 3).map((v, i) => [i, v] as const) : Object.entries(value);
+    return [prefix, ...entries.flatMap(([key, child]) => paths(child, [...prefix, key]))];
+  };
+  const base = roundTrip();
+  const all = paths(base).filter((path) => path.length > 0);
+  it('covers a wide set of positions', () => {
+    expect(all.length).toBeGreaterThan(100);
+  });
+  it('gives errors, not exceptions, for every hostile value at every position', () => {
+    for (const path of all) {
+      for (const value of hostile) {
+        const doc = JSON.parse(JSON.stringify(base)) as Json;
+        let node = doc;
+        for (const key of path.slice(0, -1)) node = node[key];
+        node[path[path.length - 1]!] = JSON.parse(JSON.stringify(value));
+        let result;
+        expect(() => (result = validateModelWith(doc)), `${path.join('.')} = ${JSON.stringify(value)}`).not.toThrow();
+        if (result && !(result as { ok: boolean }).ok) {
+          expect((result as { errors: string[] }).errors.join(' '), `${path.join('.')} = ${JSON.stringify(value)}`).not.toContain('could not be checked');
+        }
+      }
+    }
+  });
+  it('reports a track version that is not a string, the reported case', () => {
+    const errors = errorsOf(broken((d) => (d.training.trackVersions['stadium-oval'] = { toString: null })));
+    expect(errors.join(' ')).toContain('trackVersions.stadium-oval" must be a string');
+    expect(errors.join(' ')).not.toContain('could not be checked');
+    expect(errorsOf(broken((d) => (d.training.trackHashes['stadium-oval'] = { toString: null }))).join(' ')).toContain('trackHashes.stadium-oval" must be a string');
+  });
+});
+
 describe('compatibility', () => {
   it('is drivable without warnings for a model made by this build', () => {
     const result = validateModelWith(roundTrip());

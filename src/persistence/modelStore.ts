@@ -161,6 +161,14 @@ export function createModelStore(options: ModelStoreOptions): ModelStore {
   };
 
   const readEntry = (storage: StorageLike, id: string): StoreEntry => {
+    try {
+      return readEntryUnchecked(storage, id);
+    } catch {
+      // One unreadable save is listed as damaged and never stops the list, or the page that asked for it.
+      return { id, status: 'damaged', problem: 'It could not be read.' };
+    }
+  };
+  const readEntryUnchecked = (storage: StorageLike, id: string): StoreEntry => {
     let text: string | null;
     try {
       text = storage.getItem(modelKey(id));
