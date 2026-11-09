@@ -124,6 +124,20 @@ describe('the newest checkpoint wins', () => {
     expect(h.written).toEqual([13]);
   });
 
+  it('seed makes the resumed boundary the newest state: a hide writes it, but only if newer than the slot, and it requests no save', () => {
+    const h = harness();
+    h.saver.reset(-1);
+    h.saver.seed({ generationIndex: 2 });
+    expect(h.saver.pending()).toBe(false);
+    h.saver.flush();
+    expect(h.written).toEqual([2]);
+    const stored = harness();
+    stored.saver.reset(2);
+    stored.saver.seed({ generationIndex: 2 });
+    stored.saver.flush();
+    expect(stored.written).toEqual([]);
+  });
+
   it('a stale callback released after a reset does not write the new run early', () => {
     const h = harness();
     for (let g = 1; g <= 5; g += 1) h.saver.boundary({ generationIndex: g });

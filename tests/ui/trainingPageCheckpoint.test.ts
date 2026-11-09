@@ -243,6 +243,87 @@ describe('a stored checkpoint is only offered', () => {
   });
 });
 
+describe('review findings (correction cycle 1)', () => {
+  const file = (text: string) => ({ name: 'cp.json', size: text.length, text: () => Promise.resolve(text) });
+  const choose = async (p: ReturnType<typeof setup>, ...files: ReturnType<typeof file>[]) => {
+    p.cp.importInput.files = files;
+    p.cp.importInput.fire('change');
+    await flush();
+  };
+
+  it('a checkpoint file with an enormous parameter is refused before it can replace the run, and training keeps running', async () => {
+    const doc = JSON.parse(JSON.stringify(documentAfter(1))) as { population: { values: number[][] } };
+    doc.population.values[0]![0] = 1e308;
+    const p = setup();
+    p.run(3);
+    await choose(p, file(JSON.stringify(doc)));
+    expect(p.cp.status.textContent).toMatch(/^Nothing was loaded\./);
+    expect(p.cp.offer.container.hidden).toBe(true);
+    expect(() => p.completeGenerations(1)).not.toThrow();
+    expect(p.completed()).toBeGreaterThanOrEqual(1);
+  });
+
+  it('after resuming a file, hiding the page before another generation completes still saves the chosen run', async () => {
+    const p = setup();
+    await choose(p, file(JSON.stringify(documentAfter(2))));
+    p.cp.offer.resume.click();
+    expect(p.stored()).toBeUndefined();
+    p.hide();
+    expect(p.storedGeneration()).toBe(2);
+  });
+
+  it('after resuming the stored checkpoint, a hide with nothing newer writes nothing', () => {
+    const storage = seeded(2);
+    const original = storage.getItem(CHECKPOINT_KEY);
+    const p = setup({ storage });
+    p.cp.offer.resume.click();
+    p.hide();
+    expect(storage.getItem(CHECKPOINT_KEY)).toBe(original);
+  });
+
+  it('an unreadable slot at startup blocks writes, then offers what is there once it can be read, and never replaces it unseen', () => {
+    const storage = seeded(3);
+    const original = storage.getItem(CHECKPOINT_KEY);
+    let readable = false;
+    const realGet = storage.getItem.bind(storage);
+    storage.getItem = (key: string) => {
+      if (!readable) throw new Error('denied');
+      return realGet(key);
+    };
+    const p = setup({ storage, every: 1 });
+    expect(p.cp.status.textContent).toContain('unavailable');
+    p.completeGenerations(2);
+    p.runDeferred(true);
+    p.hide();
+    expect(original).not.toBeNull();
+    expect(storage.data.get(CHECKPOINT_KEY)).toBe(original);
+    readable = true;
+    p.completeGenerations(p.completed() + 1);
+    expect(p.cp.offer.container.hidden).toBe(false);
+    expect(p.cp.offer.text.textContent).toContain('A saved checkpoint was found');
+    p.hide();
+    expect(storage.data.get(CHECKPOINT_KEY)).toBe(original);
+  });
+
+  it('an unreadable slot that turns out to be empty turns saving on', () => {
+    const storage = new FakeLocalStorage();
+    let readable = false;
+    const realGet = storage.getItem.bind(storage);
+    storage.getItem = (key: string) => {
+      if (!readable) throw new Error('denied');
+      return realGet(key);
+    };
+    const p = setup({ storage, every: 1 });
+    p.completeGenerations(1);
+    p.hide();
+    expect(storage.data.get(CHECKPOINT_KEY)).toBeUndefined();
+    readable = true;
+    p.completeGenerations(p.completed() + 1);
+    p.hide();
+    expect(storage.data.get(CHECKPOINT_KEY)).toBeDefined();
+  });
+});
+
 describe('storage failures', () => {
   it('a full store: the save fails with a message, training continues, and the previous checkpoint is kept', () => {
     const storage = new FakeLocalStorage();

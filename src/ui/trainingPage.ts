@@ -263,7 +263,7 @@ export function startTrainingPage(page: TrainingPage): void {
     drawMsThisFrame = 0;
     if (timeMs - lastReadoutMs < 250 && timeMs >= lastReadoutMs) return;
     lastReadoutMs = timeMs;
-    const config = `${speed.paused ? 'paused' : speed.mode} · ${effectiveDrawCap(speed.mode, drawCap, population)} cars drawn`;
+    const config = `${active ? 'replay' : speed.paused ? 'paused' : speed.mode} · ${effectiveDrawCap(speed.mode, drawCap, population)} cars drawn`;
     const frameRate = frameMeter.rate();
     const tickRate = tickMeter.rate();
     const stepMs = meanMs(stepCostMeter.rate(), tickRate);
@@ -383,6 +383,8 @@ export function startTrainingPage(page: TrainingPage): void {
     speed.setMode('normal');
     speed.setPaused(false);
     active = { ...next, credit: 0, frame: null, restore };
+    // A replay runs one car, training runs many: the two are never averaged into one step-time window.
+    resetMeters();
     running.loop?.resync();
     syncControls();
     syncReplayControls();
@@ -419,6 +421,7 @@ export function startTrainingPage(page: TrainingPage): void {
     if (!active) return;
     const { restore } = active;
     active = null;
+    resetMeters();
     speed.setMode(restore.mode);
     speed.setPaused(restore.paused);
     running.loop?.resync();
@@ -775,7 +778,12 @@ export function startTrainingPage(page: TrainingPage): void {
         }
       },
     });
-    onBoundary = () => saver.boundary(trainer.checkpointState());
+    /** True while the stored slot could not be read at startup: writes stay blocked until it can be, so nothing unseen is replaced. */
+    let slotUnknown = false;
+    onBoundary = () => {
+      if (slotUnknown) recheckSlot();
+      saver.boundary(trainer.checkpointState());
+    };
 
     /** Replaces the running trainer with one resumed from `doc`. Training keeps its speed; any replay is stopped first. */
     const resumeFrom = (doc: CheckpointDocument, source: 'storage' | 'file') => {
@@ -801,6 +809,8 @@ export function startTrainingPage(page: TrainingPage): void {
       hideOffer();
       storageOffer = null;
       saver.reset(source === 'storage' ? doc.generationIndex : -1);
+      // The resumed boundary is the newest state: a hide before the first new generation finishes still preserves this run.
+      saver.seed(trainer.checkpointState());
       saver.setEnabled(true);
       refreshSaved();
       syncReplayControls();
@@ -848,6 +858,24 @@ export function startTrainingPage(page: TrainingPage): void {
       }
     });
 
+    /** Reads the slot again after it could not be read: offers what is there, or turns saving on if it is empty. */
+    function recheckSlot(): void {
+      const again = cpStore.read();
+      if (again.status === 'unavailable') return;
+      slotUnknown = false;
+      if (again.status === 'ok') {
+        storageOffer = consider(again.checkpoint, 'storage');
+      } else if (again.status === 'damaged') {
+        canvas.dataset.checkpointOffer = 'damaged';
+        storageOffer = { doc: null, source: 'storage', canResume: false, text: `A saved checkpoint is damaged and cannot be used. ${again.problem} Discard it to start saving checkpoints.` };
+        showOffer(storageOffer);
+        cpSay('A saved checkpoint is damaged. You can discard it.');
+      } else {
+        saver.setEnabled(true);
+        cpSay('Browser storage can be read again. One checkpoint is saved at a generation boundary every 5 generations or 30 seconds while training runs.');
+      }
+    }
+
     // The stored checkpoint, offered once at the start. Autosave stays off until it is answered.
     const stored = cpStore.read();
     if (stored.status === 'ok') {
@@ -860,6 +888,10 @@ export function startTrainingPage(page: TrainingPage): void {
       showOffer(storageOffer);
       cpSay('A saved checkpoint is damaged. You can discard it.');
     } else if (stored.status === 'unavailable') {
+      // The slot cannot be read, so whether a checkpoint is there is unknown: writes stay blocked (a later success could
+      // otherwise replace one that was never offered) until a read works, and the slot is read again at each boundary.
+      slotUnknown = true;
+      saver.setEnabled(false);
       cpSay(stored.message);
     } else {
       cpSay('No checkpoint saved yet. One is saved at a generation boundary every 5 generations or 30 seconds while training runs.');
@@ -956,7 +988,14 @@ export function startTrainingPage(page: TrainingPage): void {
   });
   running.loop = startFrameLoop(page.frames ?? browserFrameEnvironment(), speed, {
     step: () => {
-      if (active) return stepReplay(active) ? undefined : false;
+      if (active) {
+        if (!fpsReadout) return stepReplay(active) ? undefined : false;
+        // Replay ticks are counted as simulation ticks, so they are timed too: the step-time numerator matches its denominator.
+        const started = measureClock();
+        const carryOn = stepReplay(active);
+        stepMsThisFrame += measureClock() - started;
+        return carryOn ? undefined : false;
+      }
       return stepper.step();
     },
     render: () => {

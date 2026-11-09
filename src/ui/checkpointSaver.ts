@@ -29,6 +29,11 @@ export interface CheckpointSaver<S extends { readonly generationIndex: number }>
   boundary(state: S): void;
   /** Hide-time or page-hide: writes the newest boundary state now if it is newer than the last written one. */
   flush(): void;
+  /**
+   * Remembers `state` as the newest boundary without requesting a save: used right after Resume so a hide-time write can
+   * preserve the chosen run before its first new generation finishes. It is written only if newer than the slot.
+   */
+  seed(state: S): void;
   /** Allows or blocks automatic saving (blocked while a stored checkpoint is waiting for an answer). */
   setEnabled(enabled: boolean): void;
   /** Resume, Discard or Start fresh: cancels the pending write, forgets `latest`, starts a new run identity and epoch. `lastWritten` is the generation index already in the slot (-1 when none). */
@@ -89,6 +94,9 @@ export function createCheckpointSaver<S extends { readonly generationIndex: numb
         cancelPending = null;
         attempt(forEpoch, forRun);
       });
+    },
+    seed(state) {
+      latest = state;
     },
     flush() {
       cancel();

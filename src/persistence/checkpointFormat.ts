@@ -5,7 +5,7 @@
 // `resolveConfig` adapter by the application layer (`ui/checkpointAdapter.ts`), which wraps the trainer's own validator.
 // Like the model format, a reader trusts nothing it parses: sizes are bounded before anything is allocated, every number
 // must be finite, every error is reported, and a check that fails unexpectedly is a refusal, never an exception.
-import { LAYERS, PARAMETER_COUNT, PARAMETER_ORDER } from '../ai/network';
+import { LAYERS, MAX_CHECKPOINT_PARAMETER_MAGNITUDE, PARAMETER_COUNT, PARAMETER_ORDER } from '../ai/network';
 import { DEFAULT_VEHICLE_PHYSICS } from '../sim/config';
 import { RNG_ALGORITHM } from '../utils/rng';
 import { MAX_TIMESTEP_SECONDS, MIN_TIMESTEP_SECONDS, MODEL_ID_PATTERN, type TrackRegistryEntry } from './modelFormat';
@@ -310,6 +310,7 @@ function validateUnchecked(value: unknown, options: ValidateOptions): Validation
         else {
           const bad = row.findIndex((v: unknown) => !isNum(v));
           if (bad >= 0) fail(`"population.values[${g}][${bad}]" must be a finite number (no NaN, Infinity or null).`);
+          else if (row.some((v: number) => Math.abs(v) >= MAX_CHECKPOINT_PARAMETER_MAGNITUDE)) fail(`"population.values[${g}]" has a parameter too large for the network to compute with (it must stay below ${MAX_CHECKPOINT_PARAMETER_MAGNITUDE}).`);
         }
       });
       checkZeros(pop.negativeZeros, rows, fail);
@@ -371,6 +372,7 @@ function checkEntry(entry: unknown, i: number, population: number | null, fail: 
   if (entry.retained === true) {
     if (!Array.isArray(entry.fitness) || entry.fitness.length < 2 || entry.fitness.length > MAX_CHECKPOINT_POPULATION || !entry.fitness.every(isNum)) fail(`"${at}.fitness" must be a list of finite numbers, one per car.`);
     if (!Array.isArray(entry.champion) || entry.champion.length !== PARAMETER_COUNT || !entry.champion.every(isNum)) fail(`"${at}.champion" must be ${PARAMETER_COUNT} finite numbers.`);
+    else if (entry.champion.some((v: number) => Math.abs(v) >= MAX_CHECKPOINT_PARAMETER_MAGNITUDE)) fail(`"${at}.champion" has a parameter too large for the network to compute with.`);
     if (!isCount(entry.championIndex) || (count !== null && entry.championIndex >= count)) fail(`"${at}.championIndex" must be a car index.`);
     else if (Array.isArray(entry.fitness) && entry.fitness[entry.championIndex] !== entry.bestFitness) fail(`"${at}.bestFitness" must be the champion's fitness.`);
     const zeros = entry.championNegativeZeros;

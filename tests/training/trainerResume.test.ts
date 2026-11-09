@@ -138,6 +138,7 @@ describe('createTrainer refuses a bad resume state with a RangeError', () => {
     ['too few genomes', (s) => ({ ...s, genomes: s.genomes.slice(1) })],
     ['a short genome', (s) => ({ ...s, genomes: [new Float64Array(3), ...s.genomes.slice(1)] })],
     ['a non-finite parameter', (s) => ({ ...s, genomes: [Float64Array.from(s.genomes[0]!, () => Number.NaN), ...s.genomes.slice(1)] })],
+    ['a finite but enormous parameter that would overflow inference', (s) => ({ ...s, genomes: [Float64Array.from(s.genomes[0]!, () => 1e308), ...s.genomes.slice(1)] })],
     ['a plain array instead of a Float64Array', (s) => ({ ...s, genomes: [Array.from(s.genomes[0]!), ...s.genomes.slice(1)] })],
     ['an invalid generator state', (s) => ({ ...s, runState: { algorithm: s.runState.algorithm, words: [1, 2, 3] } })],
     ['a null state', () => null],

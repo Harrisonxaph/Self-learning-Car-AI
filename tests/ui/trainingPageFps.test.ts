@@ -166,4 +166,24 @@ describe('frame-rate readout', () => {
     run(60, TICK_MS);
     expect(fps!.textContent).toMatch(/population 50 · stadium-oval · build test$/);
   });
+
+  it('times replay ticks too, never averaging a replay into a training window, and says which it is measuring', () => {
+    const { canvas, controls, fps, replay, run } = setup();
+    controls.speeds.max.click();
+    for (let i = 0; i < 5000 && !(Number(canvas.dataset.completedGenerations) >= 1); i += 1) run(1, TICK_MS);
+    expect(Number(canvas.dataset.completedGenerations)).toBeGreaterThanOrEqual(1);
+    controls.speeds.normal.click();
+    run(120, TICK_MS);
+    expect(canvas.dataset.fpsStepMs).toBe('0.5000');
+    replay.generation.value = '1';
+    replay.start.click();
+    run(1, TICK_MS);
+    expect(replay.stop.disabled).toBe(false);
+    // The window started again, so nothing from training is in it.
+    expect(canvas.dataset.fpsStepMs).toBeUndefined();
+    run(120, TICK_MS);
+    // Replay ticks are timed like training ticks: each costs the same two clock reads per tick.
+    expect(canvas.dataset.fpsStepMs).toBe('0.5000');
+    expect(fps!.textContent).toContain('· replay ·');
+  });
 });

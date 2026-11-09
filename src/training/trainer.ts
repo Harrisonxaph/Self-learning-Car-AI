@@ -18,7 +18,7 @@
 // generator (genomes in index order); each generation transition takes exactly three more draws, through
 // createEvolutionRngs. Episodes use no randomness, so stepping order and drawing cannot change any stream.
 import { INPUT_CONTRACT } from '../ai/inputs';
-import { INITIALISATION, initialParameters, PARAMETER_COUNT, PARAMETER_ORDER, runNetwork } from '../ai/network';
+import { INITIALISATION, initialParameters, MAX_CHECKPOINT_PARAMETER_MAGNITUDE, PARAMETER_COUNT, PARAMETER_ORDER, runNetwork } from '../ai/network';
 import { OUTPUT_CONTRACT } from '../ai/outputs';
 import { createEvolutionRngs, EVOLUTION_OPERATORS, nextGeneration, resolveEvolutionConfig, type EvolutionConfig } from '../evolution/population';
 import { rankByFitness } from '../evolution/selection';
@@ -488,6 +488,8 @@ function checkResume(resume: TrainerResume, setup: TrainingSetup): void {
   if (!Array.isArray(resume.genomes) || resume.genomes.length !== populationSize) throw new RangeError(`Resume population must hold ${populationSize} genomes.`);
   resume.genomes.forEach((genome, i) => {
     if (!(genome instanceof Float64Array) || genome.length !== PARAMETER_COUNT || !genome.every(Number.isFinite)) throw new RangeError(`Resume genome ${i} must be ${PARAMETER_COUNT} finite numbers.`);
+    // A finite but enormous parameter (1e308) would make the first step throw out of the frame loop: refuse it here.
+    if (genome.some((v) => Math.abs(v) >= MAX_CHECKPOINT_PARAMETER_MAGNITUDE)) throw new RangeError(`Resume genome ${i} has a parameter too large for the network to compute with.`);
   });
   restoreRng(resume.runState);
 }

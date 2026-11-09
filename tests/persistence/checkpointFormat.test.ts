@@ -161,6 +161,8 @@ describe('every invalid checkpoint is refused with messages, and nothing is writ
     ['a population count that disagrees with the configuration', mutate((o) => { o.population.count = 4; o.population.values.pop(); })],
     ['a short genome', mutate((o) => { o.population.values[0].pop(); })],
     ['a null parameter', mutate((o) => { o.population.values[1][3] = null; })],
+    ['a finite but enormous parameter (1e308) that would overflow inference', mutate((o) => { o.population.values[0][0] = 1e308; })],
+    ['an enormous parameter in a champion', mutate((o) => { const e = o.history.find((x: Doc) => x.retained); e.champion[0] = -1e200; })],
     ['an overflowing exponent', text.replace(/"values":\[\[[^,]+,/, '"values":[[1e999,')],
     ['a wrong parameter order', mutate((o) => { o.population.order = 'x'; })],
     ['negativeZeros pointing at a non-zero', mutate((o) => { o.population.negativeZeros = [[0, 0]]; })],
