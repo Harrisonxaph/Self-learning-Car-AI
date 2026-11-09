@@ -455,3 +455,36 @@ describe('exportFile', () => {
     expect(exportFilename(doc as ModelDocument)).toMatch(/^sdae-champion-unnamed-gen\d+-xyz\.json$/);
   });
 });
+
+describe('stored data nested too deeply to write out', () => {
+  // Unknown extra fields are ignored by validation, so a stored document can hold one nested far deeper than JSON.stringify
+  // can write; reading it back is fine, writing it out used to throw.
+  const withDeepExtra = (storage: FakeStorage, id: string, depth = 200_000) => {
+    const text = storage.data.get(`${MODEL_KEY_PREFIX}${id}`)!;
+    const end = text.lastIndexOf('}');
+    storage.data.set(`${MODEL_KEY_PREFIX}${id}`, `${text.slice(0, end)},"extra":${'['.repeat(depth)}${']'.repeat(depth)}}`);
+  };
+  it('refuses to export it with a clear message, and still lists and loads it', () => {
+    const { store, storage } = setup();
+    store.save(model('deep'));
+    withDeepExtra(storage, 'deep');
+    expect(storage.data.get(`${MODEL_KEY_PREFIX}deep`)!.length).toBeLessThan(MAX_MODEL_BYTES);
+    let result: ReturnType<typeof store.exportFile> | undefined;
+    expect(() => (result = store.exportFile('deep'))).not.toThrow();
+    expect(result).toEqual({ ok: false, message: "This saved champion can't be exported: its data is nested too deeply to write out." });
+    expect(store.list()).toMatchObject({ available: true, entries: [{ id: 'deep', status: 'ok' }] });
+    expect(store.load('deep').ok).toBe(true);
+  });
+  it('is not a problem for the other operations, and never changes what is stored', () => {
+    const { store, storage } = setup();
+    store.save(model('deep'));
+    store.save(model('fine'));
+    withDeepExtra(storage, 'deep');
+    const before = [...storage.data.entries()];
+    expect(store.exportFile('fine').ok).toBe(true);
+    expect(store.exportFile('deep').ok).toBe(false);
+    expect([...storage.data.entries()]).toEqual(before);
+    expect(store.remove('deep')).toEqual({ ok: true });
+    expect(ids(store)).toEqual(['fine']);
+  });
+});

@@ -260,8 +260,14 @@ export function createModelStore(options: ModelStoreOptions): ModelStore {
       }
       const read = readModel(stored, registry);
       if (!read.ok) return { ok: false, message: `This saved champion can't be exported. ${read.problem}` };
-      // The validated document, written out again: exactly what a later import will read.
-      const text = JSON.stringify(read.model, null, 2);
+      // The validated document, written out again: exactly what a later import will read. Unknown extra fields are ignored
+      // by validation, so stored data can hold a value nested too deeply to write out; that is a message, not an exception.
+      let text: string;
+      try {
+        text = JSON.stringify(read.model, null, 2);
+      } catch {
+        return { ok: false, message: "This saved champion can't be exported: its data is nested too deeply to write out." };
+      }
       if (text.length > MAX_MODEL_BYTES) return { ok: false, message: "This saved champion can't be exported: it is larger than the 1 MiB limit." };
       return { ok: true, filename: exportFilename(read.model), text };
     },

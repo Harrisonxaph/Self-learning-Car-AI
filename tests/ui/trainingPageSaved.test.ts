@@ -614,3 +614,23 @@ describe('Download JSON', () => {
     expect(p.saved.downloads).toHaveLength(0);
   });
 });
+
+describe('Download JSON of stored data nested too deeply', () => {
+  it('says it cannot be exported and carries on, with no error escaping', () => {
+    const storage = new FakeLocalStorage();
+    const p = setup({ storage: () => storage });
+    p.completeGenerations(1);
+    p.saved.save.click();
+    const key = `${MODEL_KEY_PREFIX}saved-1`;
+    const text = storage.data.get(key)!;
+    const end = text.lastIndexOf('}');
+    storage.data.set(key, `${text.slice(0, end)},"extra":${'['.repeat(200_000)}${']'.repeat(200_000)}}`);
+    p.replay.details.toggle(true);
+    expect(p.rows()[0]!.attributes['data-status']).toBe('ok');
+    expect(() => p.button(p.rows()[0]!, 'Download JSON').click()).not.toThrow();
+    expect(p.saved.status.textContent).toContain('nested too deeply');
+    expect(p.saved.downloads).toHaveLength(0);
+    p.run(30);
+    expect(p.canvas.dataset.mode).toBe('train');
+  });
+});

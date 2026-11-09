@@ -677,6 +677,30 @@ test('Download JSON gives a file with the validated saved champion', async ({ pa
   await expect(page.locator('#saved-status')).toContainText('Download started');
 });
 
+test('Download JSON of stored data nested too deeply gives a message, not an error', async ({ page }) => {
+  await installPausedClock(page);
+  await page.goto('/?mode=train');
+  await page.clock.runFor(100);
+  await advanceUntil(page, (v) => v.data.chartPoints === '1');
+  await page.locator('#champion-replay > summary').click();
+  await page.locator('#saved-save').click();
+  await expect(page.locator('#saved-list li')).toHaveCount(1);
+  await page.evaluate(() => {
+    const index = JSON.parse(localStorage.getItem('sdae:models:index')!) as string[];
+    const key = `sdae:model:${index[0]}`;
+    const text = localStorage.getItem(key)!;
+    const end = text.lastIndexOf('}');
+    localStorage.setItem(key, `${text.slice(0, end)},"extra":${'['.repeat(100_000)}${']'.repeat(100_000)}}`);
+  });
+  await page.locator('#champion-replay > summary').click();
+  await page.locator('#champion-replay > summary').click();
+  await expect(page.locator('#saved-list li')).toHaveCount(1);
+  await page.getByRole('button', { name: /^Download JSON for / }).click();
+  await expect(page.locator('#saved-status')).toContainText('nested too deeply');
+  await page.clock.runFor(500);
+  await expect(page.locator('#sim-canvas')).toHaveAttribute('data-mode', 'train');
+});
+
 test('a saved champion whose network overflows is refused with a message, and the page keeps running without an error', async ({ page }) => {
   await installPausedClock(page);
   await page.goto('/?mode=train');

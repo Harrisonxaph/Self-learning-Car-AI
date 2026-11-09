@@ -389,7 +389,13 @@ export function startTrainingPage(page: TrainingPage): void {
       replay: replaySaved,
       download: (id) => {
         pendingDelete = null;
-        const file = store.exportFile(id);
+        let file: ReturnType<typeof store.exportFile>;
+        try {
+          file = store.exportFile(id);
+        } catch {
+          say("This saved champion can't be exported.");
+          return;
+        }
         if (!file.ok) {
           say(file.message);
           return;
