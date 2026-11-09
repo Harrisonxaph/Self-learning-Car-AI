@@ -165,6 +165,7 @@ export function fakePage(frames: FakeFrames, options: FakePageOptions | { ms: nu
   const saved = {
     name: Object.assign(new FakeControl(), { value: '' }),
     save: new FakeControl(),
+    importInput: Object.assign(new FakeControl(), { files: null as { name: string; size: number; text(): Promise<string> }[] | null }),
     status: { textContent: '' as string | null },
     list: new FakeNode('ul'),
     ui: { create: (tag: string) => new FakeNode(tag) },

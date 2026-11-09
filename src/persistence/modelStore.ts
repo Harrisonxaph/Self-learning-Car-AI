@@ -62,6 +62,11 @@ export type LoadResult =
 /** A file to download: the validated v1 document as JSON text, and a plain, safe file name. */
 export type ExportResult = { readonly ok: true; readonly filename: string; readonly text: string } | { readonly ok: false; readonly message: string };
 
+/** What importing a file did: added as a new save, found already saved (identical), or saved under a new id because its id was taken by different content. */
+export type ImportOutcome =
+  | { readonly ok: true; readonly status: 'added' | 'already-saved' | 'saved-as-copy'; readonly id: string; readonly indexed: boolean }
+  | { readonly ok: false; readonly reason: 'unavailable' | 'quota' | 'full' | 'invalid'; readonly message: string };
+
 export type RemoveResult = { readonly ok: true } | { readonly ok: false; readonly message: string };
 
 export interface ModelStore {
@@ -70,6 +75,11 @@ export interface ModelStore {
   load(id: string): LoadResult;
   /** The saved champion as a JSON file, so a copy can outlive the browser's storage. Only a valid entry can be exported. */
   exportFile(id: string): ExportResult;
+  /**
+   * Saves an imported, already validated champion without ever overwriting a save: identical content under the same id is
+   * "already saved", different content under a taken id is saved under a fresh id from `newId`.
+   */
+  importModel(model: ModelDocument, newId: () => string): ImportOutcome;
   remove(id: string): RemoveResult;
 }
 
@@ -80,6 +90,13 @@ export function exportFilename(model: ModelDocument): string {
   const slug = (model.name ?? '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40).replace(/-+$/g, '');
   const short = model.id.replace(/[^A-Za-z0-9]/g, '').slice(0, 8) || 'model';
   return `sdae-champion-${slug === '' ? 'unnamed' : slug}-gen${model.training.generation + 1}-${short}.json`;
+}
+
+/** JSON text with object keys in sorted order, so two equal documents compare equal whatever their key order. */
+function canonical(value: unknown): string {
+  return JSON.stringify(value, (_key, v: unknown) =>
+    typeof v === 'object' && v !== null && !Array.isArray(v) ? Object.fromEntries(Object.entries(v as Record<string, unknown>).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))) : v,
+  );
 }
 
 function isQuotaError(error: unknown): boolean {
@@ -270,6 +287,45 @@ export function createModelStore(options: ModelStoreOptions): ModelStore {
       }
       if (text.length > MAX_MODEL_BYTES) return { ok: false, message: "This saved champion can't be exported: it is larger than the 1 MiB limit." };
       return { ok: true, filename: exportFilename(read.model), text };
+    },
+
+    importModel(model, newId) {
+      const storage = open();
+      if (!storage) return { ok: false, reason: 'unavailable', message: MESSAGES.unavailable };
+      const known = knownIds(storage);
+      if (known.failed && known.ids.length === 0) return { ok: false, reason: 'unavailable', message: MESSAGES.unavailable };
+      let target = model;
+      if (known.ids.includes(model.id)) {
+        let existing: string | null;
+        try {
+          existing = storage.getItem(modelKey(model.id));
+        } catch {
+          return { ok: false, reason: 'unavailable', message: MESSAGES.unavailable };
+        }
+        const read = readModel(existing, registry);
+        let identical: boolean;
+        try {
+          identical = read.ok && canonical(read.model) === canonical(model);
+        } catch {
+          identical = false;
+        }
+        if (identical) return { ok: true, status: 'already-saved', id: model.id, indexed: true };
+        let fresh: string | null = null;
+        for (let attempt = 0; attempt < 5 && fresh === null; attempt += 1) {
+          let candidate: string;
+          try {
+            candidate = newId();
+          } catch {
+            candidate = '';
+          }
+          if (MODEL_ID_PATTERN.test(candidate) && !known.ids.includes(candidate)) fresh = candidate;
+        }
+        if (fresh === null) return { ok: false, reason: 'invalid', message: 'This champion could not be saved: no free id was available.' };
+        target = { ...model, id: fresh };
+      }
+      const saved = this.save(target);
+      if (!saved.ok) return saved;
+      return { ok: true, status: target === model ? 'added' : 'saved-as-copy', id: target.id, indexed: saved.indexed };
     },
 
     remove(id) {

@@ -15,6 +15,8 @@ import type { SimConfig, VehiclePhysics } from '../sim/config';
 import type { Track } from '../sim/track';
 import { createChampionReplay, type ChampionReplay, type ReplayFrame } from '../training/championReplay';
 import { createTrainer, DEFAULT_TRAINING_CONFIG, type Generation } from '../training/trainer';
+import { describeRefusal, importModelText } from '../persistence/modelImport';
+import { MAX_MODEL_BYTES } from '../persistence/modelFormat';
 import { createModelStore, MESSAGES, type StorageLike } from '../persistence/modelStore';
 import { buildModel, modelParameters } from '../persistence/modelFormat';
 import { tracksIn } from '../training/trackSplits';
@@ -36,6 +38,18 @@ import {
   speedStatus,
   type SpeedMode,
 } from './trainingSpeed';
+
+/** The part of a file chooser the import uses (so Node tests can fake it). */
+export interface ImportFile {
+  readonly name: string;
+  readonly size: number;
+  text(): Promise<string>;
+}
+export interface ImportInput {
+  readonly files: ArrayLike<ImportFile> | null;
+  value: string;
+  addEventListener(type: 'change', listener: () => void): void;
+}
 
 export interface TrainingPage {
   readonly canvas: HTMLCanvasElement;
@@ -90,6 +104,8 @@ export interface TrainingPage {
   readonly saved: {
     readonly name: HTMLInputElement;
     readonly save: HTMLButtonElement;
+    /** The file chooser for Import JSON (P3-06): one `.json` file; it is read only after its size is checked. */
+    readonly importInput: ImportInput;
     readonly status: HTMLElement;
     readonly list: UiList;
     readonly ui: UiFactory;
@@ -469,6 +485,67 @@ export function startTrainingPage(page: TrainingPage): void {
     say([`Replaying "${name}" from generation ${model.training.generation + 1}.`, ...loaded.warnings, ...prepared.warnings].join(' '));
     refreshSaved();
   };
+  // Import JSON (P3-06). The file's size is checked before it is read, and the text is checked in full before anything is
+  // written, so a refused file changes nothing. The file's name is never used as a key and is not shown.
+  let importing = false;
+  const importChosen = async () => {
+    const input = savedPanel.importInput;
+    const files = input.files;
+    const count = files ? files.length : 0;
+    if (count === 0 || importing) return;
+    pendingDelete = null;
+    try {
+      if (count > 1) {
+        say('Nothing was imported. Choose one file at a time.');
+        return;
+      }
+      const file = files?.[0];
+      if (!file) return;
+      if (!(file.size <= MAX_MODEL_BYTES)) {
+        say('Nothing was imported. This file is larger than the 1 MiB limit for a champion.');
+        return;
+      }
+      importing = true;
+      let text: string;
+      try {
+        text = await file.text();
+      } catch {
+        say('Nothing was imported. The file could not be read.');
+        return;
+      }
+      const result = importModelText(text, { registry: tracksIn('training') });
+      if (!result.ok) {
+        say(describeRefusal(result.errors));
+        return;
+      }
+      const outcome = store.importModel(result.model, savedPanel.newId);
+      if (!outcome.ok) {
+        say(`Nothing was imported. ${outcome.message}`);
+        return;
+      }
+      const name = result.model.name ?? 'Unnamed champion';
+      const extra = [...result.warnings, ...(result.drivable ? [] : ['It is listed but cannot be replayed here.'])].join(' ');
+      const head =
+        outcome.status === 'already-saved'
+          ? `"${name}" is already saved; nothing was added.`
+          : outcome.status === 'saved-as-copy'
+            ? `Imported "${name}" (generation ${result.model.training.generation + 1}) as a new copy, because a different champion already used its id.`
+            : `Imported "${name}" (generation ${result.model.training.generation + 1}).`;
+      say(`${head}${extra === '' ? '' : ` ${extra}`}${outcome.indexed ? '' : ' It may not be listed in order until your next save.'}`);
+      refreshSaved();
+    } catch {
+      say('Nothing was imported. This file could not be checked.');
+    } finally {
+      importing = false;
+      // Choosing the same file again must fire a change.
+      try {
+        input.value = '';
+      } catch {
+        // Some browsers refuse; the next choice of a different file still works.
+      }
+    }
+  };
+  savedPanel.importInput.addEventListener('change', () => void importChosen());
   savedPanel.save.addEventListener('click', () => {
     if (session.generations.length === 0) return;
     const generation = chosenGeneration();
