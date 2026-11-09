@@ -25,6 +25,9 @@ import { debugFpsEnabled, debugRaysEnabled } from './ui/debugFlags';
 import { browserFrameEnvironment, startFrameLoop } from './ui/frameLoop';
 import { hudView, nextFeedback, type Feedback } from './ui/hud';
 import { pageMode } from './ui/pageMode';
+import { downloadJson } from './ui/download';
+import { newModelId } from './ui/modelId';
+import type { UiList, UiNode } from './ui/savedChampionsView';
 import { startTrainingPage } from './ui/trainingPage';
 
 const element = <T extends Element>(selector: string): T => {
@@ -97,6 +100,20 @@ if (pageMode(window.location.search) === 'train') {
         result: element('#replay-result'),
         status: element('#replay-status'),
       },
+    },
+    saved: {
+      name: element<HTMLInputElement>('#saved-name'),
+      save: element<HTMLButtonElement>('#saved-save'),
+      status: element<HTMLElement>('#saved-status'),
+      // Real elements satisfy the small node interface the list is built through (see ui/savedChampionsView.ts).
+      list: element<HTMLElement>('#saved-list') as unknown as UiList,
+      ui: { create: (tag) => document.createElement(tag) as unknown as UiNode },
+      storage: () => window.localStorage,
+      newId: () => newModelId(),
+      download: downloadJson,
+      isoNow: () => new Date().toISOString(),
+      codeVersion: __CODE_VERSION__,
+      appVersion: __APP_VERSION__,
     },
     graph: {
       details: element<HTMLDetailsElement>('#training-graph'),

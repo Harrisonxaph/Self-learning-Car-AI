@@ -32,7 +32,7 @@ function outputs() {
 describe('replayText', () => {
   it('has no values before the first tick', () => {
     const replay = createChampionReplay(champion, trainer.setup);
-    const text = replayText(null, replay.state(), 0, DT, 1, INPUT_COUNT);
+    const text = replayText(null, replay.state(), 0, DT, 'generation 1', INPUT_COUNT);
     expect(text).toEqual({ ...emptyReplayText(INPUT_COUNT), result: 'Running' });
     expect(text.inputs).toHaveLength(INPUT_COUNT);
   });
@@ -41,7 +41,7 @@ describe('replayText', () => {
     const replay = createChampionReplay(champion, trainer.setup);
     for (let i = 0; i < 10; i += 1) replay.step();
     const frame = replay.step()!;
-    const text = replayText(frame, replay.state(), replay.ticks(), DT, 3, INPUT_COUNT);
+    const text = replayText(frame, replay.state(), replay.ticks(), DT, 'generation 3', INPUT_COUNT);
     expect(text.inputs).toEqual(frame.decision.inputs.map((v) => v.toFixed(3)));
     expect(text.steering).toBe(frame.decision.controls.steering.toFixed(3));
     expect(text.decision).toBe(`Decision 11 at ${(10 * DT).toFixed(2)} s`);
@@ -53,7 +53,7 @@ describe('replayText', () => {
     const replay = createChampionReplay(champion, trainer.setup);
     let last = replay.step()!;
     for (let f = replay.step(); f; f = replay.step()) last = f;
-    const text = replayText(last, replay.state(), replay.ticks(), DT, 2, INPUT_COUNT);
+    const text = replayText(last, replay.state(), replay.ticks(), DT, 'generation 2', INPUT_COUNT);
     expect(text.decision).toContain('(the last)');
     expect(text.result).toBe(resultText(replay.state(), replay.ticks(), DT));
     expect(text.result).toMatch(/^(completed|crashed|stalled|timeout) after \d+\.\d{2} s · \d+ gates · /);
@@ -65,7 +65,7 @@ describe('renderReplay', () => {
   it('writes only the outputs whose text changed', () => {
     const { o, counter } = outputs();
     const replay = createChampionReplay(champion, trainer.setup);
-    const text = replayText(replay.step(), replay.state(), replay.ticks(), DT, 1, INPUT_COUNT);
+    const text = replayText(replay.step(), replay.state(), replay.ticks(), DT, 'generation 1', INPUT_COUNT);
     renderReplay(o, text);
     const first = counter.writes;
     renderReplay(o, text);

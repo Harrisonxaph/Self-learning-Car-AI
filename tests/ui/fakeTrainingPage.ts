@@ -1,6 +1,7 @@
 // Fake DOM objects with just enough behaviour for `startTrainingPage` to run in Node: the canvas and status line, the
 // dashboard and graph elements, and the speed controls, whose click and change handlers the tests can fire.
 import { INPUT_COUNT } from '../../src/ai/inputs';
+import type { StorageLike } from '../../src/persistence/modelStore';
 import stadiumOval from '../../src/data/tracks/stadium-oval.json';
 import type { ViewportEnvironment } from '../../src/render/viewport';
 import { DEFAULT_SIM_CONFIG, DEFAULT_VEHICLE_PHYSICS } from '../../src/sim/config';
@@ -40,6 +41,55 @@ export class FakeControl {
   }
 }
 
+/** A DOM node for the saved list: children, attributes, text and click listeners. */
+export class FakeNode {
+  textContent: string | null = '';
+  disabled = false;
+  children: FakeNode[] = [];
+  readonly attributes: Record<string, string> = {};
+  private readonly listeners: (() => void)[] = [];
+  constructor(readonly tag: string) {}
+  setAttribute(name: string, value: string) {
+    this.attributes[name] = value;
+  }
+  append(...nodes: FakeNode[]) {
+    this.children.push(...nodes);
+  }
+  replaceChildren(...nodes: FakeNode[]) {
+    this.children = nodes;
+  }
+  addEventListener(_type: string, listener: () => void) {
+    this.listeners.push(listener);
+  }
+  click() {
+    for (const listener of this.listeners) listener();
+  }
+  /** Every descendant, depth first. */
+  find(predicate: (node: FakeNode) => boolean): FakeNode[] {
+    return this.children.flatMap((child) => [...(predicate(child) ? [child] : []), ...child.find(predicate)]);
+  }
+}
+
+/** A localStorage stand-in for the page tests. */
+export class FakeLocalStorage implements StorageLike {
+  readonly data = new Map<string, string>();
+  getItem(key: string) {
+    return this.data.get(key) ?? null;
+  }
+  setItem(key: string, value: string) {
+    this.data.set(key, value);
+  }
+  removeItem(key: string) {
+    this.data.delete(key);
+  }
+  get length() {
+    return this.data.size;
+  }
+  key(index: number) {
+    return [...this.data.keys()][index] ?? null;
+  }
+}
+
 /** A `<details>`: toggling it sets `open` and fires the page's `toggle` listeners, as the browser does. */
 export class FakeDetails {
   open = false;
@@ -65,6 +115,8 @@ export interface FakePageOptions {
   readonly isPhone?: boolean;
   /** Gives the page a track layer, so each frame draws (through `drawCars`) instead of returning early. */
   readonly drawing?: boolean;
+  /** The storage the page saves champions to; a fresh one by default. Pass the same one to a second page to simulate a reload. */
+  readonly storage?: (() => StorageLike | null) | undefined;
   /** Gives the page the opt-in frame-rate readout element. */
   readonly fps?: boolean | undefined;
 }
@@ -109,6 +161,28 @@ export function fakePage(frames: FakeFrames, options: FakePageOptions | { ms: nu
     },
   };
   const fps = opts.fps ? { hidden: true, textContent: '' } : undefined;
+  const savedStorage = new FakeLocalStorage();
+  const saved = {
+    name: Object.assign(new FakeControl(), { value: '' }),
+    save: new FakeControl(),
+    status: { textContent: '' as string | null },
+    list: new FakeNode('ul'),
+    ui: { create: (tag: string) => new FakeNode(tag) },
+    storage: opts.storage ?? (() => savedStorage as StorageLike | null),
+    newId: (() => {
+      let n = 0;
+      return () => `saved-${(n += 1)}`;
+    })(),
+    downloads: [] as { filename: string; text: string }[],
+    download(filename: string, text: string) {
+      if (this.failDownload) throw new Error('blocked');
+      this.downloads.push({ filename, text });
+    },
+    failDownload: false,
+    isoNow: () => '2026-11-08T22:00:00.000Z',
+    codeVersion: 'test',
+    appVersion: '0.0.0',
+  };
   const viewport: ViewportEnvironment = { measure: () => ({ width: 390, height: 600 }), devicePixelRatio: () => 1, subscribe: () => () => {} };
   const page = {
     canvas,
@@ -118,6 +192,7 @@ export function fakePage(frames: FakeFrames, options: FakePageOptions | { ms: nu
     dashboard: { panel, outputs: dashboard.outputs },
     controls,
     replay,
+    saved,
     fps,
     isPhone: opts.isPhone ?? false,
     // No track layer yet: the frame draws nothing, which leaves the per-frame paths under test.
@@ -131,5 +206,5 @@ export function fakePage(frames: FakeFrames, options: FakePageOptions | { ms: nu
     graphViewportEnvironment: viewport,
     now: opts.now ?? (opts.clock ? () => opts.clock!.ms : undefined),
   } as unknown as TrainingPage;
-  return { page, canvas, dashboard, panel, hidden, graph, controls, replay, status, fps };
+  return { page, canvas, dashboard, panel, hidden, graph, controls, replay, saved, savedStorage, status, fps };
 }

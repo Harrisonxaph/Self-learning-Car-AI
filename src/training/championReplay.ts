@@ -81,4 +81,3 @@ export function createChampionReplay(genome: Float64Array, setup: TrainingSetup)
     done: () => current.episode.outcome !== null,
   };
 }
-

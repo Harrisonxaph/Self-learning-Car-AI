@@ -557,6 +557,10 @@ test('with the champion replay open, the track keeps its space, the page does no
   await expect(page.locator('#sim-canvas')).toHaveAttribute('data-mode', 'train');
   await advanceUntil(page, (v) => v.data.chartPoints === '1');
   await page.locator('#champion-replay > summary').click();
+  // Two saved champions, so the list is part of what must stay reachable.
+  await page.locator('#saved-save').click();
+  await page.locator('#saved-save').click();
+  await expect(page.locator('#saved-list li')).toHaveCount(2);
   await page.locator('#replay-start').click();
   const original = page.viewportSize()!;
   const sizes = [original, { width: original.height, height: original.width }, { width: 568, height: 320 }, { width: 320, height: 568 }];
@@ -573,10 +577,10 @@ test('with the champion replay open, the track keeps its space, the page does no
       const panel = document.getElementById('champion-replay')!;
       const box = panel.getBoundingClientRect();
       panel.scrollTop = panel.scrollHeight;
-      const status = rect('replay-status');
+      const status = document.querySelector('#saved-list li:last-child')!.getBoundingClientRect();
       const after = panel.getBoundingClientRect();
       const root = document.documentElement;
-      const small = ['replay-generation', 'replay-start', 'replay-stop'].filter((id) => {
+      const small = ['replay-generation', 'replay-start', 'replay-stop', 'saved-name', 'saved-save'].filter((id) => {
         const r = rect(id);
         return r.width < 44 || r.height < 44;
       });
@@ -595,6 +599,180 @@ test('with the champion replay open, the track keeps its space, the page does no
     expect(fit, label).toMatchObject({ panelInside: true, lastReachable: true, noScrollX: true, noScrollY: true, small: [] });
     await handle?.evaluate((el) => (el as Element).remove());
   }
+});
+
+test('a saved champion survives a page reload, replays and can be deleted', async ({ page }) => {
+  await installPausedClock(page);
+  await page.goto('/?mode=train');
+  await page.clock.runFor(100);
+  await expect(page.locator('#sim-canvas')).toHaveAttribute('data-mode', 'train');
+  await advanceUntil(page, (v) => v.data.chartPoints === '1');
+  await page.locator('#champion-replay > summary').click();
+  await expect(page.locator('#saved-notice')).toContainText('Saved in this browser only');
+  await expect(page.locator('#saved-list li')).toHaveCount(0);
+  await page.locator('#saved-name').fill('E2E champion');
+  await page.locator('#saved-save').click();
+  await expect(page.locator('#saved-status')).toHaveText('Saved "E2E champion" (generation 1).');
+  await expect(page.locator('#saved-list li')).toHaveCount(1);
+  await expect(page.locator('#saved-list li')).toContainText('E2E champion · generation 1');
+  // The saved model is real, parseable JSON in this browser's localStorage, at full precision.
+  const stored = await page.evaluate(() => {
+    const index = JSON.parse(localStorage.getItem('sdae:models:index')!) as string[];
+    const doc = JSON.parse(localStorage.getItem(`sdae:model:${index[0]}`)!);
+    return { count: index.length, format: doc.format, values: doc.parameters.values.length, name: doc.name };
+  });
+  expect(stored).toEqual({ count: 1, format: 'self-driving-ai-evolution/model', values: 159, name: 'E2E champion' });
+
+  // Reload: the page starts again from nothing, and the save is still there.
+  await page.reload();
+  await page.clock.runFor(200);
+  await expect(page.locator('#sim-canvas')).toHaveAttribute('data-mode', 'train');
+  await page.locator('#champion-replay > summary').click();
+  await expect(page.locator('#saved-list li')).toHaveCount(1);
+  await expect(page.locator('#saved-list li')).toContainText('E2E champion');
+  await page.getByRole('button', { name: 'Replay E2E champion' }).click();
+  await page.clock.runFor(1500);
+  await expect(page.locator('#sim-canvas')).toHaveAttribute('data-replay', 'running');
+  await expect(page.locator('#sim-canvas')).toHaveAttribute('data-replay-source', 'saved');
+  await expect(page.locator('#saved-status')).toContainText('Replaying "E2E champion"');
+  await advanceUntil(page, (v) => v.data.replay === 'done', 1000, 120);
+  expect(['completed', 'crashed', 'stalled', 'timeout']).toContain(await data(page, 'replay-outcome'));
+  await expect(page.locator('#replay-status')).toContainText('Replay of saved champion "E2E champion" finished');
+
+  // Delete takes two taps.
+  await page.getByRole('button', { name: 'Delete E2E champion' }).click();
+  await expect(page.locator('#saved-list li')).toHaveCount(1);
+  await page.getByRole('button', { name: 'Confirm delete E2E champion' }).click();
+  await expect(page.locator('#saved-list li')).toHaveCount(0);
+  await expect(page.locator('#saved-status')).toHaveText('Deleted.');
+});
+
+test('Download JSON gives a file with the validated saved champion', async ({ page }) => {
+  await installPausedClock(page);
+  await page.goto('/?mode=train');
+  await page.clock.runFor(100);
+  await advanceUntil(page, (v) => v.data.chartPoints === '1');
+  await page.locator('#champion-replay > summary').click();
+  await page.locator('#saved-name').fill('Download me');
+  await page.locator('#saved-save').click();
+  await expect(page.locator('#saved-list li')).toHaveCount(1);
+  const downloadPromise = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Download JSON for Download me' }).click();
+  const download = await downloadPromise;
+  expect(download.suggestedFilename()).toMatch(/^sdae-champion-download-me-gen1-[a-z0-9]{1,8}\.json$/);
+  const path = await download.path();
+  const { readFileSync } = await import('node:fs');
+  const doc = JSON.parse(readFileSync(path, 'utf8'));
+  expect(doc.format).toBe('self-driving-ai-evolution/model');
+  expect(doc.schemaVersion).toBe(1);
+  expect(doc.name).toBe('Download me');
+  expect(doc.parameters.values).toHaveLength(159);
+  expect(doc.training.trackIds).toEqual(['stadium-oval']);
+  // The same document the page stores.
+  const stored = await page.evaluate(() => {
+    const index = JSON.parse(localStorage.getItem('sdae:models:index')!) as string[];
+    return JSON.parse(localStorage.getItem(`sdae:model:${index[0]}`)!);
+  });
+  expect(doc).toEqual(stored);
+  await expect(page.locator('#saved-status')).toContainText('Download started');
+});
+
+test('Download JSON of stored data nested too deeply gives a message, not an error', async ({ page }) => {
+  await installPausedClock(page);
+  await page.goto('/?mode=train');
+  await page.clock.runFor(100);
+  await advanceUntil(page, (v) => v.data.chartPoints === '1');
+  await page.locator('#champion-replay > summary').click();
+  await page.locator('#saved-save').click();
+  await expect(page.locator('#saved-list li')).toHaveCount(1);
+  await page.evaluate(() => {
+    const index = JSON.parse(localStorage.getItem('sdae:models:index')!) as string[];
+    const key = `sdae:model:${index[0]}`;
+    const text = localStorage.getItem(key)!;
+    const end = text.lastIndexOf('}');
+    localStorage.setItem(key, `${text.slice(0, end)},"extra":${'['.repeat(100_000)}${']'.repeat(100_000)}}`);
+  });
+  await page.locator('#champion-replay > summary').click();
+  await page.locator('#champion-replay > summary').click();
+  await expect(page.locator('#saved-list li')).toHaveCount(1);
+  await page.getByRole('button', { name: /^Download JSON for / }).click();
+  await expect(page.locator('#saved-status')).toContainText('nested too deeply');
+  await page.clock.runFor(500);
+  await expect(page.locator('#sim-canvas')).toHaveAttribute('data-mode', 'train');
+});
+
+test('a saved champion whose network overflows is refused with a message, and the page keeps running without an error', async ({ page }) => {
+  await installPausedClock(page);
+  await page.goto('/?mode=train');
+  await page.clock.runFor(100);
+  await advanceUntil(page, (v) => v.data.chartPoints === '1');
+  await page.locator('#champion-replay > summary').click();
+  await page.locator('#saved-save').click();
+  await expect(page.locator('#saved-list li')).toHaveCount(1);
+  // Finite numbers pass validation, but a network with the largest doubles overflows when it is run.
+  await page.evaluate(() => {
+    const index = JSON.parse(localStorage.getItem('sdae:models:index')!) as string[];
+    const key = `sdae:model:${index[0]}`;
+    const doc = JSON.parse(localStorage.getItem(key)!);
+    doc.parameters.values = doc.parameters.values.map(() => Number.MAX_VALUE);
+    localStorage.setItem(key, JSON.stringify(doc));
+  });
+  await page.locator('#champion-replay > summary').click();
+  await page.locator('#champion-replay > summary').click();
+  await expect(page.locator('#saved-list li')).toHaveCount(1);
+  const tick = Number(await data(page, 'tick'));
+  await page.locator('#saved-list').getByRole('button', { name: /^Replay / }).click();
+  await expect(page.locator('#saved-status')).toContainText('numbers too large to compute');
+  await page.clock.runFor(1000);
+  await expect(page.locator('#sim-canvas')).toHaveAttribute('data-replay', 'off');
+  expect(Number(await data(page, 'tick'))).toBeGreaterThan(tick);
+});
+
+test('with localStorage denied, the page says so and training and replay carry on', async ({ page }) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(window, 'localStorage', {
+      get() {
+        throw new DOMException('denied', 'SecurityError');
+      },
+    });
+  });
+  await installPausedClock(page);
+  await page.goto('/?mode=train');
+  await page.clock.runFor(100);
+  await expect(page.locator('#sim-canvas')).toHaveAttribute('data-mode', 'train');
+  await page.locator('#champion-replay > summary').click();
+  await expect(page.locator('#saved-status')).toContainText('Browser storage is unavailable');
+  await advanceUntil(page, (v) => v.data.chartPoints === '1');
+  await page.locator('#saved-save').click();
+  await expect(page.locator('#saved-status')).toContainText('Browser storage is unavailable');
+  await expect(page.locator('#saved-list li')).toHaveCount(0);
+  const tick = Number(await data(page, 'tick'));
+  await page.locator('#replay-start').click();
+  await page.clock.runFor(1000);
+  await expect(page.locator('#sim-canvas')).toHaveAttribute('data-replay', 'running');
+  await page.locator('#replay-stop').click();
+  await page.clock.runFor(1000);
+  expect(Number(await data(page, 'tick'))).toBeGreaterThan(tick);
+});
+
+test('with localStorage full, saving says so and nothing is lost or broken', async ({ page }) => {
+  await page.addInitScript(() => {
+    const original = Storage.prototype.setItem;
+    Storage.prototype.setItem = function (key: string, value: string) {
+      if (key.startsWith('sdae:')) throw new DOMException('full', 'QuotaExceededError');
+      return original.call(this, key, value);
+    };
+  });
+  await installPausedClock(page);
+  await page.goto('/?mode=train');
+  await page.clock.runFor(100);
+  await advanceUntil(page, (v) => v.data.chartPoints === '1');
+  await page.locator('#champion-replay > summary').click();
+  await page.locator('#saved-save').click();
+  await expect(page.locator('#saved-status')).toContainText('Browser storage is full');
+  await expect(page.locator('#saved-list li')).toHaveCount(0);
+  await page.clock.runFor(500);
+  await expect(page.locator('#sim-canvas')).toHaveAttribute('data-mode', 'train');
 });
 
 test('the graph and replay summaries never overlap and can always be tapped, in portrait and landscape, with either panel open', async ({ page }, testInfo) => {

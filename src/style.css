@@ -438,3 +438,46 @@ body {
     padding-bottom: 0.25rem;
   }
 }
+
+/* Saved champions (P3-05), inside the champion replay block. */
+.saved-champions {
+  margin-top: 0.5rem;
+  border-top: 1px solid #33424f;
+  padding-top: 0.25rem;
+}
+
+.saved-heading {
+  margin: 0.25rem 0;
+  font-size: 1rem;
+}
+
+.saved-name {
+  width: min(14rem, 100%);
+  flex: 1 1 8rem;
+}
+
+.saved-list {
+  margin: 0.25rem 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.85rem;
+}
+
+.saved-list li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem 0.6rem;
+  padding: 0.3rem 0;
+  border-bottom: 1px solid #26323d;
+}
+
+.saved-actions {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.saved-warning {
+  flex-basis: 100%;
+  color: #ffb000;
+}

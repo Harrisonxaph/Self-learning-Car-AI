@@ -1,6 +1,6 @@
 # Saved model format
 
-> Status: **specification only**. Implementation is roadmap items P3-05 (ST1) and P3-06. Nothing reads or writes this format yet.
+> Status: **P3-05 implements saving, listing, loading and validating this format in localStorage** (`src/persistence/modelFormat.ts`, `src/persistence/modelStore.ts`). File export and import, and migrations, are P3-06. The "Amendments made in P3-05" section at the end lists what the implementation added or clarified.
 
 A saved model ("brain") is a single JSON document. The same document is used for localStorage, file export and file import.
 
@@ -387,3 +387,25 @@ Phase 3 P3-08 compares saved metadata/configuration and compatible replays; Phas
 A brain stores one controller and its provenance. It can be inspected, replayed and evaluated; it does not reproduce the full evolutionary population or resume training exactly. P3-07 defines a separate versioned generation-boundary checkpoint with population genomes, champion, next-generation index, all PRNG stream states (including Gaussian sampler cache), configuration, track versions and metrics. Test uninterrupted-versus-resumed equivalence. Save periodically while active rather than relying on tab-hide delivery; unavailable/quota-limited storage must leave training usable and allow file export.
 
 Newer-version files are rejected safely; older versions require an explicit tested migration before activation. No migration is claimed to exist in this documentation-only repository.
+
+## Amendments made in P3-05
+
+Authorised by the owner on [#25](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/25#issuecomment-6727944973) as defaults proposed in `docs/plans/p3-05-plan.md`.
+
+- **`training.configuration.generations`** is a positive integer for a batch run **or `null` for an open-ended interactive run** (the training page has no generation budget). The page saves `null`.
+- **`training.trackHashes`** (new, required): the `sha256:` content hash of each training track, keyed by track id like `trackVersions`. A reader checks the hash and version against the track-splits manifest.
+- **`training.configuration.prng`** is `{ "algorithm": "sfc32-splitmix32-v1", "version": 1 }`: the algorithm this app uses (the example above shows a different, synthetic name). A reader accepts only the algorithm it implements.
+- **Sensor layout:** version 1 is driven only with the default layout (seven rays at -90, -60, -30, 0, 30, 60, 90 degrees, 50 m). Another layout validates but is reported as not drivable.
+- **Negative zero:** JSON cannot store it, so a parameter of -0 is saved as 0; a network behaves the same with either (tested).
+- **`id`** is 1 to 100 letters, digits, dots, dashes or underscores (it becomes a storage key). It comes from `crypto.randomUUID()`, then `crypto.getRandomValues`, then the clock and `Math.random`, and never from a simulation or evolution stream.
+- **`codeVersion` and `appVersion`** are injected at build time: the commit from `VERCEL_GIT_COMMIT_SHA` or `GITHUB_SHA` (else `dev`) and the `package.json` version.
+- **Ranges (Codex review 5820029584):** a model validates only if the trainer could set it up. Population 2 to 100,000; elites 0 to the population; tournament size 1 to the population; crossover and mutation rates 0 to 1; mutation scale at least 0; `maxLaps` at least 1; episode and stall limits above 0 and at most 1,000,000 s; timestep 0.001 to 0.1 s; physics lengths, accelerations and steering above 0 (steering below pi/2), drag, rolling resistance and stop speed at least 0, with a **finite** terminal speed (no drag at all is rejected); fitness weights at least 0, reference lap time above 0, lap ratio at least 1. Operator settings and sensors are compared field by field, so key order and unknown extra fields never matter; array order (ray angles) does.
+- **Hostile values:** every value is type-checked before it is formatted or compared (a track version that is not a string, such as `{"toString":null}`, is a validation error, not an exception), `validateModel` turns any unexpected failure into a rejection, and the store lists an entry it cannot read as damaged, so one bad save can never stop the page from starting.
+- **Deep nesting:** unknown extra fields are ignored by validation, so stored data can hold a value nested far deeper than JSON can write out (for example 200,000 levels). Reading, listing, loading and replaying it are unaffected; **Download JSON** says "its data is nested too deeply to write out" instead of throwing, and changes nothing in storage.
+- **Overflow:** finite parameters can still overflow when the network is run. The page runs a saved champion ahead of time (up to 5,000 ticks) and refuses one that throws, and a replay that throws part-way is stopped with a message; training is never affected.
+- **Replay pace:** a saved champion is replayed with its own timestep, one second of its time per second of page time at 1x.
+- **Reading failures:** a store whose index or key enumeration throws is reported as partly readable (saves that can be read are still listed), and as unavailable when nothing could be read; an ordinary empty store is not an error.
+- **Seed:** `training.seed` is an unsigned 32-bit integer, or `null` for legacy unseeded data, which requires a non-empty `training.seedUnavailableReason`; the app lists such a save as "seed unavailable, not reproducible".
+- **Unknown extra fields** are ignored when reading and are not kept when saving.
+- **Storage details:** the index `sdae:models:index` is a JSON array of ids in saving order. It is a hint: the store also finds model keys that are not in it, shows an index entry whose model is gone as damaged, and rebuilds a damaged index from the model keys. The cap is 20 saves; a 21st asks the person to delete one (damaged entries count, and can be deleted).
+- **Export JSON next to every save** (the storage section above) **is met in P3-05** (owner's [decision](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/25#issuecomment-6741305815) to take the recommendation): each valid saved champion has a "Download JSON" button that downloads exactly the validated v1 document (`JSON.stringify(model, null, 2)`, under the 1 MiB cap) as `sdae-champion-<name>-gen<N>-<id>.json`, the name reduced to lowercase letters, digits and dashes. A damaged entry has no download; a champion made for another simulation version can still be downloaded, so a copy can be kept. **Still P3-06:** importing a file, its size limit, schema, version and compatibility checks for files, migrations and the re-import-identically test.
