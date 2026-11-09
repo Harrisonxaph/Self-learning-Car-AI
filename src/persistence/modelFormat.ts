@@ -13,6 +13,15 @@ export const MODEL_FORMAT = 'self-driving-ai-evolution/model';
 export const MODEL_SCHEMA_VERSION = 1;
 /** A stored entry or a file over this many characters is rejected before it is parsed (MODEL_FORMAT.md, "Size"). */
 export const MAX_MODEL_BYTES = 1_048_576;
+
+/**
+ * The size of `text` in UTF-8 bytes, which is what a file or a download holds (the limit is in bytes, not UTF-16 code
+ * units: a multibyte character is up to 3 bytes per code unit). Text longer than the limit in code units is already
+ * over it, so only text that could fit is encoded.
+ */
+export function utf8Bytes(text: string): number {
+  return text.length > MAX_MODEL_BYTES ? text.length : new TextEncoder().encode(text).length;
+}
 export const PRNG_VERSION = 1;
 /** Ids become storage keys, so they are limited to plain characters. */
 export const MODEL_ID_PATTERN = /^[A-Za-z0-9._-]{1,100}$/;

@@ -116,4 +116,31 @@ describe('Import JSON', () => {
     p.frames.fire(32);
     expect(p.canvas.dataset.replaySource).toBe('saved');
   });
+
+  it('a valid file with a deeply nested unknown field is refused with a message; the list, storage and an active replay are untouched', async () => {
+    const p = setup();
+    await p.choose(p.file('c.json', fixture));
+    p.saved.list.children[0]!.find((n) => n.tag === 'button' && n.textContent === 'Replay')[0]!.click();
+    p.frames.fire(0);
+    p.frames.fire(16);
+    const snapshot = new Map(p.savedStorage.data);
+    const base = JSON.parse(fixture) as Record<string, unknown>;
+    const body = `${JSON.stringify({ ...base, id: 'deep-1', extra: 0 }).slice(0, -2)}${'['.repeat(12_000)}${']'.repeat(12_000)}}`;
+    await p.choose(p.file('deep.json', body));
+    expect(p.saved.status.textContent).toMatch(/^Nothing was imported\./);
+    expect(p.savedStorage.data).toEqual(snapshot);
+    expect(p.saved.list.children).toHaveLength(1);
+    p.frames.fire(32);
+    expect(p.canvas.dataset.replaySource).toBe('saved');
+  });
+
+  it('a multibyte file between 1 MiB in code units and 1 MiB in bytes is refused unread-by-parse, with the size message', async () => {
+    const p = setup();
+    const base = JSON.parse(fixture) as Record<string, unknown>;
+    const body = JSON.stringify({ ...base, extra: '\u754c'.repeat(350_000) });
+    expect(body.length).toBeLessThan(MAX_MODEL_BYTES);
+    await p.choose(p.file('wide.json', body));
+    expect(p.saved.status.textContent).toContain('1 MiB');
+    expect(p.savedStorage.data.size).toBe(0);
+  });
 });

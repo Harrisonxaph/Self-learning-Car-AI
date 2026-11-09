@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 import stadiumOval from '../../src/data/tracks/stadium-oval.json';
 import { DEFAULT_SIM_CONFIG, DEFAULT_VEHICLE_PHYSICS } from '../../src/sim/config';
 import { loadTrack } from '../../src/sim/track';
-import { MAX_MODEL_BYTES, buildModel, modelParameters, type ModelDocument } from '../../src/persistence/modelFormat';
+import { MAX_MODEL_BYTES, buildModel, modelParameters, utf8Bytes, type ModelDocument } from '../../src/persistence/modelFormat';
 import { describeRefusal, importModelText } from '../../src/persistence/modelImport';
 import { MIGRATIONS, migrateToCurrent } from '../../src/persistence/migrations';
 import { createModelStore, type StorageLike } from '../../src/persistence/modelStore';
@@ -105,7 +105,15 @@ describe('importModelText: invalid files are refused', () => {
 describe('importModelText: valid files', () => {
   it('accepts a file with a byte-order mark', () => {
     const result = importModelText(`${String.fromCharCode(0xfeff)}${text(good)}`, { registry: REGISTRY });
-    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error(result.errors.join(' '));
+    expect(result.model).toEqual(good);
+  });
+
+  it('a replacement character inside valid metadata is just a string, and imports unchanged', () => {
+    const named = { ...good, name: `a${String.fromCharCode(0xfffd)}b` };
+    const result = importModelText(JSON.stringify(named), { registry: REGISTRY });
+    if (!result.ok) throw new Error(result.errors.join(' '));
+    expect(result.model.name).toBe(named.name);
   });
 
   it('re-imports an exported file identically: deep-equal, bit-for-bit parameters, byte-identical re-export', () => {
@@ -248,5 +256,128 @@ describe('the committed fixture (synthetic test data from a seeded run, not a re
     const out = store.exportFile('fixture-v1');
     if (!out.ok) throw new Error(out.message);
     expect(out.text).toBe(fixture);
+  });
+});
+
+describe('store.importModel: an incomplete inventory never leads to an overwrite', () => {
+  class Flaky extends Spy {
+    failScan = false;
+    override get length(): number {
+      if (this.failScan) throw new Error('scan failed');
+      return super.length;
+    }
+  }
+  it('refuses, and changes nothing, when keys cannot be enumerated and an orphan holds the id', () => {
+    const storage = new Flaky();
+    const store = createModelStore({ storage: () => storage, registry: REGISTRY });
+    store.save(good);
+    store.save(make(5, 'other-1'));
+    // The fixture id falls out of the index (a supported state after a failed index write); the other save stays indexed.
+    storage.data.set('sdae:models:index', JSON.stringify(['other-1']));
+    const snapshot = new Map(storage.data);
+    const writes = storage.writes;
+    storage.failScan = true;
+    const different = { ...make(6, 'good-1'), name: 'Different' };
+    const out = store.importModel(different, () => 'copy-x');
+    expect(out).toMatchObject({ ok: false });
+    expect(storage.writes).toBe(writes);
+    expect(storage.data).toEqual(snapshot);
+  });
+  it('checks the destination key itself, so an orphan is a collision even when the index and listing miss it', () => {
+    const storage = new Spy();
+    const store = createModelStore({ storage: () => storage, registry: REGISTRY });
+    storage.data.set('sdae:model:good-1', JSON.stringify(good));
+    // An index that is damaged hides nothing from the scan; a hand-hidden key (not matching the scan) is still found by key.
+    const original = storage.data.get('sdae:model:good-1');
+    const out = store.importModel({ ...make(7, 'good-1'), name: 'Different' }, () => 'copy-y');
+    expect(out).toMatchObject({ ok: true, status: 'saved-as-copy', id: 'copy-y' });
+    expect(storage.data.get('sdae:model:good-1')).toBe(original);
+  });
+  it('a generated copy id that is already taken is skipped, never overwritten', () => {
+    const storage = new Spy();
+    const store = createModelStore({ storage: () => storage, registry: REGISTRY });
+    store.save(good);
+    store.save(make(5, 'taken-1'));
+    const taken = storage.data.get('sdae:model:taken-1');
+    const ids = ['taken-1', 'fresh-1'];
+    const out = store.importModel({ ...make(6, 'good-1'), name: 'Different' }, () => ids.shift()!);
+    expect(out).toMatchObject({ ok: true, status: 'saved-as-copy', id: 'fresh-1' });
+    expect(storage.data.get('sdae:model:taken-1')).toBe(taken);
+  });
+});
+
+describe('one UTF-8 byte limit for import, save and export', () => {
+  /** The fixture with a multibyte extra field sized so the compact JSON is `target` bytes. */
+  const withExtra = (target: number): string => {
+    const base = JSON.parse(text(good)) as Record<string, unknown>;
+    base.extra = '';
+    const empty = JSON.stringify(base);
+    const room = target - utf8Bytes(empty);
+    base.extra = '\u754c'.repeat(Math.floor(room / 3)) + 'x'.repeat(room % 3);
+    return JSON.stringify(base);
+  };
+  it('counts bytes, not code units', () => {
+    expect(utf8Bytes('abc')).toBe(3);
+    expect(utf8Bytes('\u754c')).toBe(3);
+    expect(utf8Bytes('\u{1F600}')).toBe(4);
+  });
+  it('refuses text that is under the limit in code units but over it in bytes, before parsing', () => {
+    const body = withExtra(MAX_MODEL_BYTES + 3);
+    expect(body.length).toBeLessThan(MAX_MODEL_BYTES);
+    expect(importModelText(body, { registry: REGISTRY })).toEqual({ ok: false, errors: ['This file is larger than the 1 MiB limit for a champion.'] });
+  });
+  it('a multibyte near-limit file imports, is saved, and its download imports again (the offered backup is always importable)', () => {
+    for (const target of [MAX_MODEL_BYTES - 21, MAX_MODEL_BYTES - 1, MAX_MODEL_BYTES]) {
+      const compact = withExtra(target);
+      expect(utf8Bytes(compact)).toBe(target);
+      const first = importModelText(compact, { registry: REGISTRY });
+      if (!first.ok) throw new Error(first.errors.join(' '));
+      const storage = new Spy();
+      const store = createModelStore({ storage: () => storage, registry: REGISTRY });
+      expect(store.importModel(first.model, () => 'x')).toMatchObject({ ok: true, status: 'added' });
+      const out = store.exportFile(first.model.id);
+      if (!out.ok) throw new Error(out.message);
+      expect(utf8Bytes(out.text)).toBeLessThanOrEqual(MAX_MODEL_BYTES);
+      const again = importModelText(out.text, { registry: REGISTRY });
+      if (!again.ok) throw new Error(again.errors.join(' '));
+      expect(again.model).toEqual(first.model);
+    }
+  });
+  it('stored text over the byte limit is refused on export with a message', () => {
+    const storage = new Spy();
+    const store = createModelStore({ storage: () => storage, registry: REGISTRY });
+    storage.data.set('sdae:model:big', withExtra(MAX_MODEL_BYTES));
+    expect(store.exportFile('big')).toMatchObject({ ok: true });
+    storage.data.set('sdae:model:big', `${withExtra(MAX_MODEL_BYTES)} `);
+    expect(store.exportFile('big')).toMatchObject({ ok: false, message: expect.stringContaining('1 MiB') as unknown as string });
+  });
+});
+
+describe('serialization safety through the whole import-and-save path', () => {
+  const deep = (levels: number): string => {
+    const base = text(good).trimEnd();
+    return `${base.slice(0, -1)},"extra":${'['.repeat(levels)}${']'.repeat(levels)}}`;
+  };
+  it('a valid model with a deeply nested unknown field gives a refusal message, not an exception, and writes nothing', () => {
+    const body = deep(12_000);
+    const parsed = importModelText(body, { registry: REGISTRY });
+    expect(parsed.ok).toBe(true);
+    const storage = new Spy();
+    const store = createModelStore({ storage: () => storage, registry: REGISTRY });
+    store.save(make(9, 'keep-1'));
+    const snapshot = new Map(storage.data);
+    const writes = storage.writes;
+    if (!parsed.ok) return;
+    let out: ReturnType<typeof store.importModel> | undefined;
+    expect(() => { out = store.importModel(parsed.model, () => 'n'); }).not.toThrow();
+    expect(out).toMatchObject({ ok: false, reason: 'invalid' });
+    expect(storage.writes).toBe(writes);
+    expect(storage.data).toEqual(snapshot);
+  });
+  it('save itself returns a message for such a model', () => {
+    const parsed = importModelText(deep(12_000), { registry: REGISTRY });
+    if (!parsed.ok) throw new Error('should parse');
+    const store = createModelStore({ storage: () => new Spy(), registry: REGISTRY });
+    expect(store.save(parsed.model)).toMatchObject({ ok: false, reason: 'invalid' });
   });
 });

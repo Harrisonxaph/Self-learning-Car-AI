@@ -1,8 +1,8 @@
 // Importing a champion from the text of a file (P3-06). Pure: it reads text and returns a result; it writes nothing, so a
-// refusal cannot have a side effect. The caller checks the file's own size before reading it; the same cap is applied
-// here before any parsing.
+// refusal cannot have a side effect. The limit is 1 MiB in UTF-8 bytes (the same measure the export uses). The caller checks
+// the file's own size before reading it; the text's UTF-8 size is checked again here before any parsing.
 import { migrateToCurrent, MIGRATIONS, type MigrationRegistry } from './migrations';
-import { compatibility, MAX_MODEL_BYTES, validateModel, type ModelDocument, type TrackRegistryEntry } from './modelFormat';
+import { compatibility, MAX_MODEL_BYTES, utf8Bytes, validateModel, type ModelDocument, type TrackRegistryEntry } from './modelFormat';
 
 export interface ImportOptions {
   readonly registry: readonly TrackRegistryEntry[];
@@ -33,7 +33,7 @@ export function importModelText(text: string, options: ImportOptions): ImportRes
 
 function importUnchecked(text: string, options: ImportOptions): ImportResult {
   if (typeof text !== 'string') return { ok: false, errors: ["This isn't a valid model file (it is not text)."] };
-  if (text.length > MAX_MODEL_BYTES) return { ok: false, errors: ['This file is larger than the 1 MiB limit for a champion.'] };
+  if (utf8Bytes(text) > MAX_MODEL_BYTES) return { ok: false, errors: ['This file is larger than the 1 MiB limit for a champion.'] };
   const body = text.charCodeAt(0) === 0xfeff ? text.slice(1) : text;
   if (body.trim() === '') return { ok: false, errors: ['This file is empty.'] };
   let parsed: unknown;

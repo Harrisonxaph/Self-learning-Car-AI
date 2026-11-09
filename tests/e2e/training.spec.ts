@@ -734,6 +734,41 @@ test('Import JSON: a downloaded champion re-imports identically, and invalid or 
   await expect(page.locator('#sim-canvas')).toHaveAttribute('data-replay-source', 'saved');
 });
 
+test('a multibyte file near the 1 MiB limit imports and its own download imports again', async ({ page }, testInfo) => {
+  await installPausedClock(page);
+  await page.goto('/?mode=train');
+  await page.clock.runFor(100);
+  await advanceUntil(page, (v) => v.data.chartPoints === '1');
+  await page.locator('#champion-replay > summary').click();
+  await page.locator('#saved-name').fill('Wide');
+  await page.locator('#saved-save').click();
+  await expect(page.locator('#saved-list li')).toHaveCount(1);
+  const downloadPromise = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Download JSON for Wide' }).click();
+  const { readFileSync, writeFileSync, statSync } = await import('node:fs');
+  const original = JSON.parse(readFileSync(await (await downloadPromise).path(), 'utf8')) as Record<string, unknown>;
+  // A new id and a multibyte extra field, sized so the compact JSON is within a few bytes of the limit.
+  const make = (room: number) => JSON.stringify({ ...original, id: 'wide-file-1', name: 'Wide copy', extra: '\u754c'.repeat(Math.floor(room / 3)) });
+  let size = 1_048_576 - 40;
+  let body = make(size);
+  size -= Buffer.byteLength(body) - 1_048_576 + 30;
+  body = make(size);
+  expect(Buffer.byteLength(body)).toBeLessThanOrEqual(1_048_576);
+  expect(Buffer.byteLength(body)).toBeGreaterThan(1_048_000);
+  const wide = testInfo.outputPath('wide.json');
+  writeFileSync(wide, body);
+  await page.locator('#saved-import').setInputFiles(wide);
+  await expect(page.locator('#saved-status')).toContainText('Imported "Wide copy"');
+  const again = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Download JSON for Wide copy' }).click();
+  const downloaded = await (await again).path();
+  expect(statSync(downloaded).size).toBeLessThanOrEqual(1_048_576);
+  await page.getByRole('button', { name: 'Delete Wide copy' }).click();
+  await page.getByRole('button', { name: 'Confirm delete Wide copy' }).click();
+  await page.locator('#saved-import').setInputFiles(downloaded);
+  await expect(page.locator('#saved-status')).toContainText('Imported "Wide copy"');
+});
+
 test('Download JSON of stored data nested too deeply gives a message, not an error', async ({ page }) => {
   await installPausedClock(page);
   await page.goto('/?mode=train');
