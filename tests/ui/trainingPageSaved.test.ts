@@ -257,10 +257,10 @@ describe('deleting', () => {
     p.saved.save.click();
     p.button(p.rows()[0]!, 'Delete').click();
     expect(p.savedStorage.data.size).toBe(3); // nothing deleted by the first tap
-    expect(p.rows()[0]!.find((n) => n.tag === 'button').map((b) => b.textContent)).toEqual(['Replay', 'Yes, delete', 'Keep']);
+    expect(p.rows()[0]!.find((n) => n.tag === 'button').map((b) => b.textContent)).toEqual(['Replay', 'Download JSON', 'Yes, delete', 'Keep']);
     p.button(p.rows()[0]!, 'Keep').click();
     expect(p.savedStorage.data.size).toBe(3);
-    expect(p.rows()[0]!.find((n) => n.tag === 'button').map((b) => b.textContent)).toEqual(['Replay', 'Delete']);
+    expect(p.rows()[0]!.find((n) => n.tag === 'button').map((b) => b.textContent)).toEqual(['Replay', 'Download JSON', 'Delete']);
     p.button(p.rows()[0]!, 'Delete').click();
     p.button(p.rows()[0]!, 'Yes, delete').click();
     expect(p.saved.status.textContent).toBe('Deleted.');
@@ -561,5 +561,56 @@ describe('a replay that fails leaves the training it interrupted exactly as it w
     p.run();
     // The very next ordinary frame may run training again only if training is not paused.
     if (p.canvas.dataset.paused === 'true') expect([p.canvas.dataset.tick, p.canvas.dataset.generationTick]).toEqual(before);
+  });
+});
+
+describe('Download JSON', () => {
+  it('downloads exactly the validated document of that save, with a plain file name, and says so', () => {
+    const p = setup();
+    p.completeGenerations(1);
+    p.saved.name.value = 'My best <script>/../x';
+    p.saved.save.click();
+    const stored = JSON.parse(p.savedStorage.data.get(`${MODEL_KEY_PREFIX}saved-1`)!);
+    p.button(p.rows()[0]!, 'Download JSON').click();
+    expect(p.saved.downloads).toHaveLength(1);
+    const { filename, text } = p.saved.downloads[0]!;
+    expect(filename).toMatch(/^sdae-champion-[a-z0-9-]+-gen1-saved1\.json$/);
+    expect(filename).not.toMatch(/[<>/\\.]{2}|\.\./);
+    // It is the whole v1 document, valid, and identical to what is stored.
+    expect(JSON.parse(text)).toEqual(stored);
+    const result = validateModel(JSON.parse(text), REGISTRY);
+    expect(result.ok).toBe(true);
+    expect(p.saved.status.textContent).toContain(`Download started: ${filename}`);
+    expect(p.saved.status.textContent).toContain('does not depend on this browser');
+  });
+
+  it('is offered for every valid save, not for a damaged one, and does not touch storage or training', () => {
+    const storage = new FakeLocalStorage();
+    storage.setItem(`${MODEL_KEY_PREFIX}junk`, '{not json');
+    const p = setup({ storage: () => storage });
+    p.completeGenerations(1);
+    p.saved.save.click();
+    const before = [...storage.data.entries()];
+    const tick = p.canvas.dataset.tick;
+    const rows = p.rows();
+    expect(rows[0]!.find((n) => n.tag === 'button').map((b) => b.textContent)).toEqual(['Delete']); // junk (damaged)
+    expect(rows[1]!.find((n) => n.tag === 'button').map((b) => b.textContent)).toEqual(['Replay', 'Download JSON', 'Delete']);
+    p.button(rows[1]!, 'Download JSON').click();
+    expect([...storage.data.entries()]).toEqual(before);
+    expect(p.canvas.dataset.tick).toBe(tick);
+  });
+
+  it('says so when the browser refuses the download, and when storage fails', () => {
+    const p = setup();
+    p.completeGenerations(1);
+    p.saved.save.click();
+    p.saved.failDownload = true;
+    p.button(p.rows()[0]!, 'Download JSON').click();
+    expect(p.saved.status.textContent).toBe('The download could not be started in this browser.');
+    p.saved.failDownload = false;
+    p.savedStorage.data.set(`${MODEL_KEY_PREFIX}saved-1`, 'damaged now');
+    p.replay.details.toggle(true);
+    expect(p.rows()[0]!.find((n) => n.tag === 'button').map((b) => b.textContent)).toEqual(['Delete']);
+    expect(p.saved.downloads).toHaveLength(0);
   });
 });

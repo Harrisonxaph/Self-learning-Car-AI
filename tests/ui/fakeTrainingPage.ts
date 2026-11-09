@@ -173,6 +173,12 @@ export function fakePage(frames: FakeFrames, options: FakePageOptions | { ms: nu
       let n = 0;
       return () => `saved-${(n += 1)}`;
     })(),
+    downloads: [] as { filename: string; text: string }[],
+    download(filename: string, text: string) {
+      if (this.failDownload) throw new Error('blocked');
+      this.downloads.push({ filename, text });
+    },
+    failDownload: false,
     isoNow: () => '2026-11-08T22:00:00.000Z',
     codeVersion: 'test',
     appVersion: '0.0.0',

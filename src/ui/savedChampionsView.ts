@@ -20,6 +20,7 @@ export interface UiFactory {
 
 export interface SavedRowHandlers {
   replay(id: string): void;
+  download(id: string): void;
   requestDelete(id: string): void;
   confirmDelete(id: string): void;
   cancelDelete(): void;
@@ -70,7 +71,10 @@ export function renderSavedList(list: UiList, ui: UiFactory, listing: StoreListi
     }
     const actions = ui.create('span');
     actions.setAttribute('class', 'saved-actions');
-    if (entry.status === 'ok') actions.append(button('Replay', `Replay ${label}`, () => handlers.replay(entry.id), !entry.drivable));
+    if (entry.status === 'ok') {
+      actions.append(button('Replay', `Replay ${label}`, () => handlers.replay(entry.id), !entry.drivable));
+      actions.append(button('Download JSON', `Download JSON for ${label}`, () => handlers.download(entry.id)));
+    }
     if (pendingDelete === entry.id) {
       actions.append(button('Yes, delete', `Confirm delete ${label}`, () => handlers.confirmDelete(entry.id)), button('Keep', `Keep ${label}`, () => handlers.cancelDelete()));
     } else {

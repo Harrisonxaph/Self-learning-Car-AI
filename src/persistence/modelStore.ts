@@ -59,16 +59,28 @@ export type LoadResult =
   | { readonly ok: true; readonly model: ModelDocument; readonly warnings: readonly string[] }
   | { readonly ok: false; readonly message: string };
 
+/** A file to download: the validated v1 document as JSON text, and a plain, safe file name. */
+export type ExportResult = { readonly ok: true; readonly filename: string; readonly text: string } | { readonly ok: false; readonly message: string };
+
 export type RemoveResult = { readonly ok: true } | { readonly ok: false; readonly message: string };
 
 export interface ModelStore {
   list(): StoreListing;
   save(model: ModelDocument): SaveResult;
   load(id: string): LoadResult;
+  /** The saved champion as a JSON file, so a copy can outlive the browser's storage. Only a valid entry can be exported. */
+  exportFile(id: string): ExportResult;
   remove(id: string): RemoveResult;
 }
 
 const modelKey = (id: string) => `${MODEL_KEY_PREFIX}${id}`;
+
+/** A file name made of plain letters, digits and dashes, whatever the saved name holds. */
+export function exportFilename(model: ModelDocument): string {
+  const slug = (model.name ?? '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40).replace(/-+$/g, '');
+  const short = model.id.replace(/[^A-Za-z0-9]/g, '').slice(0, 8) || 'model';
+  return `sdae-champion-${slug === '' ? 'unnamed' : slug}-gen${model.training.generation + 1}-${short}.json`;
+}
 
 function isQuotaError(error: unknown): boolean {
   if (typeof error !== 'object' || error === null) return false;
@@ -234,6 +246,24 @@ export function createModelStore(options: ModelStoreOptions): ModelStore {
       const c = compatibility(read.model);
       if (!c.drivable) return { ok: false, message: `This saved champion can't be run by this version of the app. ${c.reasons.join(' ')}` };
       return { ok: true, model: read.model, warnings: c.warnings };
+    },
+
+    exportFile(id) {
+      if (!MODEL_ID_PATTERN.test(id)) return { ok: false, message: 'That is not a saved champion.' };
+      const storage = open();
+      if (!storage) return { ok: false, message: MESSAGES.unavailable };
+      let stored: string | null;
+      try {
+        stored = storage.getItem(modelKey(id));
+      } catch {
+        return { ok: false, message: MESSAGES.unavailable };
+      }
+      const read = readModel(stored, registry);
+      if (!read.ok) return { ok: false, message: `This saved champion can't be exported. ${read.problem}` };
+      // The validated document, written out again: exactly what a later import will read.
+      const text = JSON.stringify(read.model, null, 2);
+      if (text.length > MAX_MODEL_BYTES) return { ok: false, message: "This saved champion can't be exported: it is larger than the 1 MiB limit." };
+      return { ok: true, filename: exportFilename(read.model), text };
     },
 
     remove(id) {

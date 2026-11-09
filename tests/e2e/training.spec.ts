@@ -647,6 +647,36 @@ test('a saved champion survives a page reload, replays and can be deleted', asyn
   await expect(page.locator('#saved-status')).toHaveText('Deleted.');
 });
 
+test('Download JSON gives a file with the validated saved champion', async ({ page }) => {
+  await installPausedClock(page);
+  await page.goto('/?mode=train');
+  await page.clock.runFor(100);
+  await advanceUntil(page, (v) => v.data.chartPoints === '1');
+  await page.locator('#champion-replay > summary').click();
+  await page.locator('#saved-name').fill('Download me');
+  await page.locator('#saved-save').click();
+  await expect(page.locator('#saved-list li')).toHaveCount(1);
+  const downloadPromise = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Download JSON for Download me' }).click();
+  const download = await downloadPromise;
+  expect(download.suggestedFilename()).toMatch(/^sdae-champion-download-me-gen1-[a-z0-9]{1,8}\.json$/);
+  const path = await download.path();
+  const { readFileSync } = await import('node:fs');
+  const doc = JSON.parse(readFileSync(path, 'utf8'));
+  expect(doc.format).toBe('self-driving-ai-evolution/model');
+  expect(doc.schemaVersion).toBe(1);
+  expect(doc.name).toBe('Download me');
+  expect(doc.parameters.values).toHaveLength(159);
+  expect(doc.training.trackIds).toEqual(['stadium-oval']);
+  // The same document the page stores.
+  const stored = await page.evaluate(() => {
+    const index = JSON.parse(localStorage.getItem('sdae:models:index')!) as string[];
+    return JSON.parse(localStorage.getItem(`sdae:model:${index[0]}`)!);
+  });
+  expect(doc).toEqual(stored);
+  await expect(page.locator('#saved-status')).toContainText('Download started');
+});
+
 test('a saved champion whose network overflows is refused with a message, and the page keeps running without an error', async ({ page }) => {
   await installPausedClock(page);
   await page.goto('/?mode=train');

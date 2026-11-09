@@ -97,6 +97,8 @@ export interface TrainingPage {
     readonly storage: () => StorageLike | null;
     /** A fresh id (a UUID); it must not draw from a simulation or evolution random stream. */
     readonly newId: () => string;
+    /** Starts a download of `text` as a file named `filename`; may throw if the browser refuses. */
+    readonly download: (filename: string, text: string) => void;
     /** The current time as an ISO 8601 UTC string. */
     readonly isoNow: () => string;
     readonly codeVersion: string;
@@ -385,6 +387,20 @@ export function startTrainingPage(page: TrainingPage): void {
     else if (listing.partial) say(MESSAGES.partial);
     renderSavedList(savedPanel.list, savedPanel.ui, listing, pendingDelete, {
       replay: replaySaved,
+      download: (id) => {
+        pendingDelete = null;
+        const file = store.exportFile(id);
+        if (!file.ok) {
+          say(file.message);
+          return;
+        }
+        try {
+          savedPanel.download(file.filename, file.text);
+          say(`Download started: ${file.filename}. Keep the file somewhere safe: it is a copy that does not depend on this browser's storage.`);
+        } catch {
+          say('The download could not be started in this browser.');
+        }
+      },
       requestDelete: (id) => {
         pendingDelete = id;
         refreshSaved();

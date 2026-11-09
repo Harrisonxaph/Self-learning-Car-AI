@@ -25,6 +25,7 @@ import { debugFpsEnabled, debugRaysEnabled } from './ui/debugFlags';
 import { browserFrameEnvironment, startFrameLoop } from './ui/frameLoop';
 import { hudView, nextFeedback, type Feedback } from './ui/hud';
 import { pageMode } from './ui/pageMode';
+import { downloadJson } from './ui/download';
 import { newModelId } from './ui/modelId';
 import type { UiList, UiNode } from './ui/savedChampionsView';
 import { startTrainingPage } from './ui/trainingPage';
@@ -109,6 +110,7 @@ if (pageMode(window.location.search) === 'train') {
       ui: { create: (tag) => document.createElement(tag) as unknown as UiNode },
       storage: () => window.localStorage,
       newId: () => newModelId(),
+      download: downloadJson,
       isoNow: () => new Date().toISOString(),
       codeVersion: __CODE_VERSION__,
       appVersion: __APP_VERSION__,

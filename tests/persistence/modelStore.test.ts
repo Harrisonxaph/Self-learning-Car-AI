@@ -4,8 +4,8 @@ import { describe, expect, it } from 'vitest';
 import stadiumOval from '../../src/data/tracks/stadium-oval.json';
 import { DEFAULT_SIM_CONFIG, DEFAULT_VEHICLE_PHYSICS, terminalSpeed, type VehiclePhysics } from '../../src/sim/config';
 import { loadTrack } from '../../src/sim/track';
-import { buildModel, MAX_MODEL_BYTES, modelParameters, type ModelDocument } from '../../src/persistence/modelFormat';
-import { createModelStore, INDEX_KEY, MAX_SAVES, MESSAGES, MODEL_KEY_PREFIX, type StorageLike } from '../../src/persistence/modelStore';
+import { buildModel, MAX_MODEL_BYTES, modelParameters, validateModel, type ModelDocument } from '../../src/persistence/modelFormat';
+import { createModelStore, exportFilename, INDEX_KEY, MAX_SAVES, MESSAGES, MODEL_KEY_PREFIX, type StorageLike } from '../../src/persistence/modelStore';
 import { tracksIn } from '../../src/training/trackSplits';
 import { createTrainer, DEFAULT_TRAINING_CONFIG } from '../../src/training/trainer';
 
@@ -400,5 +400,58 @@ describe('remove', () => {
   it('refuses an id that is not a saved champion', () => {
     const { store } = setup();
     expect(store.remove('a/b')).toEqual({ ok: false, message: 'That is not a saved champion.' });
+  });
+});
+
+describe('exportFile', () => {
+  it('writes the validated document as JSON that reads back identically, parameters bit for bit', () => {
+    const { store } = setup();
+    const original = model('abc', { name: 'My best' });
+    store.save(original);
+    const file = store.exportFile('abc');
+    if (!file.ok) throw new Error(file.message);
+    const back = validateModel(JSON.parse(file.text), REGISTRY);
+    if (!back.ok) throw new Error(back.errors.join('; '));
+    expect(back.model).toEqual(original);
+    const a = modelParameters(back.model);
+    stats.champion.forEach((v, i) => expect(Object.is(a[i], v === 0 ? 0 : v)).toBe(true));
+    expect(file.text.length).toBeLessThan(MAX_MODEL_BYTES);
+    expect(file.filename).toBe(`sdae-champion-my-best-gen${stats.generation + 1}-abc.json`);
+  });
+  it('refuses a damaged, missing or unreadable save, and an id that is not a save, without throwing', () => {
+    const { store, storage } = setup();
+    storage.data.set(`${MODEL_KEY_PREFIX}bad`, 'not json');
+    expect(store.exportFile('bad')).toMatchObject({ ok: false, message: expect.stringContaining("can't be exported") });
+    expect(store.exportFile('missing')).toMatchObject({ ok: false });
+    expect(store.exportFile('../x')).toEqual({ ok: false, message: 'That is not a saved champion.' });
+    storage.failGet = () => new Error('denied');
+    expect(store.exportFile('bad')).toEqual({ ok: false, message: MESSAGES.unavailable });
+    const none = createModelStore({ storage: () => { throw new Error('denied'); }, registry: REGISTRY });
+    expect(none.exportFile('bad')).toEqual({ ok: false, message: MESSAGES.unavailable });
+  });
+  it('exports a save made for another simulation version too, so a copy can still be kept', () => {
+    const { store, storage } = setup();
+    store.save(model('old'));
+    const doc = JSON.parse(storage.data.get(`${MODEL_KEY_PREFIX}old`)!);
+    doc.simulationVersion = 2;
+    storage.data.set(`${MODEL_KEY_PREFIX}old`, JSON.stringify(doc));
+    expect(store.exportFile('old').ok).toBe(true);
+  });
+  it.each([
+    ['plain letters', 'My Best', 'my-best'],
+    ['a path and markup', '../../etc/<script>', 'etc-script'],
+    ['control and unicode characters', 'caf\u00e9 \u0000\n\u202e x', 'caf-x'],
+    ['nothing usable', '###', 'unnamed'],
+    ['a very long name', 'a'.repeat(200), 'a'.repeat(40)],
+  ])('makes a plain file name from %s', (_label, name, slug) => {
+    const doc = { ...model('id-1'), name } as ModelDocument;
+    const filename = exportFilename(doc);
+    expect(filename).toBe(`sdae-champion-${slug}-gen${doc.training.generation + 1}-id1.json`);
+    expect(filename).toMatch(/^[a-z0-9.-]+$/);
+  });
+  it('makes a plain file name even when the saved name is missing', () => {
+    const doc = { ...model('xyz') } as { name?: string };
+    delete doc.name;
+    expect(exportFilename(doc as ModelDocument)).toMatch(/^sdae-champion-unnamed-gen\d+-xyz\.json$/);
   });
 });
