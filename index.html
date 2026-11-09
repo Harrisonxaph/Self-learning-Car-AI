@@ -97,11 +97,15 @@
         <p id="replay-status" class="graph-summary" role="status"></p>
         <section class="saved-champions" aria-labelledby="saved-heading">
           <h2 id="saved-heading" class="saved-heading">Saved champions</h2>
-          <p id="saved-notice" class="graph-summary">Saved in this browser only. Browsers can clear this storage, and a private window may keep nothing, or only until it closes, so this is a convenience, not a backup. Use Download JSON to keep a copy as a file. (Loading a file back in arrives in a later update, P3-06.)</p>
+          <p id="saved-notice" class="graph-summary">Saved in this browser only. Browsers can clear this storage, and a private window may keep nothing, or only until it closes, so this is a convenience, not a backup. Use Download JSON to keep a copy as a file. Import JSON file loads a downloaded champion back in; a file that is not a valid champion is refused and changes nothing.</p>
           <div class="replay-controls">
             <label class="replay-field" for="saved-name">Name</label>
             <input id="saved-name" class="replay-input saved-name" type="text" maxlength="60" autocomplete="off" placeholder="Generation N champion" />
             <button type="button" id="saved-save" class="tc-button replay-button" disabled>Save this champion</button>
+          </div>
+          <div class="replay-controls">
+            <input id="saved-import" class="import-input" type="file" accept=".json,application/json" />
+            <label id="saved-import-button" class="tc-button replay-button import-label" for="saved-import">Import JSON file</label>
           </div>
           <p id="saved-status" class="graph-summary" role="status"></p>
           <ul id="saved-list" class="saved-list" aria-label="Saved champions"></ul>

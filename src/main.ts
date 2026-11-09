@@ -104,6 +104,7 @@ if (pageMode(window.location.search) === 'train') {
     saved: {
       name: element<HTMLInputElement>('#saved-name'),
       save: element<HTMLButtonElement>('#saved-save'),
+      importInput: element<HTMLInputElement>('#saved-import'),
       status: element<HTMLElement>('#saved-status'),
       // Real elements satisfy the small node interface the list is built through (see ui/savedChampionsView.ts).
       list: element<HTMLElement>('#saved-list') as unknown as UiList,

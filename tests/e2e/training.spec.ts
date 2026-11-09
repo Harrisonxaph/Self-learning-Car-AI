@@ -580,7 +580,7 @@ test('with the champion replay open, the track keeps its space, the page does no
       const status = document.querySelector('#saved-list li:last-child')!.getBoundingClientRect();
       const after = panel.getBoundingClientRect();
       const root = document.documentElement;
-      const small = ['replay-generation', 'replay-start', 'replay-stop', 'saved-name', 'saved-save'].filter((id) => {
+      const small = ['replay-generation', 'replay-start', 'replay-stop', 'saved-name', 'saved-save', 'saved-import-button'].filter((id) => {
         const r = rect(id);
         return r.width < 44 || r.height < 44;
       });
@@ -675,6 +675,98 @@ test('Download JSON gives a file with the validated saved champion', async ({ pa
   });
   expect(doc).toEqual(stored);
   await expect(page.locator('#saved-status')).toContainText('Download started');
+});
+
+test('Import JSON: a downloaded champion re-imports identically, and invalid or oversized files change nothing', async ({ page }, testInfo) => {
+  await installPausedClock(page);
+  await page.goto('/?mode=train');
+  await page.clock.runFor(100);
+  await advanceUntil(page, (v) => v.data.chartPoints === '1');
+  await page.locator('#champion-replay > summary').click();
+  await page.locator('#saved-name').fill('Round trip');
+  await page.locator('#saved-save').click();
+  await expect(page.locator('#saved-list li')).toHaveCount(1);
+  const stored = () =>
+    page.evaluate(() => {
+      const index = JSON.parse(localStorage.getItem('sdae:models:index')!) as string[];
+      return index.map((id) => localStorage.getItem(`sdae:model:${id}`));
+    });
+  const [before] = await stored();
+  const downloadPromise = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Download JSON for Round trip' }).click();
+  const downloaded = await (await downloadPromise).path();
+  const { readFileSync, writeFileSync } = await import('node:fs');
+  const exportedText = readFileSync(downloaded, 'utf8');
+
+  // Delete the save, then bring it back from the file.
+  await page.getByRole('button', { name: 'Delete Round trip' }).click();
+  await page.getByRole('button', { name: 'Confirm delete Round trip' }).click();
+  await expect(page.locator('#saved-list li')).toHaveCount(0);
+  await page.locator('#saved-import').setInputFiles(downloaded);
+  await expect(page.locator('#saved-status')).toContainText('Imported "Round trip" (generation 1).');
+  await expect(page.locator('#saved-list li')).toHaveCount(1);
+  const [after] = await stored();
+  expect(JSON.parse(after!)).toEqual(JSON.parse(before!));
+  // Exporting again gives the same file, byte for byte.
+  const again = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Download JSON for Round trip' }).click();
+  expect(readFileSync((await (await again).path()), 'utf8')).toBe(exportedText);
+
+  // The same file twice adds nothing.
+  await page.locator('#saved-import').setInputFiles(downloaded);
+  await expect(page.locator('#saved-status')).toContainText('already saved');
+  await expect(page.locator('#saved-list li')).toHaveCount(1);
+
+  // Invalid and oversized files are refused and change nothing.
+  const snapshot = await stored();
+  const notJson = testInfo.outputPath('not-a-champion.json');
+  writeFileSync(notJson, 'this is not a champion');
+  await page.locator('#saved-import').setInputFiles(notJson);
+  await expect(page.locator('#saved-status')).toContainText('Nothing was imported.');
+  await page.locator('#saved-import').setInputFiles({ name: 'big.json', mimeType: 'application/json', buffer: Buffer.alloc(1_048_577, 32) });
+  await expect(page.locator('#saved-status')).toContainText('1 MiB');
+  expect(await stored()).toEqual(snapshot);
+  await expect(page.locator('#saved-list li')).toHaveCount(1);
+
+  // The imported champion replays.
+  await page.getByRole('button', { name: 'Replay Round trip' }).click();
+  await page.clock.runFor(1500);
+  await expect(page.locator('#sim-canvas')).toHaveAttribute('data-replay-source', 'saved');
+});
+
+test('a multibyte file near the 1 MiB limit imports and its own download imports again', async ({ page }, testInfo) => {
+  await installPausedClock(page);
+  await page.goto('/?mode=train');
+  await page.clock.runFor(100);
+  await advanceUntil(page, (v) => v.data.chartPoints === '1');
+  await page.locator('#champion-replay > summary').click();
+  await page.locator('#saved-name').fill('Wide');
+  await page.locator('#saved-save').click();
+  await expect(page.locator('#saved-list li')).toHaveCount(1);
+  const downloadPromise = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Download JSON for Wide' }).click();
+  const { readFileSync, writeFileSync, statSync } = await import('node:fs');
+  const original = JSON.parse(readFileSync(await (await downloadPromise).path(), 'utf8')) as Record<string, unknown>;
+  // A new id and a multibyte extra field, sized so the compact JSON is within a few bytes of the limit.
+  const make = (room: number) => JSON.stringify({ ...original, id: 'wide-file-1', name: 'Wide copy', extra: '\u754c'.repeat(Math.floor(room / 3)) });
+  let size = 1_048_576 - 40;
+  let body = make(size);
+  size -= Buffer.byteLength(body) - 1_048_576 + 30;
+  body = make(size);
+  expect(Buffer.byteLength(body)).toBeLessThanOrEqual(1_048_576);
+  expect(Buffer.byteLength(body)).toBeGreaterThan(1_048_000);
+  const wide = testInfo.outputPath('wide.json');
+  writeFileSync(wide, body);
+  await page.locator('#saved-import').setInputFiles(wide);
+  await expect(page.locator('#saved-status')).toContainText('Imported "Wide copy"');
+  const again = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Download JSON for Wide copy' }).click();
+  const downloaded = await (await again).path();
+  expect(statSync(downloaded).size).toBeLessThanOrEqual(1_048_576);
+  await page.getByRole('button', { name: 'Delete Wide copy' }).click();
+  await page.getByRole('button', { name: 'Confirm delete Wide copy' }).click();
+  await page.locator('#saved-import').setInputFiles(downloaded);
+  await expect(page.locator('#saved-status')).toContainText('Imported "Wide copy"');
 });
 
 test('Download JSON of stored data nested too deeply gives a message, not an error', async ({ page }) => {

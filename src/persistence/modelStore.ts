@@ -5,7 +5,7 @@
 // Keys (docs/MODEL_FORMAT.md, "Storage behaviour"): `sdae:model:<id>` per model and `sdae:models:index`, a JSON array of ids
 // in saving order. The index is a hint: the store also scans for model keys that are not in it (a save that failed
 // between the two writes, or a damaged index), and an index entry whose model is gone is reported as damaged.
-import { compatibility, MAX_MODEL_BYTES, MODEL_ID_PATTERN, validateModel, type ModelDocument, type TrackRegistryEntry } from './modelFormat';
+import { compatibility, MAX_MODEL_BYTES, MODEL_ID_PATTERN, utf8Bytes, validateModel, type ModelDocument, type TrackRegistryEntry } from './modelFormat';
 
 export const MODEL_KEY_PREFIX = 'sdae:model:';
 export const INDEX_KEY = 'sdae:models:index';
@@ -62,6 +62,11 @@ export type LoadResult =
 /** A file to download: the validated v1 document as JSON text, and a plain, safe file name. */
 export type ExportResult = { readonly ok: true; readonly filename: string; readonly text: string } | { readonly ok: false; readonly message: string };
 
+/** What importing a file did: added as a new save, found already saved (identical), or saved under a new id because its id was taken by different content. */
+export type ImportOutcome =
+  | { readonly ok: true; readonly status: 'added' | 'already-saved' | 'saved-as-copy'; readonly id: string; readonly indexed: boolean }
+  | { readonly ok: false; readonly reason: 'unavailable' | 'quota' | 'full' | 'invalid'; readonly message: string };
+
 export type RemoveResult = { readonly ok: true } | { readonly ok: false; readonly message: string };
 
 export interface ModelStore {
@@ -70,6 +75,11 @@ export interface ModelStore {
   load(id: string): LoadResult;
   /** The saved champion as a JSON file, so a copy can outlive the browser's storage. Only a valid entry can be exported. */
   exportFile(id: string): ExportResult;
+  /**
+   * Saves an imported, already validated champion without ever overwriting a save: identical content under the same id is
+   * "already saved", different content under a taken id is saved under a fresh id from `newId`.
+   */
+  importModel(model: ModelDocument, newId: () => string): ImportOutcome;
   remove(id: string): RemoveResult;
 }
 
@@ -82,6 +92,13 @@ export function exportFilename(model: ModelDocument): string {
   return `sdae-champion-${slug === '' ? 'unnamed' : slug}-gen${model.training.generation + 1}-${short}.json`;
 }
 
+/** JSON text with object keys in sorted order, so two equal documents compare equal whatever their key order. */
+function canonical(value: unknown): string {
+  return JSON.stringify(value, (_key, v: unknown) =>
+    typeof v === 'object' && v !== null && !Array.isArray(v) ? Object.fromEntries(Object.entries(v as Record<string, unknown>).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))) : v,
+  );
+}
+
 function isQuotaError(error: unknown): boolean {
   if (typeof error !== 'object' || error === null) return false;
   const { name, code } = error as { name?: unknown; code?: unknown };
@@ -91,7 +108,7 @@ function isQuotaError(error: unknown): boolean {
 /** Reads text from a stored entry and validates it; the size cap applies before any parsing. */
 function readModel(text: string | null, registry: readonly TrackRegistryEntry[]): { ok: true; model: ModelDocument } | { ok: false; problem: string } {
   if (text === null) return { ok: false, problem: 'It is listed but its data is missing.' };
-  if (text.length > MAX_MODEL_BYTES) return { ok: false, problem: 'It is larger than the 1 MiB limit.' };
+  if (utf8Bytes(text) > MAX_MODEL_BYTES) return { ok: false, problem: 'It is larger than the 1 MiB limit.' };
   let parsed: unknown;
   try {
     parsed = JSON.parse(text);
@@ -200,7 +217,7 @@ export function createModelStore(options: ModelStoreOptions): ModelStore {
     };
   };
 
-  return {
+  const store: ModelStore = {
     list() {
       const storage = open();
       if (!storage) return { available: false, message: MESSAGES.unavailable };
@@ -211,10 +228,17 @@ export function createModelStore(options: ModelStoreOptions): ModelStore {
     },
 
     save(model) {
-      const checked = validateModel(JSON.parse(JSON.stringify(model)) as unknown, registry);
+      // Unknown extra fields survive validation, so serializing can fail (for example a value nested too deeply): a message, never an exception.
+      let text: string;
+      let checked: ReturnType<typeof validateModel>;
+      try {
+        checked = validateModel(JSON.parse(JSON.stringify(model)) as unknown, registry);
+        text = JSON.stringify(model);
+      } catch {
+        return { ok: false, reason: 'invalid', message: "This champion could not be saved: its data is nested too deeply to write out." };
+      }
       if (!checked.ok) return { ok: false, reason: 'invalid', message: `This champion could not be saved: ${checked.errors.join(' ')}` };
-      const text = JSON.stringify(model);
-      if (text.length > MAX_MODEL_BYTES) return { ok: false, reason: 'invalid', message: 'This champion could not be saved: it is larger than the 1 MiB limit.' };
+      if (utf8Bytes(text) > MAX_MODEL_BYTES) return { ok: false, reason: 'invalid', message: 'This champion could not be saved: it is larger than the 1 MiB limit.' };
       const storage = open();
       if (!storage) return { ok: false, reason: 'unavailable', message: MESSAGES.unavailable };
       const known = knownIds(storage);
@@ -268,8 +292,66 @@ export function createModelStore(options: ModelStoreOptions): ModelStore {
       } catch {
         return { ok: false, message: "This saved champion can't be exported: its data is nested too deeply to write out." };
       }
-      if (text.length > MAX_MODEL_BYTES) return { ok: false, message: "This saved champion can't be exported: it is larger than the 1 MiB limit." };
+      // The limit is in UTF-8 bytes, the same one an import applies to the file, so an offered download can always be imported
+      // again. The indented text is used when it fits; close to the limit the compact text of the same document is used.
+      if (utf8Bytes(text) > MAX_MODEL_BYTES) {
+        try {
+          text = JSON.stringify(read.model);
+        } catch {
+          return { ok: false, message: "This saved champion can't be exported: its data is nested too deeply to write out." };
+        }
+        if (utf8Bytes(text) > MAX_MODEL_BYTES) return { ok: false, message: "This saved champion can't be exported: it is larger than the 1 MiB limit." };
+      }
       return { ok: true, filename: exportFilename(read.model), text };
+    },
+
+    importModel(model, newId) {
+      const storage = open();
+      if (!storage) return { ok: false, reason: 'unavailable', message: MESSAGES.unavailable };
+      const known = knownIds(storage);
+      if (known.failed) {
+        // An incomplete inventory cannot show what is already saved or how many saves there are, so nothing is written.
+        return { ok: false, reason: 'unavailable', message: 'Browser storage could not be fully read, so nothing was imported. Try again, or delete a saved champion first.' };
+      }
+      /** The text stored under `id`: null if the key is free; throws if the storage refuses. The key itself is checked, not only the inventory. */
+      const stored = (id: string): string | null => storage.getItem(modelKey(id));
+      let target = model;
+      let existing: string | null;
+      try {
+        existing = stored(model.id);
+      } catch {
+        return { ok: false, reason: 'unavailable', message: MESSAGES.unavailable };
+      }
+      if (existing !== null || known.ids.includes(model.id)) {
+        let identical: boolean;
+        try {
+          const read = readModel(existing, registry);
+          identical = read.ok && canonical(read.model) === canonical(model);
+        } catch {
+          identical = false;
+        }
+        if (identical) return { ok: true, status: 'already-saved', id: model.id, indexed: true };
+        let fresh: string | null = null;
+        for (let attempt = 0; attempt < 5 && fresh === null; attempt += 1) {
+          let candidate: string;
+          try {
+            candidate = newId();
+          } catch {
+            candidate = '';
+          }
+          if (!MODEL_ID_PATTERN.test(candidate) || known.ids.includes(candidate)) continue;
+          try {
+            if (stored(candidate) === null) fresh = candidate;
+          } catch {
+            return { ok: false, reason: 'unavailable', message: MESSAGES.unavailable };
+          }
+        }
+        if (fresh === null) return { ok: false, reason: 'invalid', message: 'This champion could not be saved: no free id was available.' };
+        target = { ...model, id: fresh };
+      }
+      const saved = store.save(target);
+      if (!saved.ok) return saved;
+      return { ok: true, status: target === model ? 'added' : 'saved-as-copy', id: target.id, indexed: saved.indexed };
     },
 
     remove(id) {
@@ -287,4 +369,5 @@ export function createModelStore(options: ModelStoreOptions): ModelStore {
       return { ok: true };
     },
   };
+  return store;
 }

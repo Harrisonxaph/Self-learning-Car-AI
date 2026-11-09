@@ -1,6 +1,6 @@
 # Saved model format
 
-> Status: **P3-05 implements saving, listing, loading and validating this format in localStorage** (`src/persistence/modelFormat.ts`, `src/persistence/modelStore.ts`). File export and import, and migrations, are P3-06. The "Amendments made in P3-05" section at the end lists what the implementation added or clarified.
+> Status: **P3-05 implements saving, listing, loading and validating this format in localStorage** (`src/persistence/modelFormat.ts`, `src/persistence/modelStore.ts`). File export is P3-05 and file import with the migration hook is P3-06 (`src/persistence/modelImport.ts`, `src/persistence/migrations.ts`). The "Amendments made in P3-05" section at the end lists what the implementation added or clarified.
 
 A saved model ("brain") is a single JSON document. The same document is used for localStorage, file export and file import.
 
@@ -409,3 +409,14 @@ Authorised by the owner on [#25](https://github.com/Harrisonxaph/Self-learning-C
 - **Unknown extra fields** are ignored when reading and are not kept when saving.
 - **Storage details:** the index `sdae:models:index` is a JSON array of ids in saving order. It is a hint: the store also finds model keys that are not in it, shows an index entry whose model is gone as damaged, and rebuilds a damaged index from the model keys. The cap is 20 saves; a 21st asks the person to delete one (damaged entries count, and can be deleted).
 - **Export JSON next to every save** (the storage section above) **is met in P3-05** (owner's [decision](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/25#issuecomment-6741305815) to take the recommendation): each valid saved champion has a "Download JSON" button that downloads exactly the validated v1 document (`JSON.stringify(model, null, 2)`, under the 1 MiB cap) as `sdae-champion-<name>-gen<N>-<id>.json`, the name reduced to lowercase letters, digits and dashes. A damaged entry has no download; a champion made for another simulation version can still be downloaded, so a copy can be kept. **Still P3-06:** importing a file, its size limit, schema, version and compatibility checks for files, migrations and the re-import-identically test.
+
+## Amendments made in P3-06
+
+Authorised by the owner ([#138](https://github.com/Harrisonxaph/Self-learning-Car-AI/pull/138#issuecomment-6745908947)) as specified in `docs/plans/p3-06-plan.md`. No field of the format changed.
+
+- **Import reads exactly what export writes.** The text is refused if longer than 1 MiB (before `JSON.parse`), a leading byte-order mark is stripped, and the parsed value goes through the same validator as a stored save. Nothing is written until the whole file has passed.
+- **Migration hook.** `migrateToCurrent` runs explicit `vN → vN+1` functions in order on a copy of an older document, refuses if a step is missing or throws, and passes current and newer documents through (the validator refuses a newer one as such). **The real registry is empty: schema 1 is the first version and no migration is claimed to exist.**
+- **One byte limit.** The 1 MiB limit is in **UTF-8 bytes** at every boundary (file size, the text before parsing, what `save` writes, what is read back, and what export offers), so a download can always be imported again. Export writes the indented document, or the compact text of the same document if only the indented form exceeds the limit. A leading byte-order mark is accepted on import and never written.
+- **Serialization is guarded.** Unknown extra fields survive validation; a value nested too deeply to write out makes a save or import return a refusal message, never an exception.
+- **Incomplete storage inventory.** If saved champions cannot be fully listed, nothing is imported; the destination key is always checked directly, so an unlisted save is never overwritten.
+- **Id collisions.** The same id with identical content is "already saved"; the same id with different content is saved under a new id; an existing save is never overwritten.

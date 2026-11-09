@@ -441,6 +441,8 @@ body {
 
 /* Saved champions (P3-05), inside the champion replay block. */
 .saved-champions {
+  /* Contains the visually hidden file input, so it can never extend the page's scrollable area. */
+  position: relative;
   margin-top: 0.5rem;
   border-top: 1px solid #33424f;
   padding-top: 0.25rem;
@@ -454,6 +456,28 @@ body {
 .saved-name {
   width: min(14rem, 100%);
   flex: 1 1 8rem;
+}
+
+/* Import JSON (P3-06): the real file input stays focusable but invisible; its label is the 44 px button. */
+.import-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  overflow: hidden;
+}
+
+.import-label {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: max(44px, 2.75rem);
+  cursor: pointer;
+}
+
+.import-input:focus-visible + .import-label {
+  outline: 3px solid #ffb000;
+  outline-offset: 2px;
 }
 
 .saved-list {
