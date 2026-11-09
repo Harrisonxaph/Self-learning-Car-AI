@@ -95,6 +95,23 @@
         <p class="graph-summary"><output aria-live="off" id="replay-decision">No decision yet</output></p>
         <p class="graph-summary"><output aria-live="off" id="replay-result"></output></p>
         <p id="replay-status" class="graph-summary" role="status"></p>
+        <section class="saved-champions checkpoint-panel" aria-labelledby="checkpoint-heading">
+          <h2 id="checkpoint-heading" class="saved-heading">Training checkpoint</h2>
+          <p id="checkpoint-notice" class="graph-summary">A checkpoint is this run at a generation boundary, so it can be resumed later. It is saved in this browser only, which is a convenience, not a backup: Download checkpoint keeps a copy as a file. A saved checkpoint is only ever offered; nothing resumes by itself.</p>
+          <div id="checkpoint-offer" class="checkpoint-offer" hidden>
+            <p id="checkpoint-offer-text" class="graph-summary"></p>
+            <div class="replay-controls">
+              <button type="button" id="checkpoint-resume" class="tc-button replay-button">Resume</button>
+              <button type="button" id="checkpoint-discard" class="tc-button replay-button">Discard</button>
+            </div>
+          </div>
+          <div class="replay-controls">
+            <button type="button" id="checkpoint-download" class="tc-button replay-button">Download checkpoint</button>
+            <input id="checkpoint-import" class="import-input" type="file" accept=".json,application/json" />
+            <label id="checkpoint-import-button" class="tc-button replay-button import-label" for="checkpoint-import">Load checkpoint file</label>
+          </div>
+          <p id="checkpoint-status" class="graph-summary" role="status"></p>
+        </section>
         <section class="saved-champions" aria-labelledby="saved-heading">
           <h2 id="saved-heading" class="saved-heading">Saved champions</h2>
           <p id="saved-notice" class="graph-summary">Saved in this browser only. Browsers can clear this storage, and a private window may keep nothing, or only until it closes, so this is a convenience, not a backup. Use Download JSON to keep a copy as a file. Import JSON file loads a downloaded champion back in; a file that is not a valid champion is refused and changes nothing.</p>

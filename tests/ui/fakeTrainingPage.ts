@@ -119,6 +119,8 @@ export interface FakePageOptions {
   readonly storage?: (() => StorageLike | null) | undefined;
   /** Gives the page the opt-in frame-rate readout element. */
   readonly fps?: boolean | undefined;
+  /** Gives the page the checkpoint feature (P3-07), with its own storage (a fresh one by default) and settings. */
+  readonly checkpoint?: { readonly storage?: (() => StorageLike | null) | undefined; readonly everyGenerations?: number; readonly minSeconds?: number } | undefined;
 }
 
 /** Just enough of the page's DOM objects for `startTrainingPage` to run in Node. */
@@ -184,6 +186,44 @@ export function fakePage(frames: FakeFrames, options: FakePageOptions | { ms: nu
     codeVersion: 'test',
     appVersion: '0.0.0',
   };
+  const checkpointStorage = new FakeLocalStorage();
+  const hideListeners: (() => void)[] = [];
+  const deferred: { run: () => void; cancelled: boolean }[] = [];
+  const checkpoint = opts.checkpoint
+    ? {
+        status: { textContent: '' as string | null },
+        offer: { container: { hidden: true }, text: { textContent: '' as string | null }, resume: new FakeControl(), discard: new FakeControl() },
+        download: new FakeControl(),
+        importInput: Object.assign(new FakeControl(), { files: null as { name: string; size: number; text(): Promise<string> }[] | null }),
+        storage: opts.checkpoint.storage ?? (() => checkpointStorage as StorageLike | null),
+        newId: (() => {
+          let n = 0;
+          return () => `cp-${(n += 1)}`;
+        })(),
+        isoNow: () => '2026-11-08T22:00:00.000Z',
+        codeVersion: 'test',
+        appVersion: '0.0.0',
+        downloads: [] as { filename: string; text: string }[],
+        failDownload: false,
+        saveFile(filename: string, text: string) {
+          if (this.failDownload) throw new Error('blocked');
+          this.downloads.push({ filename, text });
+        },
+        defer: (callback: () => void) => {
+          const entry = { run: callback, cancelled: false };
+          deferred.push(entry);
+          return () => {
+            entry.cancelled = true;
+          };
+        },
+        onHide: (listener: () => void) => {
+          hideListeners.push(listener);
+          return () => {};
+        },
+        ...(opts.checkpoint.everyGenerations === undefined ? {} : { everyGenerations: opts.checkpoint.everyGenerations }),
+        ...(opts.checkpoint.minSeconds === undefined ? {} : { minSeconds: opts.checkpoint.minSeconds }),
+      }
+    : undefined;
   const viewport: ViewportEnvironment = { measure: () => ({ width: 390, height: 600 }), devicePixelRatio: () => 1, subscribe: () => () => {} };
   const page = {
     canvas,
@@ -194,6 +234,7 @@ export function fakePage(frames: FakeFrames, options: FakePageOptions | { ms: nu
     controls,
     replay,
     saved,
+    checkpoint,
     fps,
     isPhone: opts.isPhone ?? false,
     // No track layer yet: the frame draws nothing, which leaves the per-frame paths under test.
@@ -207,5 +248,10 @@ export function fakePage(frames: FakeFrames, options: FakePageOptions | { ms: nu
     graphViewportEnvironment: viewport,
     now: opts.now ?? (opts.clock ? () => opts.clock!.ms : undefined),
   } as unknown as TrainingPage;
-  return { page, canvas, dashboard, panel, hidden, graph, controls, replay, saved, savedStorage, status, fps };
+  /** Releases every deferred checkpoint write that has not been cancelled (a real scheduler runs these after the frame). */
+  const runDeferred = (includeCancelled = false) => {
+    for (const entry of deferred.splice(0)) if (includeCancelled || !entry.cancelled) entry.run();
+  };
+  const hide = () => hideListeners.forEach((listener) => listener());
+  return { page, canvas, dashboard, panel, hidden, graph, controls, replay, saved, savedStorage, checkpoint, checkpointStorage, runDeferred, hide, status, fps };
 }

@@ -101,6 +101,38 @@ if (pageMode(window.location.search) === 'train') {
         status: element('#replay-status'),
       },
     },
+    checkpoint: {
+      status: element<HTMLElement>('#checkpoint-status'),
+      offer: {
+        container: element<HTMLElement>('#checkpoint-offer'),
+        text: element<HTMLElement>('#checkpoint-offer-text'),
+        resume: element<HTMLButtonElement>('#checkpoint-resume'),
+        discard: element<HTMLButtonElement>('#checkpoint-discard'),
+      },
+      download: element<HTMLButtonElement>('#checkpoint-download'),
+      importInput: element<HTMLInputElement>('#checkpoint-import'),
+      storage: () => window.localStorage,
+      newId: () => newModelId(),
+      isoNow: () => new Date().toISOString(),
+      codeVersion: __CODE_VERSION__,
+      appVersion: __APP_VERSION__,
+      saveFile: downloadJson,
+      defer: (callback) => {
+        const handle = window.setTimeout(callback, 0);
+        return () => window.clearTimeout(handle);
+      },
+      onHide: (listener) => {
+        const onVisibility = () => {
+          if (document.visibilityState === 'hidden') listener();
+        };
+        document.addEventListener('visibilitychange', onVisibility);
+        window.addEventListener('pagehide', listener);
+        return () => {
+          document.removeEventListener('visibilitychange', onVisibility);
+          window.removeEventListener('pagehide', listener);
+        };
+      },
+    },
     saved: {
       name: element<HTMLInputElement>('#saved-name'),
       save: element<HTMLButtonElement>('#saved-save'),

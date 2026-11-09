@@ -14,7 +14,11 @@ import { browserViewportEnvironment, createViewport, type Viewport, type Viewpor
 import type { SimConfig, VehiclePhysics } from '../sim/config';
 import type { Track } from '../sim/track';
 import { createChampionReplay, type ChampionReplay, type ReplayFrame } from '../training/championReplay';
-import { createTrainer, DEFAULT_TRAINING_CONFIG, type Generation } from '../training/trainer';
+import { createTrainer, DEFAULT_TRAINING_CONFIG, type Generation, type TrainerState } from '../training/trainer';
+import { MAX_CHECKPOINT_BYTES, type CheckpointDocument } from '../persistence/checkpointFormat';
+import { checkpointFile, CHECKPOINT_MESSAGES, createCheckpointStore, describeCheckpointRefusal, parseCheckpointText } from '../persistence/checkpointStore';
+import { checkpointFromState, checkpointFromTrainer, checkpointValidateOptions, resumeFromCheckpoint } from './checkpointAdapter';
+import { createCheckpointSaver } from './checkpointSaver';
 import { describeRefusal, importModelText } from '../persistence/modelImport';
 import { MAX_MODEL_BYTES } from '../persistence/modelFormat';
 import { createModelStore, MESSAGES, type StorageLike } from '../persistence/modelStore';
@@ -24,7 +28,7 @@ import { emptyReplayText, renderReplay, replayText, type ReplayOutputs } from '.
 import { renderSavedList, type UiFactory, type UiList } from './savedChampionsView';
 import { replayForModel } from './savedReplay';
 import { browserFrameEnvironment, startFrameLoop, type FrameEnvironment, type FrameLoop } from './frameLoop';
-import { createRateMeter, formatRateReadout } from './rateMeter';
+import { createRateMeter, formatRateReadout, meanMs } from './rateMeter';
 import { createTrainingChart, type GraphContext } from './trainingChart';
 import { createTrainingSession, type DashboardOutputs } from './trainingDashboard';
 import {
@@ -120,6 +124,29 @@ export interface TrainingPage {
     readonly codeVersion: string;
     readonly appVersion: string;
   };
+  /**
+   * Training checkpoints (P3-07): a status line, the offer to resume (never automatic), Download checkpoint and a file chooser.
+   * Absent, the page has no checkpoint feature. The checkpoint is stored in localStorage and is separate from saved champions.
+   */
+  readonly checkpoint?: {
+    readonly status: HTMLElement;
+    readonly offer: { readonly container: HTMLElement; readonly text: HTMLElement; readonly resume: HTMLButtonElement; readonly discard: HTMLButtonElement };
+    readonly download: HTMLButtonElement;
+    readonly importInput: ImportInput;
+    readonly storage: () => StorageLike | null;
+    readonly newId: () => string;
+    readonly isoNow: () => string;
+    readonly codeVersion: string;
+    readonly appVersion: string;
+    /** Starts a download of `text` as a file named `filename`; may throw if the browser refuses. */
+    readonly saveFile: (filename: string, text: string) => void;
+    /** Runs a callback after the current frame; returns a function that cancels it. */
+    readonly defer: (callback: () => void) => () => void;
+    /** Calls the listener when the page is hidden or being left (`visibilitychange` to hidden, `pagehide`); returns an unsubscribe. */
+    readonly onHide: (listener: () => void) => () => void;
+    readonly everyGenerations?: number;
+    readonly minSeconds?: number;
+  };
   /** The browser's frame, size and clock sources by default; tests pass fakes to drive the real page wiring in Node. */
   readonly frames?: FrameEnvironment;
   readonly viewportEnvironment?: ViewportEnvironment;
@@ -152,8 +179,12 @@ export function startTrainingPage(page: TrainingPage): void {
   canvas.setAttribute('aria-label', 'Racetrack with a population of training cars');
 
   page.dashboard.panel.hidden = false;
-  const trainer = createTrainer(DEFAULT_TRAINING_CONFIG, { track, physics, timestepSeconds: config.timestepSeconds });
-  const session = createTrainingSession(trainer, page.dashboard.outputs);
+  const environment = { track, physics, timestepSeconds: config.timestepSeconds };
+  // A resume (P3-07) replaces the trainer and its session, so both are rebindable; nothing caches a value derived from them.
+  let trainer = createTrainer(DEFAULT_TRAINING_CONFIG, environment);
+  let session = createTrainingSession(trainer, page.dashboard.outputs);
+  /** Set by the checkpoint code below; called when a generation ends. */
+  let onBoundary: () => void = () => {};
   let ticks = 0;
 
   // Speed, pause and the number of cars drawn (P3-03). None of these changes what the trainer computes.
@@ -195,11 +226,22 @@ export function startTrainingPage(page: TrainingPage): void {
   const fpsReadout = page.fps;
   const frameMeter = createRateMeter();
   const tickMeter = createRateMeter();
+  // Mean step time (P3-07): milliseconds spent inside the simulation step, fed to a meter at the same sample times as the
+  // tick counts, so ms-per-second over ticks-per-second is the mean ms per tick over the same window and resets.
+  const stepCostMeter = createRateMeter();
+  const drawCostMeter = createRateMeter();
+  let stepMsThisFrame = 0;
+  let drawMsThisFrame = 0;
+  const measureClock = page.now ?? (() => performance.now());
   let ticksThisFrame = 0;
   let lastReadoutMs = Number.NEGATIVE_INFINITY;
   const resetMeters = () => {
     frameMeter.reset();
     tickMeter.reset();
+    stepCostMeter.reset();
+    drawCostMeter.reset();
+    stepMsThisFrame = 0;
+    drawMsThisFrame = 0;
     ticksThisFrame = 0;
     lastReadoutMs = Number.NEGATIVE_INFINITY;
   };
@@ -214,18 +256,28 @@ export function startTrainingPage(page: TrainingPage): void {
     if (!fpsReadout) return;
     frameMeter.add(timeMs);
     tickMeter.add(timeMs, ticksThisFrame);
+    stepCostMeter.add(timeMs, stepMsThisFrame);
+    drawCostMeter.add(timeMs, drawMsThisFrame);
     ticksThisFrame = 0;
+    stepMsThisFrame = 0;
+    drawMsThisFrame = 0;
     if (timeMs - lastReadoutMs < 250 && timeMs >= lastReadoutMs) return;
     lastReadoutMs = timeMs;
     const config = `${speed.paused ? 'paused' : speed.mode} · ${effectiveDrawCap(speed.mode, drawCap, population)} cars drawn`;
     const frameRate = frameMeter.rate();
     const tickRate = tickMeter.rate();
-    fpsReadout.textContent = formatRateReadout(frameRate, tickRate, config);
+    const stepMs = meanMs(stepCostMeter.rate(), tickRate);
+    const renderMs = meanMs(drawCostMeter.rate(), frameRate);
+    fpsReadout.textContent = formatRateReadout(frameRate, tickRate, config, { stepMs, renderMs, context: `population ${population} · ${track.id} · build ${page.saved.codeVersion}` });
     const { dataset } = canvas;
     if (frameRate !== null) dataset.fpsFrames = frameRate.toFixed(1);
     else delete dataset.fpsFrames;
     if (tickRate !== null) dataset.fpsTicks = tickRate.toFixed(1);
     else delete dataset.fpsTicks;
+    if (stepMs !== null) dataset.fpsStepMs = stepMs.toFixed(4);
+    else delete dataset.fpsStepMs;
+    if (renderMs !== null) dataset.fpsRenderMs = renderMs.toFixed(2);
+    else delete dataset.fpsRenderMs;
   };
 
   // The graph reads the session's history and is redrawn at most a few times a second, only while it is open.
@@ -316,7 +368,12 @@ export function startTrainingPage(page: TrainingPage): void {
     const count = session.generations.length;
     if (count === 0) return;
     const generation = chosenGeneration();
-    const stats = session.generations[generation - 1]!;
+    const stats = session.generations[generation - 1];
+    if (!stats) {
+      // After a resume, an older generation's champion may not have been kept (it is only a graph point).
+      say(`The champion of generation ${generation} was not kept in the checkpoint, so it cannot be replayed.`);
+      return;
+    }
     const remake = () => createChampionReplay(stats.champion, trainer.setup);
     beginReplay({ replay: remake(), label: `generation ${generation}`, generation, physics, timestep: config.timestepSeconds, remake });
   };
@@ -549,7 +606,11 @@ export function startTrainingPage(page: TrainingPage): void {
   savedPanel.save.addEventListener('click', () => {
     if (session.generations.length === 0) return;
     const generation = chosenGeneration();
-    const stats = session.generations[generation - 1]!;
+    const stats = session.generations[generation - 1];
+    if (!stats) {
+      say(`The champion of generation ${generation} was not kept in the checkpoint, so it cannot be saved.`);
+      return;
+    }
     const typed = savedPanel.name.value.trim();
     const name = typed === '' ? `Generation ${generation} champion` : typed.slice(0, 60);
     // `record()` copies the whole history, so it is called once per save, never per frame.
@@ -607,7 +668,7 @@ export function startTrainingPage(page: TrainingPage): void {
   const show = () => {
     const generation = trainer.generation();
     const drawn = effectiveDrawCap(speed.mode, drawCap, population);
-    const text = trainingStatus(generation, speedStatus(speed.mode, speed.paused) + (active ? ` · replaying ${active.label}` : ''));
+    const text = trainingStatus(generation, speedStatus(speed.mode, speed.paused) + (active ? ` · replaying ${active.label}` : '') + (canvas.dataset.checkpointOffer ? ' · checkpoint found' : ''));
     if (status.textContent !== text) status.textContent = text;
     const { live, completed } = session.frame();
     Object.assign(canvas.dataset, {
@@ -660,12 +721,235 @@ export function startTrainingPage(page: TrainingPage): void {
     }
   };
 
+  // Training checkpoints (P3-07). A checkpoint is the state of this run at a generation boundary, written in the right order by
+  // one saver (see checkpointSaver.ts). A stored checkpoint is only ever OFFERED: nothing resumes automatically, and automatic
+  // saving stays off until the offer is answered, so a stored checkpoint is never overwritten unseen. Every failure is a
+  // message and training carries on; Download checkpoint works from the state in memory whatever the storage does.
+  const cp = page.checkpoint;
+  if (cp) {
+    const options = checkpointValidateOptions();
+    const cpStore = createCheckpointStore({ storage: cp.storage, ...options });
+    const clock = page.now ?? (() => performance.now());
+    const meta = () => ({ id: cp.newId(), createdAt: cp.isoNow(), codeVersion: cp.codeVersion, appVersion: cp.appVersion });
+    const cpSay = (text: string) => {
+      if (cp.status.textContent !== text) cp.status.textContent = text;
+    };
+    interface Offer {
+      /** The checkpoint offered, or null when the stored one is damaged and there is nothing to resume. */
+      readonly doc: CheckpointDocument | null;
+      readonly source: 'storage' | 'file';
+      readonly text: string;
+      readonly canResume: boolean;
+    }
+    let offered: Offer | null = null;
+    /** The stored checkpoint's offer while it is unanswered, so loading and discarding a file brings it back. */
+    let storageOffer: Offer | null = null;
+    const showOffer = (offer: Offer) => {
+      offered = offer;
+      cp.offer.text.textContent = offer.text;
+      cp.offer.resume.disabled = !offer.canResume;
+      cp.offer.container.hidden = false;
+    };
+    const hideOffer = () => {
+      offered = null;
+      cp.offer.container.hidden = true;
+      delete canvas.dataset.checkpointOffer;
+    };
+    const saver = createCheckpointSaver<TrainerState>({
+      write: (state) => {
+        const written = cpStore.write(checkpointFromState(trainer.setup, state, meta()));
+        return written.ok ? { ok: true } : { ok: false, message: written.message };
+      },
+      defer: cp.defer,
+      now: clock,
+      isRunning: () => !speed.paused,
+      ...(cp.everyGenerations === undefined ? {} : { everyGenerations: cp.everyGenerations }),
+      ...(cp.minSeconds === undefined ? {} : { minSeconds: cp.minSeconds }),
+      onResult: (result) => {
+        if (result.kind === 'saved') {
+          cpSay(`Checkpoint saved after generation ${result.generationIndex} (${cp.isoNow().slice(11, 19)} UTC). Training continues.`);
+          canvas.dataset.checkpointSaved = String(result.generationIndex);
+        } else {
+          cpSay(result.message);
+          canvas.dataset.checkpointFailed = String(result.generationIndex);
+        }
+      },
+    });
+    onBoundary = () => saver.boundary(trainer.checkpointState());
+
+    /** Replaces the running trainer with one resumed from `doc`. Training keeps its speed; any replay is stopped first. */
+    const resumeFrom = (doc: CheckpointDocument, source: 'storage' | 'file') => {
+      const resumed = resumeFromCheckpoint(doc, trainer.setup);
+      if (!resumed.ok) {
+        cpSay(`This checkpoint cannot be resumed. ${resumed.reasons.join(' ')}`);
+        return;
+      }
+      let next: ReturnType<typeof createTrainer>;
+      try {
+        next = createTrainer(resumed.configuration, environment, resumed.resume);
+      } catch {
+        cpSay('This checkpoint cannot be resumed: its state was refused by the trainer.');
+        return;
+      }
+      stopReplay();
+      trainer = next;
+      session = createTrainingSession(trainer, page.dashboard.outputs, resumed.resume.history);
+      ticks = 0;
+      replayCount = -1;
+      resetMeters();
+      chart.invalidate();
+      hideOffer();
+      storageOffer = null;
+      saver.reset(source === 'storage' ? doc.generationIndex : -1);
+      saver.setEnabled(true);
+      refreshSaved();
+      syncReplayControls();
+      const kept = resumed.resume.history.filter((entry) => entry.retained).length;
+      cpSay(`Resumed from generation ${doc.generationIndex} (the next generation to run is ${doc.generationIndex + 1}). ${kept} of ${doc.generationIndex} past champions were kept; the rest are graph points only.`);
+      canvas.dataset.checkpointResumed = String(doc.generationIndex);
+    };
+
+    const consider = (doc: CheckpointDocument, source: 'storage' | 'file'): Offer => {
+      const check = resumeFromCheckpoint(doc, trainer.setup);
+      canvas.dataset.checkpointOffer = check.ok ? 'resumable' : 'unusable';
+      const when = doc.createdAt.replace('T', ' ').slice(0, 19);
+      const offer: Offer = check.ok
+        ? { doc, source, canResume: true, text: `${source === 'file' ? 'A checkpoint file was loaded' : 'A saved checkpoint was found'}: ${doc.generationIndex} completed generations, saved ${when} UTC. Resuming replaces the run now in progress.` }
+        : { doc, source, canResume: false, text: `A checkpoint (${doc.generationIndex} generations, saved ${when} UTC) cannot be resumed by this version. ${check.reasons.join(' ')}` };
+      showOffer(offer);
+      cpSay(check.ok ? (source === 'file' ? 'Checkpoint file loaded. Choose Resume or Discard.' : 'A saved checkpoint was found. Choose Resume or Discard. Automatic checkpoint saving is off until you do.') : 'That checkpoint cannot be resumed here. You can discard it.');
+      return offer;
+    };
+
+    cp.offer.resume.addEventListener('click', () => {
+      if (offered?.doc && offered.canResume) resumeFrom(offered.doc, offered.source);
+    });
+    cp.offer.discard.addEventListener('click', () => {
+      const current = offered;
+      if (!current) return;
+      hideOffer();
+      if (current.source === 'storage') {
+        const cleared = cpStore.clear();
+        if (!cleared.ok) {
+          cpSay(cleared.message);
+          showOffer(current);
+          return;
+        }
+        storageOffer = null;
+        cpSay('Discarded the stored checkpoint. Checkpoints will be saved again as training runs.');
+        saver.reset(-1);
+        saver.setEnabled(true);
+      } else if (storageOffer) {
+        // A loaded file was dropped while the stored checkpoint is still waiting for an answer: bring that offer back.
+        cpSay('Discarded the loaded file. The stored checkpoint is still waiting for your answer.');
+        showOffer(storageOffer);
+      } else {
+        cpSay('Discarded the loaded file. The stored checkpoint, if any, is unchanged.');
+      }
+    });
+
+    // The stored checkpoint, offered once at the start. Autosave stays off until it is answered.
+    const stored = cpStore.read();
+    if (stored.status === 'ok') {
+      saver.setEnabled(false);
+      storageOffer = consider(stored.checkpoint, 'storage');
+    } else if (stored.status === 'damaged') {
+      saver.setEnabled(false);
+      canvas.dataset.checkpointOffer = 'damaged';
+      storageOffer = { doc: null, source: 'storage', canResume: false, text: `A saved checkpoint is damaged and cannot be used. ${stored.problem} Discard it to start saving checkpoints.` };
+      showOffer(storageOffer);
+      cpSay('A saved checkpoint is damaged. You can discard it.');
+    } else if (stored.status === 'unavailable') {
+      cpSay(stored.message);
+    } else {
+      cpSay('No checkpoint saved yet. One is saved at a generation boundary every 5 generations or 30 seconds while training runs.');
+    }
+
+
+    cp.onHide(() => saver.flush());
+
+    cp.download.addEventListener('click', () => {
+      let built: ReturnType<typeof checkpointFromTrainer>;
+      try {
+        built = checkpointFromTrainer(trainer, meta());
+      } catch {
+        cpSay(CHECKPOINT_MESSAGES.notWritable);
+        return;
+      }
+      const file = checkpointFile(built);
+      if (!file.ok) {
+        cpSay(file.message);
+        return;
+      }
+      try {
+        cp.saveFile(file.filename, file.text);
+        cpSay(`Download started: ${file.filename}. It is a copy of this run at generation ${built.generationIndex}, independent of this browser's storage.`);
+      } catch {
+        cpSay('The download could not be started in this browser.');
+      }
+    });
+
+    let loading = false;
+    cp.importInput.addEventListener('change', () => {
+      void (async () => {
+        const input = cp.importInput;
+        const files = input.files;
+        const count = files ? files.length : 0;
+        if (count === 0 || loading) return;
+        try {
+          if (count > 1) {
+            cpSay('Nothing was loaded. Choose one file at a time.');
+            return;
+          }
+          const file = files?.[0];
+          if (!file) return;
+          if (!(file.size <= MAX_CHECKPOINT_BYTES)) {
+            cpSay('Nothing was loaded. This file is larger than the 3 MiB limit for a checkpoint.');
+            return;
+          }
+          loading = true;
+          let text: string;
+          try {
+            text = await file.text();
+          } catch {
+            cpSay('Nothing was loaded. The file could not be read.');
+            return;
+          }
+          const parsed = parseCheckpointText(text, options);
+          if (!parsed.ok) {
+            cpSay(describeCheckpointRefusal(parsed.errors));
+            return;
+          }
+          consider(parsed.checkpoint, 'file');
+        } catch {
+          cpSay('Nothing was loaded. This file could not be checked.');
+        } finally {
+          loading = false;
+          try {
+            input.value = '';
+          } catch {
+            // Some browsers refuse; choosing a different file still works.
+          }
+        }
+      })();
+    });
+  }
+
   const viewport = createViewport(canvas, page.viewportEnvironment ?? browserViewportEnvironment(canvas), draw);
   const stepper = createFrameStepper({
     runTick: () => {
       ticks += 1;
       ticksThisFrame += 1;
-      session.step();
+      const completed = session.generations.length;
+      if (fpsReadout) {
+        // Only the opt-in readout pays for the two clock reads per tick.
+        const started = measureClock();
+        session.step();
+        stepMsThisFrame += measureClock() - started;
+      } else {
+        session.step();
+      }
+      if (session.generations.length !== completed) onBoundary();
     },
     mode: () => speed.mode,
     now: page.now ?? (() => performance.now()),
@@ -676,9 +960,11 @@ export function startTrainingPage(page: TrainingPage): void {
       return stepper.step();
     },
     render: () => {
+      const drawStarted = fpsReadout ? measureClock() : 0;
       draw(viewport.current());
       show();
       chart.frame();
+      if (fpsReadout) drawMsThisFrame += measureClock() - drawStarted;
       stepper.endFrame();
       updateFps(page.now ? page.now() : performance.now());
     },

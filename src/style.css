@@ -480,6 +480,13 @@ body {
   outline-offset: 2px;
 }
 
+.checkpoint-offer {
+  margin: 0.25rem 0;
+  padding: 0.25rem 0.5rem;
+  border: 2px solid #ffb000;
+  border-radius: 0.6rem;
+}
+
 .saved-list {
   margin: 0.25rem 0 0;
   padding: 0;

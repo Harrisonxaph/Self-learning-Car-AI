@@ -50,7 +50,7 @@ describe('frame-rate readout', () => {
     run(180, TICK_MS);
     expect(Number(canvas.dataset.fpsFrames)).toBeCloseTo(60, 0);
     expect(Number(canvas.dataset.fpsTicks)).toBeCloseTo(60, 0);
-    expect(fps!.textContent).toMatch(/^Render 6\d\.\d frames\/s · Simulation 6\d\.\d ticks\/s · normal · 50 cars drawn$/);
+    expect(fps!.textContent).toMatch(/^Render 6\d\.\d frames\/s · Simulation 6\d\.\d ticks\/s · Step [\d.…]+ ms\/tick · Draw [\d.…]+ ms\/frame · normal · 50 cars drawn · population 50 · stadium-oval · build test$/);
   });
 
   it('reports ticks separately from frames at 4×, and names the configuration', () => {
@@ -136,5 +136,34 @@ describe('frame-rate readout', () => {
       return [canvas.dataset.tick, canvas.dataset.generation, canvas.dataset.generationTick, canvas.dataset.running, canvas.dataset.lastBest];
     };
     expect(stats(true)).toEqual(stats(false));
+  });
+
+  it('reports the mean time of a simulation tick, measured around the step handler only (P3-07)', () => {
+    const { canvas, fps, run } = setup();
+    run(1, TICK_MS);
+    expect(fps!.textContent).toContain('Step … ms/tick · Draw … ms/frame');
+    expect(canvas.dataset.fpsStepMs).toBeUndefined();
+    run(180, TICK_MS);
+    // Each tick costs exactly two reads of the half-millisecond fake clock, whatever else the frame does.
+    expect(canvas.dataset.fpsStepMs).toBe('0.5000');
+    expect(fps!.textContent).toContain('Step 0.5000 ms/tick');
+    expect(Number(canvas.dataset.fpsRenderMs)).toBeGreaterThan(0);
+  });
+
+  it('keeps the per-tick figure when several ticks run in a frame, and starts it again after a pause', () => {
+    const { canvas, controls, run } = setup();
+    controls.speeds.fast.click();
+    run(180, TICK_MS);
+    expect(canvas.dataset.fpsStepMs).toBe('0.5000');
+    controls.pause.click();
+    run(30, TICK_MS);
+    expect(canvas.dataset.fpsStepMs).toBeUndefined();
+    expect(Number(canvas.dataset.fpsTicks)).toBe(0);
+  });
+
+  it('names where the figures were measured: population, track and build', () => {
+    const { fps, run } = setup();
+    run(60, TICK_MS);
+    expect(fps!.textContent).toMatch(/population 50 · stadium-oval · build test$/);
   });
 });

@@ -3,8 +3,8 @@
 // its text changes. The session below is the one place the page's per-frame dashboard path runs, so tests can drive
 // exactly that path without a browser.
 import { historyPoint, type HistoryPoint } from '../training/generationHistory';
-import { completedMetrics, liveCounts, type CompletedMetrics, type LiveCounts } from '../training/generationMetrics';
-import type { GenerationStats, Trainer } from '../training/trainer';
+import { completedMetrics, liveCounts, type CompletedMetrics, type CompletedSource, type LiveCounts } from '../training/generationMetrics';
+import type { GenerationStats, HistoryEntry, Trainer } from '../training/trainer';
 
 /** What the dashboard writes to: an element's text, or any object with the same property in a test. */
 export interface TextTarget {
@@ -84,9 +84,10 @@ export interface TrainingSession {
   /**
    * The statistics of every completed generation, in order (entry 0 is generation 0), kept by reference as the trainer
    * returned them, so the champion replay (P3-04) can look a champion up without calling `trainer.record()`, which copies
-   * the whole history. It adds no copy beyond the champion arrays the trainer already holds.
+   * the whole history. It adds no copy beyond the champion arrays the trainer already holds. After a resume from a checkpoint
+   * (P3-07) an entry is `null` where the champion was not kept: its graph point is still there, but there is nothing to replay.
    */
-  readonly generations: readonly GenerationStats[];
+  readonly generations: readonly (GenerationStats | null)[];
 }
 
 /**
@@ -94,10 +95,16 @@ export interface TrainingSession {
  * the dashboard reads the last completed generation without touching the trainer's history, and adds one point to the
  * graph's history.
  */
-export function createTrainingSession(trainer: DashboardTrainer, outputs: DashboardOutputs): TrainingSession {
-  let last: ReturnType<DashboardTrainer['step']> = null;
+export function createTrainingSession(trainer: DashboardTrainer, outputs: DashboardOutputs, restored: readonly HistoryEntry[] = []): TrainingSession {
+  const newest = restored[restored.length - 1];
+  let last: CompletedSource | null = newest === undefined ? null : newest.retained ? newest.stats : newest;
   const history: HistoryPoint[] = [];
-  const generations: GenerationStats[] = [];
+  const generations: (GenerationStats | null)[] = [];
+  // A restored generation is plotted from the figures it kept; one whose champion was not kept has no stats to replay.
+  for (const entry of restored) {
+    history.push(historyPoint(entry.retained ? entry.stats : entry, entry.retained ? entry.stats.fitness.length : entry.populationSize));
+    generations.push(entry.retained ? entry.stats : null);
+  }
   return {
     history,
     generations,
