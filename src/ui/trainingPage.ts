@@ -807,15 +807,26 @@ export function startTrainingPage(page: TrainingPage): void {
       resetMeters();
       chart.invalidate();
       hideOffer();
-      storageOffer = null;
+      // Resuming the stored checkpoint answers its offer. Resuming a FILE does not: a stored checkpoint still waiting for an
+      // answer (or a slot that could not be read) must never be replaced unseen, so saving stays blocked and the offer returns.
+      if (source === 'storage') storageOffer = null;
+      const slotUnanswered = slotUnknown || storageOffer !== null;
       saver.reset(source === 'storage' ? doc.generationIndex : -1);
       // The resumed boundary is the newest state: a hide before the first new generation finishes still preserves this run.
       saver.seed(trainer.checkpointState());
-      saver.setEnabled(true);
+      saver.setEnabled(!slotUnanswered);
       refreshSaved();
       syncReplayControls();
       const kept = resumed.resume.history.filter((entry) => entry.retained).length;
-      cpSay(`Resumed from generation ${doc.generationIndex} (the next generation to run is ${doc.generationIndex + 1}). ${kept} of ${doc.generationIndex} past champions were kept; the rest are graph points only.`);
+      const resumedText = `Resumed from generation ${doc.generationIndex} (the next generation to run is ${doc.generationIndex + 1}). ${kept} of ${doc.generationIndex} past champions were kept; the rest are graph points only.`;
+      if (storageOffer !== null) {
+        showOffer(storageOffer);
+        cpSay(`${resumedText} Automatic checkpoint saving stays off until you answer the stored checkpoint above (Resume or Discard).`);
+      } else if (slotUnknown) {
+        cpSay(`${resumedText} Automatic checkpoint saving stays off because the stored checkpoint could not be read; it is checked again at each generation boundary.`);
+      } else {
+        cpSay(resumedText);
+      }
       canvas.dataset.checkpointResumed = String(doc.generationIndex);
     };
 
@@ -848,6 +859,8 @@ export function startTrainingPage(page: TrainingPage): void {
         storageOffer = null;
         cpSay('Discarded the stored checkpoint. Checkpoints will be saved again as training runs.');
         saver.reset(-1);
+        // The run in progress is the newest state, so a hide right now preserves it.
+        saver.seed(trainer.checkpointState());
         saver.setEnabled(true);
       } else if (storageOffer) {
         // A loaded file was dropped while the stored checkpoint is still waiting for an answer: bring that offer back.

@@ -305,6 +305,69 @@ describe('review findings (correction cycle 1)', () => {
     expect(storage.data.get(CHECKPOINT_KEY)).toBe(original);
   });
 
+  it('resuming a file after the slot could not be read keeps saving blocked, so the stored checkpoint found later is offered and never overwritten unseen', async () => {
+    const storage = seeded(3);
+    const original = storage.getItem(CHECKPOINT_KEY);
+    let readable = false;
+    const realGet = storage.getItem.bind(storage);
+    storage.getItem = (key: string) => {
+      if (!readable) throw new Error('denied');
+      return realGet(key);
+    };
+    const p = setup({ storage, every: 1 });
+    await choose(p, file(JSON.stringify(documentAfter(2))));
+    p.cp.offer.resume.click();
+    expect(p.cp.status.textContent).toContain('stays off because the stored checkpoint could not be read');
+    p.completeGenerations(p.completed() + 2);
+    p.runDeferred(true);
+    p.hide();
+    expect(storage.data.get(CHECKPOINT_KEY)).toBe(original);
+    // The slot becomes readable: the stored checkpoint is offered at the next boundary, and is still not overwritten.
+    readable = true;
+    p.completeGenerations(p.completed() + 1);
+    expect(p.cp.offer.container.hidden).toBe(false);
+    expect(p.cp.offer.text.textContent).toContain('A saved checkpoint was found');
+    p.runDeferred(true);
+    p.hide();
+    expect(storage.data.get(CHECKPOINT_KEY)).toBe(original);
+    // Answering it (Discard) turns saving on, and a hide then preserves the run in progress.
+    p.cp.offer.discard.click();
+    p.hide();
+    expect(p.storedGeneration()).toBeGreaterThan(2);
+  });
+
+  it('resuming a file while a readable stored checkpoint is unanswered brings that offer back and keeps saving blocked', async () => {
+    const storage = seeded(3);
+    const original = storage.getItem(CHECKPOINT_KEY);
+    const p = setup({ storage, every: 1 });
+    await choose(p, file(JSON.stringify(documentAfter(2))));
+    p.cp.offer.resume.click();
+    p.run();
+    // The run is the file's, but the stored checkpoint is offered again and nothing replaces it.
+    expect(p.canvas.dataset.checkpointResumed).toBe('2');
+    expect(p.cp.offer.container.hidden).toBe(false);
+    expect(p.cp.offer.text.textContent).toContain('A saved checkpoint was found');
+    expect(p.cp.status.textContent).toContain('stays off until you answer the stored checkpoint');
+    p.completeGenerations(p.completed() + 2);
+    p.runDeferred(true);
+    p.hide();
+    expect(storage.getItem(CHECKPOINT_KEY)).toBe(original);
+    // Discarding the stored one turns saving on.
+    p.cp.offer.discard.click();
+    p.hide();
+    expect(storage.getItem(CHECKPOINT_KEY)).not.toBe(original);
+    expect(p.storedGeneration()).toBeGreaterThanOrEqual(2);
+  });
+
+  it('resuming a file when the slot is empty still turns saving on', async () => {
+    const storage = new FakeLocalStorage();
+    const p = setup({ storage, every: 1 });
+    await choose(p, file(JSON.stringify(documentAfter(2))));
+    p.cp.offer.resume.click();
+    p.hide();
+    expect(p.storedGeneration()).toBe(2);
+  });
+
   it('an unreadable slot that turns out to be empty turns saving on', () => {
     const storage = new FakeLocalStorage();
     let readable = false;
