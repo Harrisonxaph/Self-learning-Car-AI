@@ -36,7 +36,9 @@ jobs:
   browser-tests:
     name: Browser tests (Chromium and WebKit, desktop and touch)
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    # Slow package mirrors must not consume the time reserved for the full browser suite.
+    # Bound setup and test execution separately, with headroom for npm ci and cleanup.
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -48,8 +50,10 @@ jobs:
       - run: npm ci
       # Browsers and their system libraries, at the versions matching the pinned @playwright/test.
       - run: npx playwright install --with-deps chromium webkit
+        timeout-minutes: 15
       # Builds the app and runs every Playwright project against `vite preview` (see playwright.config.ts).
       - run: npm run test:e2e
+        timeout-minutes: 20
       - name: Upload Playwright report
         if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
