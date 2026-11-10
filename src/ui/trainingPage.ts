@@ -392,7 +392,6 @@ export function startTrainingPage(page: TrainingPage): void {
     return clamped;
   };
   const startReplay = () => {
-    if (activePair) stopReplay();
     if (active && active.generation === null) {
       // The active replay is a saved champion: restart that one, never silently switch to a live generation.
       beginReplay({ replay: active.remake(), label: active.label, generation: null, physics: active.physics, timestep: active.timestep, remake: active.remake });
@@ -412,6 +411,9 @@ export function startTrainingPage(page: TrainingPage): void {
   };
   /** Starts (or restarts) a replay at 1×, unpaused, remembering the speed and pause state to restore afterwards. */
   const beginReplay = (next: Pick<ActiveReplay, 'replay' | 'label' | 'generation' | 'physics' | 'timestep' | 'remake'>) => {
+    // The one entry point of every single-champion replay (live, restart or from the saved list): a combined replay of two
+    // champions is stopped first, so the two replay modes are never active together.
+    if (activePair) stopReplay();
     const restore = active ? active.restore : { mode: speed.mode, paused: speed.paused };
     speed.setMode('normal');
     speed.setPaused(false);

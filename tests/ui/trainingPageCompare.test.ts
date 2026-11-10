@@ -189,6 +189,47 @@ describe('the combined replay', () => {
   });
 });
 
+describe('the two replay modes are never active together', () => {
+  it('Replay in the saved list while the pair runs stops the pair first; Back to training then returns to training', () => {
+    const p = setup([A, B]);
+    p.compare.run.click();
+    p.run(3);
+    p.compare.replay.click();
+    p.run(2);
+    expect(p.canvas.dataset.pairReplay).toBe('running');
+    const row = p.saved.list.children.find((r) => r.attributes['data-id'] === 'a-1')!;
+    row.find((n) => n.tag === 'button' && n.textContent === 'Replay')[0]!.click();
+    p.run(2);
+    // The saved champion runs, the pair is gone, and the status says what is replaying.
+    expect(p.canvas.dataset.pairReplay).toBe('off');
+    expect(p.canvas.dataset.replay).not.toBe('off');
+    expect(p.saved.status.textContent).toContain('Replaying');
+    const ticksDuringReplay = p.canvas.dataset.tick;
+    p.run(5);
+    expect(p.canvas.dataset.tick).toBe(ticksDuringReplay);
+    // Back to training really returns to training: nothing is left pending.
+    p.replay.stop.click();
+    p.run(3);
+    expect(p.canvas.dataset.replay).toBe('off');
+    expect(p.canvas.dataset.pairReplay).toBe('off');
+    expect(p.replay.stop.disabled).toBe(true);
+    expect(p.controls.speeds.max.disabled).toBe(false);
+    expect(Number(p.canvas.dataset.tick)).toBeGreaterThan(Number(ticksDuringReplay));
+  });
+
+  it('a live-generation replay started while the pair runs also stops the pair', () => {
+    const p = setup([A, B]);
+    p.run(2);
+    p.compare.run.click();
+    p.compare.replay.click();
+    p.run(2);
+    expect(p.canvas.dataset.pairReplay).toBe('running');
+    p.replay.stop.click();
+    p.run(2);
+    expect(p.canvas.dataset.pairReplay).toBe('off');
+  });
+});
+
 describe('deleting a compared save', () => {
   it('clears the comparison and the combined replay', () => {
     const p = setup([A, B]);
