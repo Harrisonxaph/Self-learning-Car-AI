@@ -10,7 +10,7 @@ import type { ViewportSize } from './viewport';
 /** The drawing calls needed (a subset of CanvasRenderingContext2D). */
 export type RaceContext = Pick<
   CanvasRenderingContext2D,
-  'setTransform' | 'beginPath' | 'moveTo' | 'lineTo' | 'arc' | 'closePath' | 'fill' | 'stroke' | 'fillStyle' | 'strokeStyle' | 'lineWidth' | 'lineJoin'
+  'setTransform' | 'beginPath' | 'moveTo' | 'lineTo' | 'arc' | 'closePath' | 'fill' | 'stroke' | 'fillStyle' | 'strokeStyle' | 'lineWidth' | 'lineJoin' | 'fillText' | 'font' | 'textAlign' | 'textBaseline'
 >;
 
 export const RACE_COLOURS = Object.freeze({
@@ -22,6 +22,9 @@ export const RACE_COLOURS = Object.freeze({
   finishedCar: '#7d8794',
   outline: '#0b1118',
   nose: '#ffffff',
+  /** Comparison replay (P3-08): the two cars have fixed identity colours and a text label, so colour is never the only cue. */
+  carA: '#ffb000',
+  carB: '#b388ff',
 });
 
 export function drawRace(context: RaceContext, size: ViewportSize, view: WorldToScreen, world: World): void {
@@ -59,6 +62,10 @@ export function drawRace(context: RaceContext, size: ViewportSize, view: WorldTo
 export interface DrawnCar {
   readonly car: Car;
   readonly finished: boolean;
+  /** Overrides the state colour (comparison replay: the car's identity colour). */
+  readonly fill?: string;
+  /** A short text drawn beside the car ("A" or "B"). */
+  readonly label?: string;
 }
 
 /**
@@ -69,11 +76,25 @@ export interface DrawnCar {
 export function drawCars(context: RaceContext, size: ViewportSize, view: WorldToScreen, cars: readonly DrawnCar[], physics: VehiclePhysics): void {
   context.setTransform(size.pixelRatio, 0, 0, size.pixelRatio, 0, 0);
   const ordered = [...cars.filter((c) => c.finished), ...cars.filter((c) => !c.finished)];
-  for (const { car, finished } of ordered) {
+  for (const { car, finished, fill: identity, label } of ordered) {
     const corners = vehicleFootprint(car.vehicle, physics).map((p) => worldToScreen(view, p));
-    const fill = car.crashed ? RACE_COLOURS.crashedCar : finished ? RACE_COLOURS.finishedCar : RACE_COLOURS.car;
+    const fill = identity ?? (car.crashed ? RACE_COLOURS.crashedCar : finished ? RACE_COLOURS.finishedCar : RACE_COLOURS.car);
     drawCarBody(context, corners, fill);
+    if (label !== undefined) drawCarLabel(context, corners, label);
   }
+}
+
+/** A short text label above a car, dark behind light so it reads on any colour (P3-08). */
+function drawCarLabel(context: RaceContext, corners: readonly Point[], label: string): void {
+  const x = corners.reduce((sum, p) => sum + p.x, 0) / corners.length;
+  const y = corners.reduce((sum, p) => sum + p.y, 0) / corners.length - 12;
+  context.font = 'bold 14px sans-serif';
+  context.textAlign = 'center';
+  context.textBaseline = 'middle';
+  context.fillStyle = RACE_COLOURS.outline;
+  context.fillText(label, x + 1, y + 1);
+  context.fillStyle = RACE_COLOURS.nose;
+  context.fillText(label, x, y);
 }
 
 /** The car body (its collision footprint, filled and outlined) and the white nose wedge. */

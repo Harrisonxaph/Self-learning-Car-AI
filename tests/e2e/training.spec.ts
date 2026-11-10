@@ -580,7 +580,7 @@ test('with the champion replay open, the track keeps its space, the page does no
       const status = document.querySelector('#saved-list li:last-child')!.getBoundingClientRect();
       const after = panel.getBoundingClientRect();
       const root = document.documentElement;
-      const small = ['replay-generation', 'replay-start', 'replay-stop', 'saved-name', 'saved-save', 'saved-import-button', 'checkpoint-download', 'checkpoint-import-button'].filter((id) => {
+      const small = ['replay-generation', 'replay-start', 'replay-stop', 'saved-name', 'saved-save', 'saved-import-button', 'checkpoint-download', 'checkpoint-import-button', 'compare-a', 'compare-b', 'compare-run', 'compare-replay'].filter((id) => {
         const r = rect(id);
         return r.width < 44 || r.height < 44;
       });
@@ -853,6 +853,93 @@ test('with browser storage full, a checkpoint fails with a message, training con
   const downloadPromise = page.waitForEvent('download');
   await page.locator('#checkpoint-download').click();
   expect((await downloadPromise).suggestedFilename()).toMatch(/^sdae-checkpoint-gen/);
+});
+
+test('Compare: two saves of one run are comparable and replay together; imported mismatches are not ranked, and only a driving-condition mismatch refuses the combined replay', async ({ page }, testInfo) => {
+  await installPausedClock(page);
+  await page.goto('/?mode=train');
+  await page.clock.runFor(100);
+  await advanceUntil(page, (v) => Number(v.data.chartPoints) >= 2, 1000, 400);
+  await page.locator('#champion-replay > summary').click();
+  for (const [name, generation] of [['Gen1', '1'], ['Gen2', '2']] as const) {
+    await page.locator('#replay-generation').fill(generation);
+    await page.locator('#saved-name').fill(name);
+    await page.locator('#saved-save').click();
+  }
+  await expect(page.locator('#saved-list li')).toHaveCount(2);
+  await page.locator('#compare-a').selectOption({ label: 'Gen1 (generation 1)' });
+  await page.locator('#compare-b').selectOption({ label: 'Gen2 (generation 2)' });
+  await page.locator('#compare-run').click();
+  await expect(page.locator('#compare-status')).toContainText('Compared A (Gen1) with B (Gen2)');
+  await expect(page.locator('.compare-table')).toBeVisible();
+  await expect(page.locator('.compare-table th[scope="row"]').first()).toBeVisible();
+  await expect(page.locator('#compare-result')).toContainText('Scored the same way');
+  await expect(page.locator('#compare-result')).toContainText('not an evaluation of general driving');
+  await expect(page.locator('#compare-replay')).toBeEnabled();
+
+  // Replay both together: two cars on one track, training waits, and each car's outcome is announced.
+  await page.locator('#compare-replay').click();
+  await page.clock.runFor(300);
+  await expect(page.locator('#sim-canvas')).toHaveAttribute('data-pair-replay', 'running');
+  await advanceUntil(page, (v) => v.data.pairReplay === 'done', 1000, 120);
+  await expect(page.locator('#compare-status')).toContainText('Replay finished. A (Gen1):');
+  await expect(page.locator('#compare-status')).toContainText('B (Gen2):');
+  await page.locator('#replay-stop').click();
+  await page.clock.runFor(200);
+  await expect(page.locator('#sim-canvas')).toHaveAttribute('data-pair-replay', 'off');
+
+  // Imported mismatches. A saved copy is downloaded, edited into three synthetic files, and imported.
+  const downloadPromise = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Download JSON for Gen1' }).click();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  type Doc = Record<string, any>;
+  const original = JSON.parse((await import('node:fs')).readFileSync(await (await downloadPromise).path(), 'utf8')) as Doc;
+  const { writeFileSync } = await import('node:fs');
+  const variant = (id: string, name: string, edit: (doc: Doc) => void) => {
+    const doc = JSON.parse(JSON.stringify(original)) as Doc;
+    doc.id = id;
+    doc.name = name;
+    edit(doc);
+    const path = testInfo.outputPath(`${id}.json`);
+    writeFileSync(path, JSON.stringify(doc));
+    return path;
+  };
+  const files = [
+    variant('syn-fitness-version', 'Synthetic fitness version', (d) => { d.training.configuration.fitness.version = 2; d.training.fitnessVersion = 2; }),
+    variant('syn-timestep', 'Synthetic timestep', (d) => { d.training.configuration.timestepSeconds = 0.02; }),
+    variant('syn-evaluation', 'Synthetic evaluation', (d) => { d.evaluation = [{ synthetic: true }, 1]; }),
+  ];
+  for (const file of files) {
+    await page.locator('#saved-import').setInputFiles(file);
+    await expect(page.locator('#saved-status')).toContainText('Imported');
+  }
+  await expect(page.locator('#saved-list li')).toHaveCount(5);
+
+  // (a) fitness version only: warning and "not ranked", the combined replay stays available.
+  await page.locator('#compare-a').selectOption({ label: 'Gen1 (generation 1)' });
+  await page.locator('#compare-b').selectOption({ label: 'Synthetic fitness version (generation 1)' });
+  await page.locator('#compare-run').click();
+  await expect(page.locator('#compare-result')).toContainText('shown but not ranked');
+  await expect(page.locator('#compare-result')).toContainText('The fitness version differs');
+  await expect(page.locator('#compare-result')).not.toContainText('Higher fitness');
+  await expect(page.locator('#compare-replay')).toBeEnabled();
+  await page.locator('#compare-replay').click();
+  await page.clock.runFor(300);
+  await expect(page.locator('#sim-canvas')).toHaveAttribute('data-pair-replay', 'running');
+  await page.locator('#replay-stop').click();
+
+  // (b) timestep: warning, "not ranked", and the combined replay is refused with reasons.
+  await page.locator('#compare-b').selectOption({ label: 'Synthetic timestep (generation 1)' });
+  await page.locator('#compare-run').click();
+  await expect(page.locator('#compare-result')).toContainText('Why they cannot be replayed together:');
+  await expect(page.locator('#compare-result')).toContainText('timesteps differ');
+  await expect(page.locator('#compare-replay')).toBeDisabled();
+
+  // (c) a present evaluation is recorded but unsupported and unverified; it changes no ranking.
+  await page.locator('#compare-b').selectOption({ label: 'Synthetic evaluation (generation 1)' });
+  await page.locator('#compare-run').click();
+  await expect(page.locator('#compare-result')).toContainText('Recorded evaluation data present: 2 entries, unsupported and unverified in Phase 3');
+  await expect(page.locator('#compare-result')).not.toContainText('synthetic');
 });
 
 test('Download JSON of stored data nested too deeply gives a message, not an error', async ({ page }) => {

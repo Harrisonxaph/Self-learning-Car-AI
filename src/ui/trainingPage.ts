@@ -14,6 +14,10 @@ import { browserViewportEnvironment, createViewport, type Viewport, type Viewpor
 import type { SimConfig, VehiclePhysics } from '../sim/config';
 import type { Track } from '../sim/track';
 import { createChampionReplay, type ChampionReplay, type ReplayFrame } from '../training/championReplay';
+import { createPairReplay, type PairReplay } from '../training/pairReplay';
+import { compareModels, type CompareResult } from '../persistence/modelCompare';
+import { renderComparison } from './compareView';
+import { RACE_COLOURS } from '../render/raceView';
 import { createTrainer, DEFAULT_TRAINING_CONFIG, type Generation, type TrainerState } from '../training/trainer';
 import { MAX_CHECKPOINT_BYTES, type CheckpointDocument } from '../persistence/checkpointFormat';
 import { checkpointFile, CHECKPOINT_MESSAGES, createCheckpointStore, describeCheckpointRefusal, parseCheckpointText } from '../persistence/checkpointStore';
@@ -22,11 +26,11 @@ import { createCheckpointSaver } from './checkpointSaver';
 import { describeRefusal, importModelText } from '../persistence/modelImport';
 import { MAX_MODEL_BYTES } from '../persistence/modelFormat';
 import { createModelStore, MESSAGES, type StorageLike } from '../persistence/modelStore';
-import { buildModel, modelParameters } from '../persistence/modelFormat';
+import { buildModel, modelParameters, type ModelDocument } from '../persistence/modelFormat';
 import { tracksIn } from '../training/trackSplits';
 import { emptyReplayText, renderReplay, replayText, type ReplayOutputs } from './championReplayView';
-import { renderSavedList, type UiFactory, type UiList } from './savedChampionsView';
-import { replayForModel } from './savedReplay';
+import { renderSavedList, type UiFactory, type UiList, type UiNode } from './savedChampionsView';
+import { replayForModel, setupForModel } from './savedReplay';
 import { browserFrameEnvironment, startFrameLoop, type FrameEnvironment, type FrameLoop } from './frameLoop';
 import { createRateMeter, formatRateReadout, meanMs } from './rateMeter';
 import { createTrainingChart, type GraphContext } from './trainingChart';
@@ -42,6 +46,14 @@ import {
   speedStatus,
   type SpeedMode,
 } from './trainingSpeed';
+
+/** A `<select>` as the comparison uses it: its options are replaced from the saved list, and its choice is read as a value. */
+export interface CompareSelect {
+  value: string;
+  disabled?: boolean;
+  replaceChildren(...children: UiNode[]): void;
+  addEventListener(type: 'change', listener: () => void): void;
+}
 
 /** The part of a file chooser the import uses (so Node tests can fake it). */
 export interface ImportFile {
@@ -100,6 +112,15 @@ export interface TrainingPage {
     readonly stop: HTMLButtonElement;
     readonly note: HTMLElement;
     readonly outputs: ReplayOutputs;
+  };
+  /** Compare two saved champions (P3-08): two choices, a Compare button, a status line, the result and a combined replay. */
+  readonly compare?: {
+    readonly a: CompareSelect;
+    readonly b: CompareSelect;
+    readonly run: HTMLButtonElement;
+    readonly replay: HTMLButtonElement;
+    readonly status: HTMLElement;
+    readonly result: UiList;
   };
   /**
    * Saved champions (P3-05): a name field, a Save button, a status sentence, a list, and what saving needs. Saved brains are
@@ -327,6 +348,17 @@ export function startTrainingPage(page: TrainingPage): void {
     readonly restore: { readonly mode: SpeedMode; readonly paused: boolean };
   }
   let active: ActiveReplay | null = null;
+  /** The combined replay of two saved champions (P3-08), or null. Training waits while it runs, as for a single replay. */
+  interface ActivePair {
+    readonly pair: PairReplay;
+    readonly physics: typeof physics;
+    readonly timestep: number;
+    readonly labels: readonly [string, string];
+    credit: number;
+    announced: boolean;
+    readonly restore: { readonly mode: SpeedMode; readonly paused: boolean };
+  }
+  let activePair: ActivePair | null = null;
   let replayCount = 0;
   const replayOutputs = replayPanel.outputs;
   const syncReplayControls = () => {
@@ -336,7 +368,7 @@ export function startTrainingPage(page: TrainingPage): void {
     // A running saved champion can always be restarted, whether or not a live generation has completed yet.
     replayPanel.start.disabled = count === 0 && !(active && active.generation === null);
     page.saved.save.disabled = count === 0;
-    replayPanel.stop.disabled = active === null;
+    replayPanel.stop.disabled = active === null && activePair === null;
     // A running saved champion restarts itself; the generation picker only chooses what a live replay starts from.
     replayPanel.start.textContent = active ? (active.generation === null ? 'Restart saved' : 'Restart') : 'Replay';
     replayPanel.start.setAttribute('aria-label', active?.generation === null ? 'Restart saved champion' : active ? 'Restart replay' : 'Replay champion');
@@ -347,8 +379,8 @@ export function startTrainingPage(page: TrainingPage): void {
     replayPanel.note.textContent =
       count === 0 ? 'No generation completed yet, so there is no champion to replay.' : `Replays the best car of a completed generation, 1 to ${count}, alone on the track at normal speed. Training waits meanwhile.`;
     // The speed and cars-drawn controls are for training; a replay always runs at 1×.
-    for (const mode of SPEED_MODES) controls.speeds[mode].disabled = active !== null;
-    controls.drawCap.disabled = active !== null;
+    for (const mode of SPEED_MODES) controls.speeds[mode].disabled = active !== null || activePair !== null;
+    controls.drawCap.disabled = active !== null || activePair !== null;
   };
   /** The generation field's value as a whole number from 1 to the number of completed generations, written back clamped. */
   const chosenGeneration = (): number => {
@@ -360,6 +392,7 @@ export function startTrainingPage(page: TrainingPage): void {
     return clamped;
   };
   const startReplay = () => {
+    if (activePair) stopReplay();
     if (active && active.generation === null) {
       // The active replay is a saved champion: restart that one, never silently switch to a live generation.
       beginReplay({ replay: active.remake(), label: active.label, generation: null, physics: active.physics, timestep: active.timestep, remake: active.remake });
@@ -418,6 +451,18 @@ export function startTrainingPage(page: TrainingPage): void {
     return true;
   };
   const stopReplay = () => {
+    if (activePair) {
+      const { restore } = activePair;
+      activePair = null;
+      resetMeters();
+      speed.setMode(restore.mode);
+      speed.setPaused(restore.paused);
+      running.loop?.resync();
+      delete canvas.dataset.pairReplay;
+      syncControls();
+      syncReplayControls();
+      return;
+    }
     if (!active) return;
     const { restore } = active;
     active = null;
@@ -457,6 +502,8 @@ export function startTrainingPage(page: TrainingPage): void {
   const say = (text: string) => {
     if (savedPanel.status.textContent !== text) savedPanel.status.textContent = text;
   };
+  /** Set by the compare code below: rebuilds the two choices from the saved list. */
+  let syncCompare: (listing: ReturnType<typeof store.list>) => void = () => {};
   const refreshSaved = () => {
     const listing = store.list();
     if (!listing.available) say(listing.message);
@@ -499,6 +546,7 @@ export function startTrainingPage(page: TrainingPage): void {
       },
     });
     savedPanel.save.disabled = session.generations.length === 0;
+    syncCompare(listing);
   };
   const replaySaved = (id: string) => {
     pendingDelete = null;
@@ -639,12 +687,149 @@ export function startTrainingPage(page: TrainingPage): void {
   });
   refreshSaved();
 
+  // Compare two saved champions (P3-08). The comparison is view-only: it reads saves through `store.inspect` and writes nothing.
+  // Whether fitness may be ranked and whether the pair can be replayed together are separate questions (persistence/modelCompare).
+  const comparePanel = page.compare;
+  const describeCar = (result: ReturnType<PairReplay['results']>[number], timestep: number): string => {
+    if (result.failed) return 'stopped: its network produced numbers too large to compute';
+    if (result.outcome === null) return 'still running';
+    if (result.outcome === 'completed') return `completed ${result.laps} ${result.laps === 1 ? 'lap' : 'laps'} in ${(result.ticks * timestep).toFixed(1)} s`;
+    return `${result.outcome} after ${(result.ticks * timestep).toFixed(1)} s, ${result.gatesPassed} ${result.gatesPassed === 1 ? 'gate' : 'gates'} passed`;
+  };
+  const stepPair = (current: ActivePair): boolean => {
+    current.credit += config.timestepSeconds;
+    for (let taken = 0; taken < MAX_REPLAY_TICKS_PER_STEP && current.credit >= current.timestep - 1e-9 && !current.pair.done(); taken += 1) {
+      current.credit -= current.timestep;
+      const step = current.pair.step();
+      if (step) ticksThisFrame += 1;
+    }
+    if (current.pair.done()) {
+      current.credit = 0;
+      if (!current.announced) {
+        current.announced = true;
+        const [a, b] = current.pair.results();
+        if (comparePanel) comparePanel.status.textContent = `Replay finished. A (${current.labels[0]}): ${describeCar(a, current.timestep)}. B (${current.labels[1]}): ${describeCar(b, current.timestep)}.`;
+        canvas.dataset.pairOutcomeA = a.failed ? 'failed' : (a.outcome ?? 'running');
+        canvas.dataset.pairOutcomeB = b.failed ? 'failed' : (b.outcome ?? 'running');
+      }
+    }
+    return true;
+  };
+  if (comparePanel) {
+    let compared: { readonly a: string; readonly b: string; readonly nameA: string; readonly nameB: string; readonly modelA: ModelDocument; readonly modelB: ModelDocument; readonly result: CompareResult } | null = null;
+    const compareSay = (text: string) => {
+      if (comparePanel.status.textContent !== text) comparePanel.status.textContent = text;
+    };
+    const option = (value: string, label: string): UiNode => {
+      const node = savedPanel.ui.create('option');
+      node.setAttribute('value', value);
+      node.textContent = label;
+      return node;
+    };
+    const sync = () => {
+      comparePanel.run.disabled = comparePanel.a.value === '' || comparePanel.b.value === '' || comparePanel.a.value === comparePanel.b.value;
+    };
+    syncCompare = (listing) => {
+      const valid = listing.available ? listing.entries.filter((entry) => entry.status === 'ok') : [];
+      const label = (entry: (typeof valid)[number]) => (entry.status === 'ok' ? `${entry.summary.name ?? 'Unnamed champion'} (generation ${entry.summary.generation + 1})` : '');
+      const keepA = valid.some((entry) => entry.id === comparePanel.a.value) ? comparePanel.a.value : (valid[0]?.id ?? '');
+      const keepB = valid.some((entry) => entry.id === comparePanel.b.value) ? comparePanel.b.value : (valid.find((entry) => entry.id !== keepA)?.id ?? '');
+      for (const select of [comparePanel.a, comparePanel.b]) select.replaceChildren(...valid.map((entry) => option(entry.id, label(entry))));
+      comparePanel.a.value = keepA;
+      comparePanel.b.value = keepB;
+      // A comparison whose model has since been deleted is cleared, never left showing.
+      if (compared && !(valid.some((e) => e.id === compared!.a) && valid.some((e) => e.id === compared!.b))) {
+        compared = null;
+        renderComparison(comparePanel.result, savedPanel.ui, null);
+        comparePanel.replay.disabled = true;
+        stopReplayIfPair();
+      }
+      sync();
+    };
+    const stopReplayIfPair = () => {
+      if (activePair) stopReplay();
+    };
+    comparePanel.a.addEventListener('change', sync);
+    comparePanel.b.addEventListener('change', sync);
+    comparePanel.run.addEventListener('click', () => {
+      const idA = comparePanel.a.value;
+      const idB = comparePanel.b.value;
+      if (idA === '' || idB === '' || idA === idB) {
+        compareSay('Choose two different saved champions.');
+        return;
+      }
+      const left = store.inspect(idA);
+      const right = store.inspect(idB);
+      if (!left.ok || !right.ok) {
+        compareSay(!left.ok ? `A: ${left.message}` : `B: ${(right as { message: string }).message}`);
+        return;
+      }
+      const result = compareModels(left.model, right.model);
+      compared = { a: idA, b: idB, nameA: left.model.name ?? 'Unnamed champion', nameB: right.model.name ?? 'Unnamed champion', modelA: left.model, modelB: right.model, result };
+      renderComparison(comparePanel.result, savedPanel.ui, result);
+      comparePanel.replay.disabled = !(result.ok && result.sharedReplay.ok);
+      compareSay(result.ok ? `Compared A (${compared.nameA}) with B (${compared.nameB}).` : result.message);
+      canvas.dataset.compare = !result.ok ? 'refused' : result.fitness.comparable ? 'comparable' : 'not-ranked';
+      canvas.dataset.compareReplay = result.ok && result.sharedReplay.ok ? 'available' : 'refused';
+    });
+    comparePanel.replay.addEventListener('click', () => {
+      if (!compared || !compared.result.ok || !compared.result.sharedReplay.ok) return;
+      let setups: { a: ReturnType<typeof setupForModel>; b: ReturnType<typeof setupForModel> };
+      try {
+        setups = { a: setupForModel(compared.modelA), b: setupForModel(compared.modelB) };
+      } catch {
+        compareSay('These two cannot be replayed together.');
+        return;
+      }
+      stopReplay();
+      const restore = { mode: speed.mode, paused: speed.paused };
+      speed.setMode('normal');
+      speed.setPaused(false);
+      delete canvas.dataset.pairOutcomeA;
+      delete canvas.dataset.pairOutcomeB;
+      activePair = {
+        pair: createPairReplay(modelParameters(compared.modelA), setups.a.setup, modelParameters(compared.modelB), setups.b.setup),
+        physics: setups.a.setup.environment.physics,
+        timestep: setups.a.setup.environment.timestepSeconds,
+        labels: [compared.nameA, compared.nameB],
+        credit: 0,
+        announced: false,
+        restore,
+      };
+      resetMeters();
+      running.loop?.resync();
+      syncControls();
+      syncReplayControls();
+      compareSay(`Replaying A (${compared.nameA}) and B (${compared.nameB}) together on the same track, at normal speed. Training waits meanwhile.`);
+    });
+    refreshSaved();
+  }
+
   const draw = (size: ViewportSize) => {
     const layer = trackLayer.get(track, size);
     context.setTransform(1, 0, 0, 1, 0, 0);
     context.clearRect(0, 0, size.width, size.height);
     if (!layer) return;
     context.drawImage(layer.canvas, 0, 0);
+    if (activePair) {
+      // Both champions on one track: fixed identity colours and an A/B label, so colour is never the only cue.
+      const [a, b] = [activePair.pair.a.state(), activePair.pair.b.state()];
+      drawCars(
+        context,
+        size,
+        layer.view,
+        [
+          { car: a.racer.car, finished: a.episode.outcome !== null, fill: RACE_COLOURS.carA, label: 'A' },
+          { car: b.racer.car, finished: b.episode.outcome !== null, fill: RACE_COLOURS.carB, label: 'B' },
+        ],
+        activePair.physics,
+      );
+      const { dataset } = canvas;
+      dataset.trackScale = String(layer.view.scale);
+      dataset.trackOffsetX = String(layer.view.offsetX);
+      dataset.trackOffsetY = String(layer.view.offsetY);
+      return;
+    }
     if (active) {
       // Only the replayed car. It is drawn in the DECISION state, with the rays that decision was made from; once the
       // episode has ended it is drawn in its result state, without rays (there is no further decision).
@@ -691,6 +876,7 @@ export function startTrainingPage(page: TrainingPage): void {
       chartDraws: String(chart.draws),
       tick: String(ticks),
       replay: active ? (active.replay.done() ? 'done' : 'running') : 'off',
+      pairReplay: activePair ? (activePair.pair.done() ? 'done' : 'running') : 'off',
     });
     if (active) {
       const { replay, frame } = active;
@@ -1001,11 +1187,12 @@ export function startTrainingPage(page: TrainingPage): void {
   });
   running.loop = startFrameLoop(page.frames ?? browserFrameEnvironment(), speed, {
     step: () => {
-      if (active) {
-        if (!fpsReadout) return stepReplay(active) ? undefined : false;
+      if (active || activePair) {
+        const run = () => (activePair ? stepPair(activePair) : stepReplay(active!));
+        if (!fpsReadout) return run() ? undefined : false;
         // Replay ticks are counted as simulation ticks, so they are timed too: the step-time numerator matches its denominator.
         const started = measureClock();
-        const carryOn = stepReplay(active);
+        const carryOn = run();
         stepMsThisFrame += measureClock() - started;
         return carryOn ? undefined : false;
       }

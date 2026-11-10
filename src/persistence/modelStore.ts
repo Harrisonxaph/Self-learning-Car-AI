@@ -67,12 +67,17 @@ export type ImportOutcome =
   | { readonly ok: true; readonly status: 'added' | 'already-saved' | 'saved-as-copy'; readonly id: string; readonly indexed: boolean }
   | { readonly ok: false; readonly reason: 'unavailable' | 'quota' | 'full' | 'invalid'; readonly message: string };
 
+/** A saved model read for inspection: valid, but possibly one this build cannot drive (it can be compared, not replayed). */
+export type InspectResult = { readonly ok: true; readonly model: ModelDocument; readonly drivable: boolean } | { readonly ok: false; readonly message: string };
+
 export type RemoveResult = { readonly ok: true } | { readonly ok: false; readonly message: string };
 
 export interface ModelStore {
   list(): StoreListing;
   save(model: ModelDocument): SaveResult;
   load(id: string): LoadResult;
+  /** A valid saved champion for comparison (P3-08), whether or not this build can drive it. Writes nothing. */
+  inspect(id: string): InspectResult;
   /** The saved champion as a JSON file, so a copy can outlive the browser's storage. Only a valid entry can be exported. */
   exportFile(id: string): ExportResult;
   /**
@@ -270,6 +275,21 @@ export function createModelStore(options: ModelStoreOptions): ModelStore {
       const c = compatibility(read.model);
       if (!c.drivable) return { ok: false, message: `This saved champion can't be run by this version of the app. ${c.reasons.join(' ')}` };
       return { ok: true, model: read.model, warnings: c.warnings };
+    },
+
+    inspect(id) {
+      if (!MODEL_ID_PATTERN.test(id)) return { ok: false, message: 'That is not a saved champion.' };
+      const storage = open();
+      if (!storage) return { ok: false, message: MESSAGES.unavailable };
+      let text: string | null;
+      try {
+        text = storage.getItem(modelKey(id));
+      } catch {
+        return { ok: false, message: MESSAGES.unavailable };
+      }
+      const read = readModel(text, registry);
+      if (!read.ok) return { ok: false, message: `This saved champion can't be compared. ${read.problem}` };
+      return { ok: true, model: read.model, drivable: compatibility(read.model).drivable };
     },
 
     exportFile(id) {
