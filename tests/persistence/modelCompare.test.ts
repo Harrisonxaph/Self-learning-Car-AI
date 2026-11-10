@@ -77,6 +77,63 @@ describe('each single difference makes fitness not comparable and is listed', ()
   });
 });
 
+describe('the recorded values are shown side by side, equal or not', () => {
+  it('each physics field is a row with both values; a differing one is marked, equal ones show the same value on both sides', () => {
+    const wider = edited(A, (o) => { o.training.configuration.physics.wheelbase += 1; });
+    const c = ok(compareModels(A, wider));
+    const wheelbase = c.rows.find((r) => r.label === 'Physics: wheelbase')!;
+    expect(wheelbase.a).toBe(String(A.training.configuration.physics.wheelbase));
+    expect(wheelbase.b).toBe(String(A.training.configuration.physics.wheelbase + 1));
+    expect(wheelbase.state).toBe('different');
+    const length = c.rows.find((r) => r.label === 'Physics: vehicleLength')!;
+    expect(length.a).toBe(length.b);
+    expect(length.a).toBe(String(A.training.configuration.physics.vehicleLength));
+    expect(length.state).toBe('same');
+    expect(c.rows.filter((r) => r.label.startsWith('Physics: ')).length).toBe(Object.keys(DEFAULT_VEHICLE_PHYSICS).length);
+  });
+  it('each fitness weight is a row with both values', () => {
+    const heavier = edited(A, (o) => { o.training.configuration.fitness.lapWeight += 100; });
+    const c = ok(compareModels(A, heavier));
+    const lap = c.rows.find((r) => r.label === 'Weight: lapWeight')!;
+    expect(lap.a).toBe(String(A.training.configuration.fitness.lapWeight));
+    expect(lap.b).toBe(String(A.training.configuration.fitness.lapWeight + 100));
+    expect(lap.state).toBe('different');
+    const checkpoint = c.rows.find((r) => r.label === 'Weight: checkpointWeight')!;
+    expect(checkpoint.a).toBe(checkpoint.b);
+    expect(checkpoint.state).toBe('same');
+    expect(c.rows.filter((r) => r.label.startsWith('Weight: ')).length).toBe(7);
+  });
+  it('no row says "as recorded" or "differs:" in place of a value', () => {
+    const c = ok(compareModels(A, edited(A, (o) => { o.training.configuration.physics.wheelbase += 1; o.training.configuration.fitness.lapWeight += 100; })));
+    for (const row of c.rows) {
+      expect(row.a).not.toMatch(/^(as recorded|differs:)/);
+      expect(row.b).not.toMatch(/^(as recorded|differs:)/);
+    }
+  });
+});
+
+describe('unknown metadata is ignored (MODEL_FORMAT.md)', () => {
+  it('unknown fields in physics and fitness, even different ones, change no row, reason or verdict', () => {
+    const left = edited(A, (o) => { o.training.configuration.physics.note = 'metadata only'; o.training.configuration.fitness.note = 'left'; });
+    const right = edited(A, (o) => { o.training.configuration.physics.note = 'something else'; o.training.configuration.physics.other = 1; o.training.configuration.fitness.note = 'right'; });
+    const c = ok(compareModels(left, right));
+    expect(c.fitness).toEqual({ comparable: true, reasons: [] });
+    expect(c.sharedReplay).toEqual({ ok: true });
+    expect(c.warnings).toEqual([]);
+    expect(c.rows.some((r) => /note|other/i.test(r.label))).toBe(false);
+    expect(c.rows.filter((r) => r.state === 'different')).toEqual([]);
+  });
+  it('a model with unknown metadata is still refused for a real supported-field mismatch', () => {
+    const left = edited(A, (o) => { o.training.configuration.physics.note = 'x'; });
+    const right = edited(A, (o) => { o.training.configuration.physics.note = 'y'; o.training.configuration.physics.wheelbase += 1; });
+    const c = ok(compareModels(left, right));
+    expect(c.fitness.comparable).toBe(false);
+    expect(c.fitness.reasons.join(' ')).toContain('wheelbase');
+    expect(c.fitness.reasons.join(' ')).not.toContain('note');
+    expect(c.sharedReplay).toMatchObject({ ok: false });
+  });
+});
+
 describe('score comparability and replay compatibility are separate questions', () => {
   it('a fitness-version-only difference: not ranked, but the combined replay stays available', () => {
     const other = edited(A, (o) => { o.training.configuration.fitness.version = 2; o.training.fitnessVersion = 2; });

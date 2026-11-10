@@ -766,6 +766,11 @@ export function startTrainingPage(page: TrainingPage): void {
         compareSay(!left.ok ? `A: ${left.message}` : `B: ${(right as { message: string }).message}`);
         return;
       }
+      // A new comparison replaces the old one, so a combined replay of the old pair is stopped first: its outcomes must never
+      // overwrite the new comparison's status, and training must be back before anything else is shown.
+      if (activePair) stopReplay();
+      delete canvas.dataset.pairOutcomeA;
+      delete canvas.dataset.pairOutcomeB;
       const result = compareModels(left.model, right.model);
       compared = { a: idA, b: idB, nameA: left.model.name ?? 'Unnamed champion', nameB: right.model.name ?? 'Unnamed champion', modelA: left.model, modelB: right.model, result };
       renderComparison(comparePanel.result, savedPanel.ui, result);

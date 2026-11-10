@@ -9,7 +9,8 @@
 //    another fitness version can still be driven (MODEL_FORMAT.md), so that difference alone never blocks it.
 // Fitness is one training generation's score on the training track. It is never described as an evaluation, and nothing
 // here says one model is better than another.
-import { compatibility, type ModelDocument } from './modelFormat';
+import { DEFAULT_VEHICLE_PHYSICS } from '../sim/config';
+import { compatibility, type FitnessSettings, type ModelDocument } from './modelFormat';
 
 export type RowState = 'same' | 'different' | 'unavailable';
 
@@ -44,10 +45,18 @@ const same = (a: unknown, b: unknown): boolean => Object.is(a, b);
 const num = (value: number, digits = 2): string => (Number.isFinite(value) ? value.toFixed(digits) : 'unavailable');
 const short = (hash: string): string => (hash.length > 16 ? `${hash.slice(0, 16)}…` : hash);
 
-/** Names of the keys of `a` whose values differ from `b`'s (both plain records of numbers). */
-function differing(a: Readonly<Record<string, unknown>>, b: Readonly<Record<string, unknown>>): string[] {
-  const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
-  return [...keys].filter((key) => !same(a[key], b[key])).sort();
+/**
+ * The supported fields only (MODEL_FORMAT.md: unknown extra fields are ignored). A comparison walks these lists, never
+ * `Object.keys` of a stored object, so unknown metadata in a model can neither become a row or a reason nor change a verdict.
+ */
+const PHYSICS_KEYS = Object.freeze(Object.keys(DEFAULT_VEHICLE_PHYSICS)) as readonly string[];
+const WEIGHT_KEYS = Object.freeze(['checkpointWeight', 'partialProgressWeight', 'lapWeight', 'collisionPenalty', 'lapTimeBonusScale', 'referenceLapSeconds', 'maxLapTimeRatio'] satisfies (keyof FitnessSettings)[]) as readonly string[];
+
+/** The listed keys whose values differ between `a` and `b`. */
+function differing(a: unknown, b: unknown, keys: readonly string[]): string[] {
+  const left = a as Readonly<Record<string, unknown>>;
+  const right = b as Readonly<Record<string, unknown>>;
+  return keys.filter((key) => !same(left[key], right[key]));
 }
 
 const evaluationText = (model: ModelDocument): { text: string; present: boolean } => {
@@ -86,8 +95,9 @@ function build(a: ModelDocument, b: ModelDocument): Comparison {
   add('Training', 'Stall limit', `${ca.stallSeconds} s`, `${cb.stallSeconds} s`);
   add('Training', 'Laps per episode', String(ca.maxLaps), String(cb.maxLaps));
   add('Training', 'Timestep', `${ca.timestepSeconds} s`, `${cb.timestepSeconds} s`);
-  const physics = differing(ca.physics as unknown as Record<string, unknown>, cb.physics as unknown as Record<string, unknown>);
-  add('Training', 'Vehicle physics', physics.length === 0 ? 'as recorded' : `differs: ${physics.join(', ')}`, physics.length === 0 ? 'as recorded' : `differs: ${physics.join(', ')}`, physics.length === 0 ? 'same' : 'different');
+  // Every supported physics field is shown with both recorded values, equal or not; `state` carries the mismatch indicator.
+  const physics = differing(ca.physics, cb.physics, PHYSICS_KEYS);
+  for (const key of PHYSICS_KEYS) add('Training', `Physics: ${key}`, String((ca.physics as unknown as Record<string, unknown>)[key]), String((cb.physics as unknown as Record<string, unknown>)[key]));
   const sensorsSame = same(ca.sensors.maxDistance, cb.sensors.maxDistance) && ca.sensors.anglesDegrees.length === cb.sensors.anglesDegrees.length && ca.sensors.anglesDegrees.every((v, i) => same(v, cb.sensors.anglesDegrees[i]));
   add('Training', 'Sensors', `${ca.sensors.anglesDegrees.length} rays, range ${ca.sensors.maxDistance}`, `${cb.sensors.anglesDegrees.length} rays, range ${cb.sensors.maxDistance}`, sensorsSame ? 'same' : 'different');
 
@@ -99,8 +109,8 @@ function build(a: ModelDocument, b: ModelDocument): Comparison {
   add('Task', 'Simulation version', String(a.simulationVersion), String(b.simulationVersion));
 
   add('Scoring', 'Fitness version', String(ca.fitness.version), String(cb.fitness.version));
-  const weights = differing(ca.fitness as unknown as Record<string, unknown>, cb.fitness as unknown as Record<string, unknown>).filter((key) => key !== 'version');
-  add('Scoring', 'Fitness weights', weights.length === 0 ? 'as recorded' : `differs: ${weights.join(', ')}`, weights.length === 0 ? 'as recorded' : `differs: ${weights.join(', ')}`, weights.length === 0 ? 'same' : 'different');
+  const weights = differing(ca.fitness, cb.fitness, WEIGHT_KEYS);
+  for (const key of WEIGHT_KEYS) add('Scoring', `Weight: ${key}`, String((ca.fitness as unknown as Record<string, unknown>)[key]), String((cb.fitness as unknown as Record<string, unknown>)[key]));
 
   add('Recorded metrics', 'Fitness', num(a.fitness), num(b.fitness));
   const ea = evaluationText(a);

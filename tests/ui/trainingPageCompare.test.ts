@@ -230,6 +230,36 @@ describe('the two replay modes are never active together', () => {
   });
 });
 
+describe('a new comparison replaces the old one cleanly', () => {
+  it('Compare while the old pair runs stops the pair; its outcomes never reach the new status, and training returns', () => {
+    const mismatch = edit(B, (o) => { o.id = 'c-1'; o.name = 'Champion c-1'; o.training.configuration.timestepSeconds = 0.02; });
+    const p = setup([A, B, mismatch]);
+    p.choose('a-1', 'b-1');
+    p.compare.run.click();
+    p.run(3);
+    p.compare.replay.click();
+    p.run(2);
+    expect(p.canvas.dataset.pairReplay).toBe('running');
+    const ticksDuringPair = p.canvas.dataset.tick;
+    // Replace the comparison with A and C: a timestep mismatch, so the combined replay is refused.
+    p.choose('a-1', 'c-1');
+    p.compare.run.click();
+    p.run(2);
+    expect(p.canvas.dataset.pairReplay).toBe('off');
+    expect(p.compare.replay.disabled).toBe(true);
+    expect(p.compare.status.textContent).toContain('Compared A (Champion a-1) with B (Champion c-1)');
+    expect(p.canvas.dataset.pairOutcomeA).toBeUndefined();
+    expect(p.text()).toContain('timesteps differ');
+    // Many more frames: the old pair's outcomes never arrive, and training carries on.
+    p.run(400);
+    expect(p.compare.status.textContent).not.toContain('Replay finished');
+    expect(p.canvas.dataset.pairOutcomeA).toBeUndefined();
+    expect(p.controls.speeds.max.disabled).toBe(false);
+    expect(p.replay.stop.disabled).toBe(true);
+    expect(Number(p.canvas.dataset.tick)).toBeGreaterThan(Number(ticksDuringPair));
+  });
+});
+
 describe('deleting a compared save', () => {
   it('clears the comparison and the combined replay', () => {
     const p = setup([A, B]);
