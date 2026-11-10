@@ -15,7 +15,7 @@ export interface UiList extends UiNode {
   replaceChildren(...children: UiNode[]): void;
 }
 export interface UiFactory {
-  create(tag: 'li' | 'span' | 'button'): UiNode;
+  create(tag: 'li' | 'span' | 'button' | 'p' | 'ul' | 'option' | 'table' | 'caption' | 'thead' | 'tbody' | 'tr' | 'th' | 'td'): UiNode;
 }
 
 export interface SavedRowHandlers {

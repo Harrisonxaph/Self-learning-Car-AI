@@ -95,6 +95,22 @@
         <p class="graph-summary"><output aria-live="off" id="replay-decision">No decision yet</output></p>
         <p class="graph-summary"><output aria-live="off" id="replay-result"></output></p>
         <p id="replay-status" class="graph-summary" role="status"></p>
+        <section class="saved-champions compare-panel" aria-labelledby="compare-heading">
+          <h2 id="compare-heading" class="saved-heading">Compare two saved champions</h2>
+          <p id="compare-notice" class="graph-summary">Choose two saves to see them side by side. Fitness is ranked only when the two were scored the same way, on the same task, under the same conditions; otherwise it is shown but not ranked. Two saves can be replayed together only under the same driving conditions.</p>
+          <div class="replay-controls">
+            <label class="replay-field" for="compare-a">A</label>
+            <select id="compare-a" class="replay-input compare-select" aria-label="Saved champion A"></select>
+            <label class="replay-field" for="compare-b">B</label>
+            <select id="compare-b" class="replay-input compare-select" aria-label="Saved champion B"></select>
+          </div>
+          <div class="replay-controls">
+            <button type="button" id="compare-run" class="tc-button replay-button" disabled>Compare</button>
+            <button type="button" id="compare-replay" class="tc-button replay-button" disabled>Replay both together</button>
+          </div>
+          <p id="compare-status" class="graph-summary" role="status"></p>
+          <div id="compare-result" class="compare-result"></div>
+        </section>
         <section class="saved-champions checkpoint-panel" aria-labelledby="checkpoint-heading">
           <h2 id="checkpoint-heading" class="saved-heading">Training checkpoint</h2>
           <p id="checkpoint-notice" class="graph-summary">A checkpoint is this run at a generation boundary, so it can be resumed later. It is saved in this browser only, which is a convenience, not a backup: Download checkpoint keeps a copy as a file. A saved checkpoint is only ever offered; nothing resumes by itself.</p>

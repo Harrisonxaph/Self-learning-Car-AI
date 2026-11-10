@@ -70,6 +70,14 @@ export class FakeNode {
   }
 }
 
+/** A `<select>` for the comparison: options are replaced from the saved list, and a choice fires `change`. */
+export class FakeSelect extends FakeControl {
+  options: FakeNode[] = [];
+  replaceChildren(...nodes: FakeNode[]) {
+    this.options = nodes;
+  }
+}
+
 /** A localStorage stand-in for the page tests. */
 export class FakeLocalStorage implements StorageLike {
   readonly data = new Map<string, string>();
@@ -119,6 +127,8 @@ export interface FakePageOptions {
   readonly storage?: (() => StorageLike | null) | undefined;
   /** Gives the page the opt-in frame-rate readout element. */
   readonly fps?: boolean | undefined;
+  /** Gives the page the comparison of two saved champions (P3-08). */
+  readonly compare?: boolean | undefined;
   /** Gives the page the checkpoint feature (P3-07), with its own storage (a fresh one by default) and settings. */
   readonly checkpoint?: { readonly storage?: (() => StorageLike | null) | undefined; readonly everyGenerations?: number; readonly minSeconds?: number } | undefined;
 }
@@ -186,6 +196,13 @@ export function fakePage(frames: FakeFrames, options: FakePageOptions | { ms: nu
     codeVersion: 'test',
     appVersion: '0.0.0',
   };
+  const compare = opts.compare
+    ? { a: new FakeSelect(), b: new FakeSelect(), run: new FakeControl(), replay: new FakeControl(), status: { textContent: '' as string | null }, result: new FakeNode('div') }
+    : undefined;
+  if (compare) {
+    compare.run.disabled = true;
+    compare.replay.disabled = true;
+  }
   const checkpointStorage = new FakeLocalStorage();
   const hideListeners: (() => void)[] = [];
   const deferred: { run: () => void; cancelled: boolean }[] = [];
@@ -234,6 +251,7 @@ export function fakePage(frames: FakeFrames, options: FakePageOptions | { ms: nu
     controls,
     replay,
     saved,
+    compare,
     checkpoint,
     fps,
     isPhone: opts.isPhone ?? false,
@@ -253,5 +271,5 @@ export function fakePage(frames: FakeFrames, options: FakePageOptions | { ms: nu
     for (const entry of deferred.splice(0)) if (includeCancelled || !entry.cancelled) entry.run();
   };
   const hide = () => hideListeners.forEach((listener) => listener());
-  return { page, canvas, dashboard, panel, hidden, graph, controls, replay, saved, savedStorage, checkpoint, checkpointStorage, runDeferred, hide, status, fps };
+  return { page, canvas, dashboard, panel, hidden, graph, controls, replay, saved, savedStorage, compare, checkpoint, checkpointStorage, runDeferred, hide, status, fps };
 }
