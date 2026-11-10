@@ -480,6 +480,75 @@ body {
   outline-offset: 2px;
 }
 
+/* Compare two saved champions (P3-08). The table stays inside the panel: at narrow widths its cells stack. */
+.compare-select {
+  width: min(11rem, 100%);
+  flex: 1 1 7rem;
+}
+
+.compare-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+}
+
+.compare-table caption {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+
+.compare-table th,
+.compare-table td {
+  padding: 0.2rem 0.3rem;
+  border-bottom: 1px solid #26323d;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+
+.compare-table .compare-group {
+  padding-top: 0.5rem;
+  color: #ffb000;
+}
+
+.compare-table tr[data-state='different'] td {
+  font-weight: 600;
+}
+
+.compare-why {
+  margin-bottom: 0;
+}
+
+@media (max-width: 480px) {
+  .compare-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+
+  .compare-table tr {
+    display: block;
+  }
+
+  .compare-table td,
+  .compare-table th[scope='row'] {
+    display: block;
+    border-bottom: none;
+  }
+
+  .compare-table td:nth-of-type(1)::before {
+    content: 'A: ';
+  }
+
+  .compare-table td:nth-of-type(2)::before {
+    content: 'B: ';
+  }
+}
+
 .checkpoint-offer {
   margin: 0.25rem 0;
   padding: 0.25rem 0.5rem;

@@ -28,7 +28,7 @@ import { pageMode } from './ui/pageMode';
 import { downloadJson } from './ui/download';
 import { newModelId } from './ui/modelId';
 import type { UiList, UiNode } from './ui/savedChampionsView';
-import { startTrainingPage } from './ui/trainingPage';
+import { startTrainingPage, type CompareSelect } from './ui/trainingPage';
 
 const element = <T extends Element>(selector: string): T => {
   const found = document.querySelector<T>(selector);
@@ -100,6 +100,14 @@ if (pageMode(window.location.search) === 'train') {
         result: element('#replay-result'),
         status: element('#replay-status'),
       },
+    },
+    compare: {
+      a: element<HTMLSelectElement>('#compare-a') as unknown as CompareSelect,
+      b: element<HTMLSelectElement>('#compare-b') as unknown as CompareSelect,
+      run: element<HTMLButtonElement>('#compare-run'),
+      replay: element<HTMLButtonElement>('#compare-replay'),
+      status: element<HTMLElement>('#compare-status'),
+      result: element<HTMLElement>('#compare-result') as unknown as UiList,
     },
     checkpoint: {
       status: element<HTMLElement>('#checkpoint-status'),
