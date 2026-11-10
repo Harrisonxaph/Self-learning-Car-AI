@@ -1,7 +1,8 @@
 // Import from file text (P3-06): every invalid case is refused with a message and nothing written, migration is a pure,
 // ordered hook (tested with a synthetic registry; the real one is empty), and an exported file re-imports identically.
 import { readFileSync } from 'node:fs';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
+import { FAIL_MARKER, installFailingStringify } from '../helpers/failingStringify';
 import stadiumOval from '../../src/data/tracks/stadium-oval.json';
 import { DEFAULT_SIM_CONFIG, DEFAULT_VEHICLE_PHYSICS } from '../../src/sim/config';
 import { loadTrack } from '../../src/sim/track';
@@ -354,13 +355,14 @@ describe('one UTF-8 byte limit for import, save and export', () => {
 });
 
 describe('serialization safety through the whole import-and-save path', () => {
-  const deep = (levels: number): string => {
-    const base = text(good).trimEnd();
-    return `${base.slice(0, -1)},"extra":${'['.repeat(levels)}${']'.repeat(levels)}}`;
-  };
-  it('a valid model with a deeply nested unknown field gives a refusal message, not an exception, and writes nothing', () => {
-    const body = deep(12_000);
-    const parsed = importModelText(body, { registry: REGISTRY });
+  // The failure is injected (tests/helpers/failingStringify.ts), not provoked by nesting depth: whether a deep value
+  // overflows the stack depends on the runtime's stack size, so a fixed depth is not a portable way to make it fail.
+  let restore: () => void = () => {};
+  afterEach(() => restore());
+  const unserializable = (): string => JSON.stringify({ ...(JSON.parse(text(good)) as Record<string, unknown>), [FAIL_MARKER]: true });
+
+  it('a valid model that cannot be written out gives a refusal message, not an exception, and writes nothing', () => {
+    const parsed = importModelText(unserializable(), { registry: REGISTRY });
     expect(parsed.ok).toBe(true);
     const storage = new Spy();
     const store = createModelStore({ storage: () => storage, registry: REGISTRY });
@@ -368,16 +370,37 @@ describe('serialization safety through the whole import-and-save path', () => {
     const snapshot = new Map(storage.data);
     const writes = storage.writes;
     if (!parsed.ok) return;
+    restore = installFailingStringify();
     let out: ReturnType<typeof store.importModel> | undefined;
     expect(() => { out = store.importModel(parsed.model, () => 'n'); }).not.toThrow();
+    restore();
     expect(out).toMatchObject({ ok: false, reason: 'invalid' });
     expect(storage.writes).toBe(writes);
     expect(storage.data).toEqual(snapshot);
   });
   it('save itself returns a message for such a model', () => {
-    const parsed = importModelText(deep(12_000), { registry: REGISTRY });
+    const parsed = importModelText(unserializable(), { registry: REGISTRY });
     if (!parsed.ok) throw new Error('should parse');
     const store = createModelStore({ storage: () => new Spy(), registry: REGISTRY });
+    restore = installFailingStringify();
     expect(store.save(parsed.model)).toMatchObject({ ok: false, reason: 'invalid' });
+  });
+  it('the same model saves normally when serialization works, so the refusal above is the injected failure and nothing else', () => {
+    const parsed = importModelText(unserializable(), { registry: REGISTRY });
+    if (!parsed.ok) throw new Error('should parse');
+    const store = createModelStore({ storage: () => new Spy(), registry: REGISTRY });
+    expect(store.save(parsed.model)).toMatchObject({ ok: true });
+  });
+  it('a deeply nested unknown field never throws, whether or not this runtime can serialize it', () => {
+    const base = text(good).trimEnd();
+    const parsed = importModelText(`${base.slice(0, -1)},"extra":${'['.repeat(12_000)}${']'.repeat(12_000)}}`, { registry: REGISTRY });
+    if (!parsed.ok) throw new Error('should parse');
+    const storage = new Spy();
+    const store = createModelStore({ storage: () => storage, registry: REGISTRY });
+    let out: ReturnType<typeof store.save> | undefined;
+    expect(() => { out = store.save(parsed.model); }).not.toThrow();
+    // Either outcome is correct; what matters is that a refusal wrote nothing and a success wrote the model.
+    if (out?.ok) expect(storage.data.size).toBe(2);
+    else expect(storage.data.size).toBe(0);
   });
 });

@@ -2,6 +2,7 @@
 // valid file is listed and replayable; a refused file leaves the list, the storage and an active replay untouched; the
 // file's size is checked before it is read; the same file twice adds nothing; training is unaffected.
 import { describe, expect, it } from 'vitest';
+import { FAIL_MARKER, installFailingStringify } from '../helpers/failingStringify';
 import { MAX_MODEL_BYTES } from '../../src/persistence/modelFormat';
 import { startTrainingPage } from '../../src/ui/trainingPage';
 import { FakeFrames } from './fakeFrames';
@@ -117,7 +118,7 @@ describe('Import JSON', () => {
     expect(p.canvas.dataset.replaySource).toBe('saved');
   });
 
-  it('a valid file with a deeply nested unknown field is refused with a message; the list, storage and an active replay are untouched', async () => {
+  it('a valid file that cannot be written out is refused with a message; the list, storage and an active replay are untouched', async () => {
     const p = setup();
     await p.choose(p.file('c.json', fixture));
     p.saved.list.children[0]!.find((n) => n.tag === 'button' && n.textContent === 'Replay')[0]!.click();
@@ -125,8 +126,14 @@ describe('Import JSON', () => {
     p.frames.fire(16);
     const snapshot = new Map(p.savedStorage.data);
     const base = JSON.parse(fixture) as Record<string, unknown>;
-    const body = `${JSON.stringify({ ...base, id: 'deep-1', extra: 0 }).slice(0, -2)}${'['.repeat(12_000)}${']'.repeat(12_000)}}`;
-    await p.choose(p.file('deep.json', body));
+    const body = JSON.stringify({ ...base, id: 'unwritable-1', [FAIL_MARKER]: true });
+    // The serialization failure is injected, not provoked by nesting depth (which depends on the runtime's stack size).
+    const restore = installFailingStringify();
+    try {
+      await p.choose(p.file('unwritable.json', body));
+    } finally {
+      restore();
+    }
     expect(p.saved.status.textContent).toMatch(/^Nothing was imported\./);
     expect(p.savedStorage.data).toEqual(snapshot);
     expect(p.saved.list.children).toHaveLength(1);
