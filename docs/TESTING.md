@@ -22,6 +22,8 @@ CI (`.github/workflows/ci.yml`, P1-10) runs all of them with Node from `.nvmrc` 
 - **Lint, typecheck, unit tests and build:** `npm ci`, `npm run lint`, `npm run typecheck`, `npm test`, `npm run build`.
 - **Browser tests:** `npm ci`, `npx playwright install --with-deps chromium webkit`, then `npm run test:e2e` (all six Playwright projects, including the phone and tablet touch projects). If it fails, the Playwright report and traces are uploaded as the `playwright-report` artifact for 14 days.
 
+The browser job allows 40 minutes overall, with separate 15-minute browser/system-dependency installation and 20-minute test-execution limits. A slow package mirror therefore does not consume the suite's execution budget. A timeout still fails the required check; no browser projects are skipped and no automatic test retries are added.
+
 Any failing command fails the workflow. Actions are pinned to full commit SHAs. CI cannot make a check required itself. Since 2026-11-01 the owner's active ruleset "Protect main" requires both jobs above to pass before a pull request can merge into `main` (P1-10 in `docs/ROADMAP.md`).
 
 ## Running the tests locally
