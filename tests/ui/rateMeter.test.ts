@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createRateMeter, formatRateReadout } from '../../src/ui/rateMeter';
+import { createRateMeter, formatRateReadout, meanMs } from '../../src/ui/rateMeter';
 
 describe('createRateMeter', () => {
   it('reports nothing until enough time has been seen', () => {
@@ -75,5 +75,39 @@ describe('formatRateReadout', () => {
   });
   it('shows an ellipsis for a rate not yet known', () => {
     expect(formatRateReadout(null, null, 'normal · 50 cars drawn')).toBe('Render … frames/s · Simulation … ticks/s · normal · 50 cars drawn');
+  });
+});
+
+describe('meanMs and the extended readout (P3-07)', () => {
+  it('is milliseconds spent per second over events per second, and null while either cannot be said', () => {
+    expect(meanMs(30, 60)).toBe(0.5);
+    expect(meanMs(null, 60)).toBeNull();
+    expect(meanMs(30, null)).toBeNull();
+    expect(meanMs(30, 0)).toBeNull();
+  });
+  it('measures a window the same way as the rates: meters fed the same sample times give the mean cost', () => {
+    const cost = createRateMeter();
+    const ticks = createRateMeter();
+    for (let i = 0; i < 40; i += 1) {
+      cost.add(i * 16, 2);
+      ticks.add(i * 16, 4);
+    }
+    expect(meanMs(cost.rate(), ticks.rate())).toBeCloseTo(0.5, 10);
+  });
+  it('a gap starts both meters again, so a stall is never averaged in', () => {
+    const cost = createRateMeter();
+    const ticks = createRateMeter();
+    for (let i = 0; i < 20; i += 1) {
+      cost.add(i * 16, 2);
+      ticks.add(i * 16, 4);
+    }
+    cost.add(10_000, 9_999);
+    ticks.add(10_000, 1);
+    expect(meanMs(cost.rate(), ticks.rate())).toBeNull();
+  });
+  it('shows an ellipsis for a figure not yet known and names the context', () => {
+    expect(formatRateReadout(60, 60, 'normal · 50 cars drawn', { stepMs: null, renderMs: 2.345, context: 'population 50 · track · build x' })).toBe(
+      'Render 60.0 frames/s · Simulation 60.0 ticks/s · Step … ms/tick · Draw 2.35 ms/frame · normal · 50 cars drawn · population 50 · track · build x',
+    );
   });
 });

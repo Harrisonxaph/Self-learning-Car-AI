@@ -1,8 +1,7 @@
 // What the training graph plots (P3-02): one point per completed generation, built from the trainer's own
 // `GenerationStats`, plus a plain-text summary of the plotted history for people who cannot read the chart.
 // Pure and headless: nothing here draws or reads the DOM.
-import { completedMetrics } from './generationMetrics';
-import type { GenerationStats } from './trainer';
+import { completedMetrics, type CompletedSource } from './generationMetrics';
 
 /** The figures plotted for one completed generation. Rates are shares of the population, from 0 to 1. */
 export interface HistoryPoint {
@@ -17,7 +16,7 @@ export interface HistoryPoint {
 }
 
 /** The plotted point for a generation the trainer has just completed. Uses the same definitions as the dashboard. */
-export function historyPoint(stats: GenerationStats, population: number): HistoryPoint {
+export function historyPoint(stats: CompletedSource, population: number): HistoryPoint {
   const metrics = completedMetrics(stats, population);
   if (metrics === null) throw new TypeError('A completed generation is required.');
   return {

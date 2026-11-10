@@ -420,3 +420,7 @@ Authorised by the owner ([#138](https://github.com/Harrisonxaph/Self-learning-Ca
 - **Serialization is guarded.** Unknown extra fields survive validation; a value nested too deeply to write out makes a save or import return a refusal message, never an exception.
 - **Incomplete storage inventory.** If saved champions cannot be fully listed, nothing is imported; the destination key is always checked directly, so an unlisted save is never overwritten.
 - **Id collisions.** The same id with identical content is "already saved"; the same id with different content is saved under a new id; an existing save is never overwritten.
+
+## Training checkpoints are a separate format
+
+A saved champion cannot resume evolution. The generation-boundary checkpoint of P3-07 is a different document with its own name, schema, size limit and importer: see [CHECKPOINT_FORMAT.md](CHECKPOINT_FORMAT.md). Each importer refuses the other's `format` with a message.

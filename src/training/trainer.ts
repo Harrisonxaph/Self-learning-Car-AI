@@ -18,7 +18,7 @@
 // generator (genomes in index order); each generation transition takes exactly three more draws, through
 // createEvolutionRngs. Episodes use no randomness, so stepping order and drawing cannot change any stream.
 import { INPUT_CONTRACT } from '../ai/inputs';
-import { INITIALISATION, initialParameters, PARAMETER_COUNT, PARAMETER_ORDER, runNetwork } from '../ai/network';
+import { INITIALISATION, initialParameters, MAX_CHECKPOINT_PARAMETER_MAGNITUDE, PARAMETER_COUNT, PARAMETER_ORDER, runNetwork } from '../ai/network';
 import { OUTPUT_CONTRACT } from '../ai/outputs';
 import { createEvolutionRngs, EVOLUTION_OPERATORS, nextGeneration, resolveEvolutionConfig, type EvolutionConfig } from '../evolution/population';
 import { rankByFitness } from '../evolution/selection';
@@ -26,7 +26,7 @@ import { DEFAULT_SENSOR_CONFIG, type SensorConfig } from '../sensors/rays';
 import type { Racer } from '../sim/checkpoints';
 import type { VehiclePhysics } from '../sim/config';
 import type { Track } from '../sim/track';
-import { createRng, RNG_ALGORITHM, type Rng } from '../utils/rng';
+import { createRng, restoreRng, RNG_ALGORITHM, type Rng, type RngState } from '../utils/rng';
 import { startEpisodeState, stepEpisode } from './episodeStep';
 import { assertTrainingTrack, trackContentHash } from './trackSplits';
 import {
@@ -156,8 +156,89 @@ export interface TrainingRecord {
   readonly physics: VehiclePhysics;
   readonly timestepSeconds: number;
   readonly sensors: SensorConfig;
+  /**
+   * The complete `GenerationStats` of every generation this record holds in full: all of them for a run started fresh, and
+   * only the retained ones after a resume from a checkpoint (P3-07). Use `complete` before treating it as the whole run.
+   */
   readonly generations: readonly GenerationStats[];
+  /** Every completed generation in order, each either full or compact (P3-07), so nothing is silently missing. */
+  readonly history: readonly HistoryEntry[];
+  /** True when every generation in `history` is held in full (a run that was never restored from a compact checkpoint). */
+  readonly complete: boolean;
 }
+
+/**
+ * A completed generation whose per-car fitness list and champion genome were not kept (P3-07). Only what the graph and
+ * the dashboard read remains; nothing is reconstructed or invented, and `retained: false` says so.
+ */
+export interface CompactGenerationStats {
+  readonly retained: false;
+  readonly generation: number;
+  readonly populationSize: number;
+  readonly bestFitness: number;
+  readonly meanFitness: number;
+  readonly worstFitness: number;
+  readonly outcomes: Readonly<Record<EpisodeOutcome, number>>;
+  readonly carsWithLap: number;
+  readonly maxGatesPassed: number;
+  readonly generationTicks: number;
+  readonly totalEpisodeTicks: number;
+}
+
+/** One completed generation: its full statistics, or the compact form when the champion was not kept. */
+export type HistoryEntry = { readonly retained: true; readonly stats: GenerationStats } | CompactGenerationStats;
+
+/** The compact form of a generation's statistics. */
+export function compactOf(stats: GenerationStats): CompactGenerationStats {
+  return Object.freeze({
+    retained: false as const,
+    generation: stats.generation,
+    populationSize: stats.fitness.length,
+    bestFitness: stats.bestFitness,
+    meanFitness: stats.meanFitness,
+    worstFitness: stats.worstFitness,
+    outcomes: Object.freeze({ ...stats.outcomes }),
+    carsWithLap: stats.carsWithLap,
+    maxGatesPassed: stats.maxGatesPassed,
+    generationTicks: stats.generationTicks,
+    totalEpisodeTicks: stats.totalEpisodeTicks,
+  });
+}
+
+/** Generations whose champion is kept in a checkpoint besides the best so far (the P3-07 default). */
+export const DEFAULT_RETAINED_GENERATIONS = 20;
+
+/**
+ * What a checkpoint keeps in full: the last `keepLast` generations and the best so far (highest best fitness; the earliest
+ * on a tie). Every other generation becomes compact. Entries already compact stay compact; none is ever made full again.
+ */
+export function retainHistory(entries: readonly HistoryEntry[], keepLast: number = DEFAULT_RETAINED_GENERATIONS): HistoryEntry[] {
+  if (!Number.isInteger(keepLast) || keepLast < 0) throw new RangeError(`keepLast must be an integer of at least 0, got ${keepLast}.`);
+  let best = -1;
+  for (let i = 0; i < entries.length; i += 1) {
+    if (best < 0 || bestOf(entries[i]!) > bestOf(entries[best]!)) best = i;
+  }
+  const firstKept = entries.length - keepLast;
+  return entries.map((entry, i) => (!entry.retained ? entry : i >= firstKept || i === best ? entry : compactOf(entry.stats)));
+}
+
+const bestOf = (entry: HistoryEntry): number => (entry.retained ? entry.stats.bestFitness : entry.bestFitness);
+
+/**
+ * The trainer's state at the start of its current generation, which is a generation boundary: everything the rest of the
+ * run depends on. `genomes` are the current population (copies), `runState` is the run generator's state (the only random
+ * state that persists between generations: the per-transition generators are derived from it afresh, and nothing caches a
+ * draw), and `history` holds the completed generations.
+ */
+export interface TrainerState {
+  readonly generationIndex: number;
+  readonly genomes: readonly Float64Array[];
+  readonly runState: RngState;
+  readonly history: readonly HistoryEntry[];
+}
+
+/** Where to resume a run: a `TrainerState`, normally read back from a checkpoint (so it is checked in full). */
+export type TrainerResume = TrainerState;
 
 export interface Trainer {
   readonly setup: TrainingSetup;
@@ -174,6 +255,8 @@ export interface Trainer {
   runGeneration(): GenerationStats;
   /** The configuration, versions and statistics of every completed generation. */
   record(): TrainingRecord;
+  /** The state at the start of the current generation (a copy), for a checkpoint. Valid at any time. */
+  checkpointState(): TrainerState;
 }
 
 /**
@@ -323,19 +406,28 @@ export function trainerStreams(seed: number): { readonly run: Rng; readonly init
  * Creates a trainer and starts generation 0. Validates the configuration (RangeError on anything invalid), then
  * seeds the initial population from the run generator.
  */
-export function createTrainer(input: unknown, environment: TrainingEnvironment): Trainer {
+export function createTrainer(input: unknown, environment: TrainingEnvironment, resume?: TrainerResume): Trainer {
   const setup = createTrainingSetup(input, environment);
-  const { run, initial } = trainerStreams(setup.config.seed);
-  const genomes = Array.from({ length: setup.config.populationSize }, () => initialParameters(initial));
-  if (genomes[0]!.length !== PARAMETER_COUNT) throw new RangeError('Initial genomes do not match the network.');
-
-  let current = startGeneration(0, genomes, setup);
+  let run: Rng;
+  let current: Generation;
+  const history: HistoryEntry[] = [];
+  if (resume !== undefined) {
+    checkResume(resume, setup);
+    run = restoreRng(resume.runState);
+    history.push(...resume.history);
+    current = startGeneration(resume.generationIndex, resume.genomes.map((genome) => Float64Array.from(genome)), setup);
+  } else {
+    const streams = trainerStreams(setup.config.seed);
+    run = streams.run;
+    const genomes = Array.from({ length: setup.config.populationSize }, () => initialParameters(streams.initial));
+    if (genomes[0]!.length !== PARAMETER_COUNT) throw new RangeError('Initial genomes do not match the network.');
+    current = startGeneration(0, genomes, setup);
+  }
   let finished: Generation | null = null;
-  const history: GenerationStats[] = [];
 
   const finish = (): GenerationStats => {
     const stats = generationStats(current, setup);
-    history.push(stats);
+    history.push({ retained: true, stats });
     const next = nextGeneration(
       current.cars.map((car) => car.genome),
       stats.fitness,
@@ -370,9 +462,36 @@ export function createTrainer(input: unknown, environment: TrainingEnvironment):
         physics: Object.freeze({ ...setup.environment.physics }),
         timestepSeconds: setup.environment.timestepSeconds,
         sensors: setup.sensors,
-        generations: Object.freeze([...history]),
+        generations: Object.freeze(history.flatMap((entry) => (entry.retained ? [entry.stats] : []))),
+        history: Object.freeze([...history]),
+        complete: history.every((entry) => entry.retained),
       }),
+    checkpointState: () => ({
+      generationIndex: current.index,
+      genomes: current.cars.map((car) => Float64Array.from(car.genome)),
+      runState: run.getState(),
+      history: [...history],
+    }),
   };
+}
+
+/** Checks a resume state against the setup it will run under. Throws RangeError naming the problem. */
+function checkResume(resume: TrainerResume, setup: TrainingSetup): void {
+  const { populationSize } = setup.config;
+  if (!resume || typeof resume !== 'object') throw new RangeError('Resume state must be an object.');
+  if (!Number.isInteger(resume.generationIndex) || resume.generationIndex < 0) throw new RangeError(`Resume generation index must be an integer of at least 0, got ${String(resume.generationIndex)}.`);
+  if (!Array.isArray(resume.history) || resume.history.length !== resume.generationIndex) throw new RangeError('Resume history must hold exactly one entry per completed generation.');
+  resume.history.forEach((entry, i) => {
+    const generation = entry?.retained ? entry.stats?.generation : (entry as CompactGenerationStats | undefined)?.generation;
+    if (generation !== i) throw new RangeError(`Resume history entry ${i} is for generation ${String(generation)}.`);
+  });
+  if (!Array.isArray(resume.genomes) || resume.genomes.length !== populationSize) throw new RangeError(`Resume population must hold ${populationSize} genomes.`);
+  resume.genomes.forEach((genome, i) => {
+    if (!(genome instanceof Float64Array) || genome.length !== PARAMETER_COUNT || !genome.every(Number.isFinite)) throw new RangeError(`Resume genome ${i} must be ${PARAMETER_COUNT} finite numbers.`);
+    // A finite but enormous parameter (1e308) would make the first step throw out of the frame loop: refuse it here.
+    if (genome.some((v) => Math.abs(v) >= MAX_CHECKPOINT_PARAMETER_MAGNITUDE)) throw new RangeError(`Resume genome ${i} has a parameter too large for the network to compute with.`);
+  });
+  restoreRng(resume.runState);
 }
 
 /** Runs `generations` whole generations headless and returns the run's record. */

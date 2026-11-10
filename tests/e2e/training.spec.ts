@@ -428,7 +428,7 @@ test('the frame-rate readout is absent by default and, with ?debug=fps, reports 
   await page.goto('/?mode=train&debug=fps');
   await page.clock.runFor(2000);
   await expect(page.locator('#fps-readout')).toBeVisible();
-  await expect(page.locator('#fps-readout')).toContainText(/Render \d+\.\d frames\/s · Simulation \d+\.\d ticks\/s · normal · \d+ cars drawn/);
+  await expect(page.locator('#fps-readout')).toContainText(/Render \d+\.\d frames\/s · Simulation \d+\.\d ticks\/s · Step [\d.…]+ ms\/tick · Draw [\d.…]+ ms\/frame · normal · \d+ cars drawn · population 50 · stadium-oval · build /);
   const rate = async () => ({
     frames: Number(await page.locator('#sim-canvas').getAttribute('data-fps-frames')),
     ticks: Number(await page.locator('#sim-canvas').getAttribute('data-fps-ticks')),
@@ -580,7 +580,7 @@ test('with the champion replay open, the track keeps its space, the page does no
       const status = document.querySelector('#saved-list li:last-child')!.getBoundingClientRect();
       const after = panel.getBoundingClientRect();
       const root = document.documentElement;
-      const small = ['replay-generation', 'replay-start', 'replay-stop', 'saved-name', 'saved-save', 'saved-import-button'].filter((id) => {
+      const small = ['replay-generation', 'replay-start', 'replay-stop', 'saved-name', 'saved-save', 'saved-import-button', 'checkpoint-download', 'checkpoint-import-button'].filter((id) => {
         const r = rect(id);
         return r.width < 44 || r.height < 44;
       });
@@ -767,6 +767,92 @@ test('a multibyte file near the 1 MiB limit imports and its own download imports
   await page.getByRole('button', { name: 'Confirm delete Wide copy' }).click();
   await page.locator('#saved-import').setInputFiles(downloaded);
   await expect(page.locator('#saved-status')).toContainText('Imported "Wide copy"');
+});
+
+test('a checkpoint is saved when the page is hidden, offered after a reload (never resumed by itself), resumes, downloads and loads from a file', async ({ page }, testInfo) => {
+  await installPausedClock(page);
+  await page.goto('/?mode=train');
+  await page.clock.runFor(100);
+  await advanceUntil(page, (v) => Number(v.data.chartPoints) >= 2, 1000, 400);
+  await page.locator('#champion-replay > summary').click();
+  await expect(page.locator('#checkpoint-status')).toContainText('No checkpoint saved yet');
+  await expect(page.locator('#checkpoint-offer')).toBeHidden();
+  // Hiding the page writes the newest generation boundary (best effort; the browser gives no guarantee of the event).
+  await page.evaluate(() => window.dispatchEvent(new Event('pagehide')));
+  await expect(page.locator('#checkpoint-status')).toContainText('Checkpoint saved after generation');
+  const stored = await page.evaluate(() => {
+    const doc = JSON.parse(localStorage.getItem('sdae:checkpoint:v1')!);
+    return { format: doc.format, generationIndex: doc.generationIndex, history: doc.history.length, population: doc.population.count, saved: Object.keys(localStorage).filter((k) => k.startsWith('sdae:model:')).length };
+  });
+  expect(stored.format).toBe('self-driving-ai-evolution/checkpoint');
+  expect(stored.generationIndex).toBeGreaterThanOrEqual(2);
+  expect(stored.history).toBe(stored.generationIndex);
+  expect(stored.population).toBe(50);
+  expect(stored.saved).toBe(0);
+
+  // Download checkpoint: a file from the run in memory.
+  await page.locator('#checkpoint-download').scrollIntoViewIfNeeded();
+  const downloadPromise = page.waitForEvent('download');
+  await page.locator('#checkpoint-download').click();
+  const download = await downloadPromise;
+  expect(download.suggestedFilename()).toMatch(/^sdae-checkpoint-gen\d+-[A-Za-z0-9]+\.json$/);
+  const downloaded = await download.path();
+
+  // Reload: the checkpoint is OFFERED, nothing resumes by itself, and the status line says so.
+  await page.reload();
+  await page.clock.runFor(200);
+  await page.locator('#champion-replay > summary').click();
+  await expect(page.locator('#checkpoint-offer')).toBeVisible();
+  await expect(page.locator('#checkpoint-offer-text')).toContainText('completed generations');
+  await expect(page.locator('#hud-message')).toContainText('checkpoint found');
+  await expect(page.locator('#sim-canvas')).not.toHaveAttribute('data-checkpoint-resumed', /.*/);
+  const offered = await page.evaluate(() => localStorage.getItem('sdae:checkpoint:v1'));
+  await page.clock.runFor(2000);
+  await page.evaluate(() => window.dispatchEvent(new Event('pagehide')));
+  expect(await page.evaluate(() => localStorage.getItem('sdae:checkpoint:v1'))).toBe(offered);
+
+  // Resume: the history comes back (graph points) and the run goes on.
+  await page.locator('#checkpoint-resume').click();
+  await page.clock.runFor(200);
+  await expect(page.locator('#checkpoint-status')).toContainText(`Resumed from generation ${stored.generationIndex}`);
+  await expect(page.locator('#sim-canvas')).toHaveAttribute('data-chart-points', String(stored.generationIndex));
+  await expect(page.locator('#checkpoint-offer')).toBeHidden();
+
+  // Load checkpoint file: the downloaded file is offered again and resumes.
+  await page.locator('#checkpoint-import').setInputFiles(downloaded);
+  await expect(page.locator('#checkpoint-offer-text')).toContainText('A checkpoint file was loaded');
+  await page.locator('#checkpoint-resume').click();
+  await page.clock.runFor(200);
+  await expect(page.locator('#checkpoint-status')).toContainText('Resumed from generation');
+
+  // A file that is not a checkpoint is refused and changes nothing.
+  const notCheckpoint = testInfo.outputPath('not-a-checkpoint.json');
+  (await import('node:fs')).writeFileSync(notCheckpoint, 'this is not a checkpoint');
+  await page.locator('#checkpoint-import').setInputFiles(notCheckpoint);
+  await expect(page.locator('#checkpoint-status')).toContainText('Nothing was loaded.');
+});
+
+test('with browser storage full, a checkpoint fails with a message, training continues and Download still works', async ({ page }) => {
+  await installPausedClock(page);
+  await page.addInitScript(() => {
+    const real = Storage.prototype.setItem;
+    Storage.prototype.setItem = function (key: string, value: string) {
+      if (key === 'sdae:checkpoint:v1') throw new DOMException('full', 'QuotaExceededError');
+      return real.call(this, key, value);
+    };
+  });
+  await page.goto('/?mode=train');
+  await page.clock.runFor(100);
+  await advanceUntil(page, (v) => Number(v.data.chartPoints) >= 1);
+  await page.locator('#champion-replay > summary').click();
+  await page.evaluate(() => window.dispatchEvent(new Event('pagehide')));
+  await expect(page.locator('#checkpoint-status')).toContainText('storage is full');
+  expect(await page.evaluate(() => localStorage.getItem('sdae:checkpoint:v1'))).toBeNull();
+  const before = Number(await data(page, 'completed-generations'));
+  await advanceUntil(page, (v) => Number(v.data.completedGenerations) > before);
+  const downloadPromise = page.waitForEvent('download');
+  await page.locator('#checkpoint-download').click();
+  expect((await downloadPromise).suggestedFilename()).toMatch(/^sdae-checkpoint-gen/);
 });
 
 test('Download JSON of stored data nested too deeply gives a message, not an error', async ({ page }) => {

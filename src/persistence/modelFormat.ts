@@ -270,6 +270,7 @@ function validateModelUnchecked(value: unknown, registry: readonly TrackRegistry
   const fail = (message: string) => void errors.push(message);
   if (!isObj(value)) return { ok: false, errors: ['The file is not a model: expected a JSON object.'] };
 
+  if (value.format === 'self-driving-ai-evolution/checkpoint') return { ok: false, errors: ['This is a training checkpoint, not a saved champion. It cannot be imported here; it resumes a training run.'] };
   if (value.format !== MODEL_FORMAT) fail(`"format" must be "${MODEL_FORMAT}".`);
   if (!isInt(value.schemaVersion) || value.schemaVersion < 1) {
     fail('"schemaVersion" must be a positive integer.');

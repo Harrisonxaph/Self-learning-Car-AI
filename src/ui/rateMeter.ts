@@ -68,8 +68,31 @@ export function createRateMeter(options: RateMeterOptions = {}): RateMeter {
   };
 }
 
+/** Extra figures for the readout (P3-07): the mean time of one simulation tick and of one rendered frame, and where they were measured. */
+export interface ReadoutExtras {
+  /** Mean wall time inside the simulation step per tick, in milliseconds, or null while it cannot be said. */
+  readonly stepMs: number | null;
+  /** Mean wall time to draw one rendered frame, in milliseconds, or null while it cannot be said. */
+  readonly renderMs: number | null;
+  /** Population, track and build, so a figure can be quoted with where it came from. */
+  readonly context: string;
+}
+
+/**
+ * The mean per-event cost over the same trailing window as the rates: `costRate` is milliseconds spent per second and
+ * `eventRate` is events per second, both from meters fed the same sample times, so the ratio is the mean milliseconds per
+ * event. Null while either cannot be said, and never a number from nothing.
+ */
+export function meanMs(costRate: number | null, eventRate: number | null): number | null {
+  if (costRate === null || eventRate === null || !(eventRate > 0)) return null;
+  return costRate / eventRate;
+}
+
 /** The readout text. A rate that cannot be said yet shows "…", and the configuration is named so a reading is self-describing. */
-export function formatRateReadout(frameRate: number | null, tickRate: number | null, config: string): string {
+export function formatRateReadout(frameRate: number | null, tickRate: number | null, config: string, extras?: ReadoutExtras): string {
   const rate = (value: number | null) => (value === null ? '…' : value.toFixed(1));
-  return `Render ${rate(frameRate)} frames/s · Simulation ${rate(tickRate)} ticks/s · ${config}`;
+  const ms = (value: number | null, digits: number) => (value === null ? '…' : value.toFixed(digits));
+  const base = `Render ${rate(frameRate)} frames/s · Simulation ${rate(tickRate)} ticks/s`;
+  if (!extras) return `${base} · ${config}`;
+  return `${base} · Step ${ms(extras.stepMs, 4)} ms/tick · Draw ${ms(extras.renderMs, 2)} ms/frame · ${config} · ${extras.context}`;
 }

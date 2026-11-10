@@ -7,6 +7,9 @@
 // Fitness is reported only for a completed generation, because a running generation's fitness is incomplete.
 import type { Generation, GenerationStats } from './trainer';
 
+/** What a completed generation's metrics read: a full `GenerationStats` or a compact one (P3-07) both satisfy it. */
+export type CompletedSource = Pick<GenerationStats, 'generation' | 'bestFitness' | 'meanFitness' | 'outcomes' | 'carsWithLap'>;
+
 /** The cars of the generation being evaluated, by what has happened to them. The four counts sum to `population`. */
 export interface LiveCounts {
   /** The generation number as shown: it starts from 1. */
@@ -75,7 +78,7 @@ export interface CompletedMetrics {
  * The figures for the last completed generation, or null before the first one ends. Takes the stats the trainer
  * returned when the generation ended, so it never needs the trainer's history.
  */
-export function completedMetrics(stats: GenerationStats | null, population: number): CompletedMetrics | null {
+export function completedMetrics(stats: CompletedSource | null, population: number): CompletedMetrics | null {
   if (stats === null) return null;
   if (!Number.isInteger(population) || population < 1) throw new RangeError(`The population must be a positive integer, got ${population}.`);
   const { crashed, stalled } = stats.outcomes;

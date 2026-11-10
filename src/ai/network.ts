@@ -23,6 +23,13 @@ export const OUTPUT_SIZE = 3;
 /** 9·12 + 12 + 12·3 + 3. */
 export const PARAMETER_COUNT = 159;
 
+/**
+ * A parameter this large or larger is refused wherever a checkpoint is read (P3-07). Inputs are at most a few in
+ * magnitude and hidden outputs are `tanh`, bounded by 1, so with every parameter within this bound no pre-activation can
+ * overflow to Infinity (it stays below about 1e103); a finite parameter above it (`1e308`) could make inference throw.
+ */
+export const MAX_CHECKPOINT_PARAMETER_MAGNITUDE = 1e100;
+
 /** The order string saved models record as `parameters.order` (docs/MODEL_FORMAT.md). */
 export const PARAMETER_ORDER = 'layer-major; per layer: weights[out][in] row-major, then biases[out]';
 
