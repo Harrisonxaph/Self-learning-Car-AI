@@ -24,6 +24,7 @@
     "experiment": "node scripts/experiment.mjs",
     "study": "node scripts/study.mjs",
     "feasibility": "node scripts/feasibility.mjs",
+    "rule-tuning": "node scripts/ruleTuning.mjs",
     "e4": "node scripts/e4.mjs"
   },
   "devDependencies": {
