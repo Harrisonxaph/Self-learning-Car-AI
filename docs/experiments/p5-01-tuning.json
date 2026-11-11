@@ -1,0 +1,1733 @@
+{
+  "format": "self-driving-ai-evolution/p5-01-rule-tuning",
+  "version": 1,
+  "id": "p5-01-rule-tuning",
+  "description": "P5-01 step 3: training-track-only tuning of the rule-based driver A3 and A3-nb (plan §3 and §4). A baseline is being fixed; this is not a learning result and no validation or held-out track is used.",
+  "preregisteredGrid": true,
+  "grid": {
+    "steerGain": [
+      1,
+      2,
+      4
+    ],
+    "frontClear": [
+      0.3,
+      0.6
+    ],
+    "speedCap": [
+      0.5,
+      0.75,
+      1
+    ],
+    "brakeFront": [
+      0.15,
+      0.3
+    ],
+    "brakeSpeed": [
+      0.4,
+      0.6
+    ]
+  },
+  "selectionRule": "checkpoints-then-laps-then-first-lap-then-grid-index-v1",
+  "algorithm": "rule-based-v1",
+  "rules": {
+    "maxEpisodeSeconds": 60,
+    "stallSeconds": 5,
+    "maxLaps": 3,
+    "fitnessVersion": 1,
+    "timestepSeconds": 0.016666666666666666
+  },
+  "physics": {
+    "wheelbase": 2.5,
+    "engineAcceleration": 8,
+    "brakeDeceleration": 12,
+    "quadraticDrag": 0.01,
+    "rollingResistance": 0.1,
+    "maxSteerRadians": 0.5,
+    "maxLateralAcceleration": 8,
+    "stopSpeed": 0.05,
+    "vehicleLength": 4,
+    "vehicleWidth": 2,
+    "maxSpeed": 23.722813232690147
+  },
+  "track": {
+    "split": "training",
+    "id": "stadium-oval",
+    "version": "1",
+    "contentHash": "sha256:f1c3e1a7f9ef938d7a1ffd4bcb79e4260fd870b4c637fdf43389ee7f4aefe8c2"
+  },
+  "engine": {
+    "name": "node",
+    "version": "v24.22.1",
+    "v8": "13.6.233.17-node.58"
+  },
+  "source": {
+    "revision": "ab18b2a488e7b7aabf21a41a4d2d1786d8037a48",
+    "dirty": false,
+    "unavailableReason": null,
+    "appVersion": "0.0.0"
+  },
+  "episodes": [
+    {
+      "agent": "A3",
+      "index": 0,
+      "params": {
+        "steerGain": 1,
+        "frontClear": 0.3,
+        "speedCap": 0.5,
+        "brakeFront": 0.15,
+        "brakeSpeed": 0.4
+      },
+      "outcome": "crashed",
+      "crashed": true,
+      "gatesPassed": 4,
+      "lapsCompleted": 0,
+      "firstLapTicks": null,
+      "orderedProgress": 0.2,
+      "ticks": 599
+    },
+    {
+      "agent": "A3",
+      "index": 1,
+      "params": {
+        "steerGain": 1,
+        "frontClear": 0.3,
+        "speedCap": 0.5,
+        "brakeFront": 0.15,
+        "brakeSpeed": 0.6
+      },
+      "outcome": "crashed",
+      "crashed": true,
+      "gatesPassed": 4,
+      "lapsCompleted": 0,
+      "firstLapTicks": null,
+      "orderedProgress": 0.2,
+      "ticks": 590
+    },
+    {
+      "agent": "A3",
+      "index": 2,
+      "params": {
+        "steerGain": 1,
+        "frontClear": 0.3,
+        "speedCap": 0.5,
+        "brakeFront": 0.3,
+        "brakeSpeed": 0.4
+      },
+      "outcome": "timeout",
+      "crashed": false,
+      "gatesPassed": 27,
+      "lapsCompleted": 1,
+      "firstLapTicks": 2640,
+      "orderedProgress": 1.35,
+      "ticks": 3600
+    },
+    {
+      "agent": "A3",
+      "index": 3,
+      "params": {
+        "steerGain": 1,
+        "frontClear": 0.3,
+        "speedCap": 0.5,
+        "brakeFront": 0.3,
+        "brakeSpeed": 0.6
+      },
+      "outcome": "crashed",
+      "crashed": true,
+      "gatesPassed": 4,
+      "lapsCompleted": 0,
+      "firstLapTicks": null,
+      "orderedProgress": 0.2,
+      "ticks": 590
+    },
+    {
+      "agent": "A3",
+      "index": 4,
+      "params": {
+        "steerGain": 1,
+        "frontClear": 0.3,
+        "speedCap": 0.75,
+        "brakeFront": 0.15,
+        "brakeSpeed": 0.4
+      },
+      "outcome": "crashed",
+      "crashed": true,
+      "gatesPassed": 4,
+      "lapsCompleted": 0,
+      "firstLapTicks": null,
+      "orderedProgress": 0.2,
+      "ticks": 389
+    },
+    {
+      "agent": "A3",
+      "index": 5,
+      "params": {
+        "steerGain": 1,
+        "frontClear": 0.3,
+        "speedCap": 0.75,
+        "brakeFront": 0.15,
+        "brakeSpeed": 0.6
+      },
+      "outcome": "crashed",
+      "crashed": true,
+      "gatesPassed": 4,
+      "lapsCompleted": 0,
+      "firstLapTicks": null,
+      "orderedProgress": 0.2,
+      "ticks": 389
+    },
+    {
+      "agent": "A3",
+      "index": 6,
+      "params": {
+        "steerGain": 1,
+        "frontClear": 0.3,
+        "speedCap": 0.75,
+        "brakeFront": 0.3,
+        "brakeSpeed": 0.4
+      },
+      "outcome": "crashed",
+      "crashed": true,
+      "gatesPassed": 4,
+      "lapsCompleted": 0,
+      "firstLapTicks": null,
+      "orderedProgress": 0.2,
+      "ticks": 425
+    },
+    {
+      "agent": "A3",
+      "index": 7,
+      "params": {
+        "steerGain": 1,
+        "frontClear": 0.3,
+        "speedCap": 0.75,
+        "brakeFront": 0.3,
+        "brakeSpeed": 0.6
+      },
+      "outcome": "crashed",
+      "crashed": true,
+      "gatesPassed": 4,
+      "lapsCompleted": 0,
+      "firstLapTicks": null,
+      "orderedProgress": 0.2,
+      "ticks": 400
+    },
+    {
+      "agent": "A3",
+      "index": 8,
+      "params": {
+        "steerGain": 1,
+        "frontClear": 0.3,
+        "speedCap": 1,
+        "brakeFront": 0.15,
+        "brakeSpeed": 0.4
+      },
+      "outcome": "crashed",
+      "crashed": true,
+      "gatesPassed": 4,
+      "lapsCompleted": 0,
+      "firstLapTicks": null,
+      "orderedProgress": 0.2,
+      "ticks": 355
+    },
+    {
+      "agent": "A3",
+      "index": 9,
+      "params": {
+        "steerGain": 1,
+        "frontClear": 0.3,
+        "speedCap": 1,
+        "brakeFront": 0.15,
+        "brakeSpeed": 0.6
+      },
+      "outcome": "crashed",
+      "crashed": true,
+      "gatesPassed": 4,
+      "lapsCompleted": 0,
+      "firstLapTicks": null,
+      "orderedProgress": 0.2,
+      "ticks": 355
+    },
+    {
+      "agent": "A3",
+      "index": 10,
+      "params": {
+        "steerGain": 1,
+        "frontClear": 0.3,
+        "speedCap": 1,
+        "brakeFront": 0.3,
+        "brakeSpeed": 0.4
+      },
+      "outcome": "crashed",
+      "crashed": true,
+      "gatesPassed": 4,
+      "lapsCompleted": 0,
+      "firstLapTicks": null,
+      "orderedProgress": 0.2,
+      "ticks": 365
+    },
+    {
+      "agent": "A3",
+      "index": 11,
+      "params": {
+        "steerGain": 1,
+        "frontClear": 0.3,
+        "speedCap": 1,
+        "brakeFront": 0.3,
+        "brakeSpeed": 0.6
+      },
+      "outcome": "crashed",
+      "crashed": true,
+      "gatesPassed": 4,
+      "lapsCompleted": 0,
+      "firstLapTicks": null,
+      "orderedProgress": 0.2,
+      "ticks": 364
+    },
+    {
+      "agent": "A3",
+      "index": 12,
+      "params": {
+        "steerGain": 1,
+        "frontClear": 0.6,
+        "speedCap": 0.5,
+        "brakeFront": 0.15,
+        "brakeSpeed": 0.4
+      },
+      "outcome": "crashed",
+      "crashed": true,
+      "gatesPassed": 4,
+      "lapsCompleted": 0,
+      "firstLapTicks": null,
+      "orderedProgress": 0.2,
+      "ticks": 601
+    },
+    {
+      "agent": "A3",
+      "index": 13,
+      "params": {
+        "steerGain": 1,
+        "frontClear": 0.6,
+        "speedCap": 0.5,
+        "brakeFront": 0.15,
+        "brakeSpeed": 0.6
+      },
+      "outcome": "crashed",
+      "crashed": true,
+      "gatesPassed": 4,
+      "lapsCompleted": 0,
+      "firstLapTicks": null,
+      "orderedProgress": 0.2,
+      "ticks": 592
+    },
+    {
+      "agent": "A3",
+      "index": 14,
+      "params": {
+        "steerGain": 1,
+        "frontClear": 0.6,
+        "speedCap": 0.5,
+        "brakeFront": 0.3,
+        "brakeSpeed": 0.4
+      },
+      "outcome": "timeout",
+      "crashed": false,
+      "gatesPassed": 27,
+      "lapsCompleted": 1,
+      "firstLapTicks": 2655,
+      "orderedProgress": 1.35,
+      "ticks": 3600
+    },
+    {
+      "agent": "A3",
+      "index": 15,
+      "params": {
+        "steerGain": 1,
+        "frontClear": 0.6,
+        "speedCap": 0.5,
+        "brakeFront": 0.3,
+        "brakeSpeed": 0.6
+      },
+      "outcome": "crashed",
+      "crashed": true,
+      "gatesPassed": 4,
+      "lapsCompleted": 0,
+      "firstLapTicks": null,
+      "orderedProgress": 0.2,
+      "ticks": 592
+    },
+    {
+      "agent": "A3",
+      "index": 16,
+      "params": {
+        "steerGain": 1,
+        "frontClear": 0.6,
+        "speedCap": 0.75,
+        "brakeFront": 0.15,
+        "brakeSpeed": 0.4
+      },
+      "outcome": "crashed",
+      "crashed": true,
+      "gatesPassed": 4,
+      "lapsCompleted": 0,
+      "firstLapTicks": null,
+      "orderedProgress": 0.2,
+      "ticks": 392
+    },
+    {
+      "agent": "A3",
+      "index": 17,
+      "params": {
+        "steerGain": 1,
+        "frontClear": 0.6,
+        "speedCap": 0.75,
+        "brakeFront": 0.15,
+        "brakeSpeed": 0.6
+      },
+      "outcome": "crashed",
+      "crashed": true,
+      "gatesPassed": 4,
+      "lapsCompleted": 0,
+      "firstLapTicks": null,
+      "orderedProgress": 0.2,
+      "ticks": 392
+    },
+    {
+      "agent": "A3",
+      "index": 18,
+      "params": {
+        "steerGain": 1,
+        "frontClear": 0.6,
+        "speedCap": 0.75,
+        "brakeFront": 0.3,
+        "brakeSpeed": 0.4
+      },
+      "outcome": "crashed",
+      "crashed": true,
+      "gatesPassed": 4,
+      "lapsCompleted": 0,
+      "firstLapTicks": null,
+      "orderedProgress": 0.2,
+      "ticks": 453
+    },
+    {
+      "agent": "A3",
+      "index": 19,
+      "params": {
+        "steerGain": 1,
+        "frontClear": 0.6,
+        "speedCap": 0.75,
+        "brakeFront": 0.3,
+        "brakeSpeed": 0.6
+      },
+      "outcome": "crashed",
+      "crashed": true,
+      "gatesPassed": 4,
+      "lapsCompleted": 0,
+      "firstLapTicks": null,
+      "orderedProgress": 0.2,
+      "ticks": 403
+    },
+    {
+      "agent": "A3",
+      "index": 20,
+      "params": {
+        "steerGain": 1,
+        "frontClear": 0.6,
+        "speedCap": 1,
+        "brakeFront": 0.15,
+        "brakeSpeed": 0.4
+      },
+      "outcome": "crashed",
+      "crashed": true,
+      "gatesPassed": 4,
+      "lapsCompleted": 0,
+      "firstLapTicks": null,
+      "orderedProgress": 0.2,
+      "ticks": 362
+    },
+    {
+      "agent": "A3",
+      "index": 21,
+      "params": {
+        "steerGain": 1,
+        "frontClear": 0.6,
+        "speedCap": 1,
+        "brakeFront": 0.15,
+        "brakeSpeed": 0.6
+      },
+      "outcome": "crashed",
+      "crashed": true,
+      "gatesPassed": 4,
+      "lapsCompleted": 0,
+      "firstLapTicks": null,
+      "orderedProgress": 0.2,
+      "ticks": 362
+    },
+    {
+      "agent": "A3",
+      "index": 22,
+      "params": {
+        "steerGain": 1,
+        "frontClear": 0.6,
+        "speedCap": 1,
+        "brakeFront": 0.3,
+        "brakeSpeed": 0.4
+      },
+      "outcome": "crashed",
+      "crashed": true,
+      "gatesPassed": 4,
+      "lapsCompleted": 0,
+      "firstLapTicks": null,
+      "orderedProgress": 0.2,
+      "ticks": 388
+    },
+    {
+      "agent": "A3",
+      "index": 23,
+      "params": {
+        "steerGain": 1,
+        "frontClear": 0.6,
+        "speedCap": 1,
+        "brakeFront": 0.3,
+        "brakeSpeed": 0.6
+      },
+      "outcome": "crashed",
+      "crashed": true,
+      "gatesPassed": 4,
+      "lapsCompleted": 0,
+      "firstLapTicks": null,
+      "orderedProgress": 0.2,
+      "ticks": 375
+    },
+    {
+      "agent": "A3",
+      "index": 24,
+      "params": {
+        "steerGain": 2,
+        "frontClear": 0.3,
+        "speedCap": 0.5,
+        "brakeFront": 0.15,
+        "brakeSpeed": 0.4
+      },
+      "outcome": "timeout",
+      "crashed": false,
+      "gatesPassed": 29,
+      "lapsCompleted": 1,
+      "firstLapTicks": 2458,
+      "orderedProgress": 1.45,
+      "ticks": 3600
+    },
+    {
+      "agent": "A3",
+      "index": 25,
+      "params": {
+        "steerGain": 2,
+        "frontClear": 0.3,
+        "speedCap": 0.5,
+        "brakeFront": 0.15,
+        "brakeSpeed": 0.6
+      },
+      "outcome": "timeout",
+      "crashed": false,
+      "gatesPassed": 29,
+      "lapsCompleted": 1,
+      "firstLapTicks": 2458,
+      "orderedProgress": 1.45,
+      "ticks": 3600
+    },
+    {
+      "agent": "A3",
+      "index": 26,
+      "params": {
+        "steerGain": 2,
+        "frontClear": 0.3,
+        "speedCap": 0.5,
+        "brakeFront": 0.3,
+        "brakeSpeed": 0.4
+      },
+      "outcome": "timeout",
+      "crashed": false,
+      "gatesPassed": 29,
+      "lapsCompleted": 1,
+      "firstLapTicks": 2458,
+      "orderedProgress": 1.45,
+      "ticks": 3600
+    },
+    {
+      "agent": "A3",
+      "index": 27,
+      "params": {
+        "steerGain": 2,
+        "frontClear": 0.3,
+        "speedCap": 0.5,
+        "brakeFront": 0.3,
+        "brakeSpeed": 0.6
+      },
+      "outcome": "timeout",
+      "crashed": false,
+      "gatesPassed": 29,
+      "lapsCompleted": 1,
+      "firstLapTicks": 2458,
+      "orderedProgress": 1.45,
+      "ticks": 3600
+    },
+    {
+      "agent": "A3",
+      "index": 28,
+      "params": {
+        "steerGain": 2,
+        "frontClear": 0.3,
+        "speedCap": 0.75,
+        "brakeFront": 0.15,
+        "brakeSpeed": 0.4
+      },
+      "outcome": "crashed",
+      "crashed": true,
+      "gatesPassed": 4,
+      "lapsCompleted": 0,
+      "firstLapTicks": null,
+      "orderedProgress": 0.2,
+      "ticks": 425
+    },
+    {
+      "agent": "A3",
+      "index": 29,
+      "params": {
+        "steerGain": 2,
+        "frontClear": 0.3,
+        "speedCap": 0.75,
+        "brakeFront": 0.15,
+        "brakeSpeed": 0.6
+      },
+      "outcome": "crashed",
+      "crashed": true,
+      "gatesPassed": 4,
+      "lapsCompleted": 0,
+      "firstLapTicks": null,
+      "orderedProgress": 0.2,
+      "ticks": 425
+    },
+    {
+      "agent": "A3",
+      "index": 30,
+      "params": {
+        "steerGain": 2,
+        "frontClear": 0.3,
+        "speedCap": 0.75,
+        "brakeFront": 0.3,
+        "brakeSpeed": 0.4
+      },
+      "outcome": "timeout",
+      "crashed": false,
+      "gatesPassed": 38,
+      "lapsCompleted": 1,
+      "firstLapTicks": 1885,
+      "orderedProgress": 1.9,
+      "ticks": 3600
+    },
+    {
+      "agent": "A3",
+      "index": 31,
+      "params": {
+        "steerGain": 2,
+        "frontClear": 0.3,
+        "speedCap": 0.75,
+        "brakeFront": 0.3,
+        "brakeSpeed": 0.6
+      },
+      "outcome": "timeout",
+      "crashed": false,
+      "gatesPassed": 39,
+      "lapsCompleted": 1,
+      "firstLapTicks": 1830,
+      "orderedProgress": 1.95,
+      "ticks": 3600
+    },
+    {
+      "agent": "A3",
+      "index": 32,
+      "params": {
+        "steerGain": 2,
+        "frontClear": 0.3,
+        "speedCap": 1,
+        "brakeFront": 0.15,
+        "brakeSpeed": 0.4
+      },
+      "outcome": "crashed",
+      "crashed": true,
+      "gatesPassed": 4,
+      "lapsCompleted": 0,
+      "firstLapTicks": null,
+      "orderedProgress": 0.2,
+      "ticks": 370
+    },
+    {
+      "agent": "A3",
+      "index": 33,
+      "params": {
+        "steerGain": 2,
+        "frontClear": 0.3,
+        "speedCap": 1,
+        "brakeFront": 0.15,
+        "brakeSpeed": 0.6
+      },
+      "outcome": "crashed",
+      "crashed": true,
+      "gatesPassed": 4,
+      "lapsCompleted": 0,
+      "firstLapTicks": null,
+      "orderedProgress": 0.2,
+      "ticks": 370
+    },
+    {
+      "agent": "A3",
+      "index": 34,
+      "params": {
+        "steerGain": 2,
+        "frontClear": 0.3,
+        "speedCap": 1,
+        "brakeFront": 0.3,
+        "brakeSpeed": 0.4
+      },
+      "outcome": "crashed",
+      "crashed": true,
+      "gatesPassed": 14,
+      "lapsCompleted": 0,
+      "firstLapTicks": null,
+      "orderedProgress": 0.7,
+      "ticks": 1218
+    },
+    {
+      "agent": "A3",
+      "index": 35,
+      "params": {
+        "steerGain": 2,
+        "frontClear": 0.3,
+        "speedCap": 1,
+        "brakeFront": 0.3,
+        "brakeSpeed": 0.6
+      },
+      "outcome": "crashed",
+      "crashed": true,
+      "gatesPassed": 4,
+      "lapsCompleted": 0,
+      "firstLapTicks": null,
+      "orderedProgress": 0.2,
+      "ticks": 391
+    },
+    {
+      "agent": "A3",
+      "index": 36,
+      "params": {
+        "steerGain": 2,
+        "frontClear": 0.6,
+        "speedCap": 0.5,
+        "brakeFront": 0.15,
+        "brakeSpeed": 0.4
+      },
+      "outcome": "timeout",
+      "crashed": false,
+      "gatesPassed": 29,
+      "lapsCompleted": 1,
+      "firstLapTicks": 2459,
+      "orderedProgress": 1.45,
+      "ticks": 3600
+    },
+    {
+      "agent": "A3",
+      "index": 37,
+      "params": {
+        "steerGain": 2,
+        "frontClear": 0.6,
+        "speedCap": 0.5,
+        "brakeFront": 0.15,
+        "brakeSpeed": 0.6
+      },
+      "outcome": "timeout",
+      "crashed": false,
+      "gatesPassed": 29,
+      "lapsCompleted": 1,
+      "firstLapTicks": 2459,
+      "orderedProgress": 1.45,
+      "ticks": 3600
+    },
+    {
+      "agent": "A3",
+      "index": 38,
+      "params": {
+        "steerGain": 2,
+        "frontClear": 0.6,
+        "speedCap": 0.5,
+        "brakeFront": 0.3,
+        "brakeSpeed": 0.4
+      },
+      "outcome": "timeout",
+      "crashed": false,
+      "gatesPassed": 29,
+      "lapsCompleted": 1,
+      "firstLapTicks": 2459,
+      "orderedProgress": 1.45,
+      "ticks": 3600
+    },
+    {
+      "agent": "A3",
+      "index": 39,
+      "params": {
+        "steerGain": 2,
+        "frontClear": 0.6,
+        "speedCap": 0.5,
+        "brakeFront": 0.3,
+        "brakeSpeed": 0.6
+      },
+      "outcome": "timeout",
+      "crashed": false,
+      "gatesPassed": 29,
+      "lapsCompleted": 1,
+      "firstLapTicks": 2459,
+      "orderedProgress": 1.45,
+      "ticks": 3600
+    },
+    {
+      "agent": "A3",
+      "index": 40,
+      "params": {
+        "steerGain": 2,
+        "frontClear": 0.6,
+        "speedCap": 0.75,
+        "brakeFront": 0.15,
+        "brakeSpeed": 0.4
+      },
+      "outcome": "crashed",
+      "crashed": true,
+      "gatesPassed": 4,
+      "lapsCompleted": 0,
+      "firstLapTicks": null,
+      "orderedProgress": 0.2,
+      "ticks": 438
+    },
+    {
+      "agent": "A3",
+      "index": 41,
+      "params": {
+        "steerGain": 2,
+        "frontClear": 0.6,
+        "speedCap": 0.75,
+        "brakeFront": 0.15,
+        "brakeSpeed": 0.6
+      },
+      "outcome": "crashed",
+      "crashed": true,
+      "gatesPassed": 4,
+      "lapsCompleted": 0,
+      "firstLapTicks": null,
+      "orderedProgress": 0.2,
+      "ticks": 432
+    },
+    {
+      "agent": "A3",
+      "index": 42,
+      "params": {
+        "steerGain": 2,
+        "frontClear": 0.6,
+        "speedCap": 0.75,
+        "brakeFront": 0.3,
+        "brakeSpeed": 0.4
+      },
+      "outcome": "timeout",
+      "crashed": false,
+      "gatesPassed": 38,
+      "lapsCompleted": 1,
+      "firstLapTicks": 1912,
+      "orderedProgress": 1.9,
+      "ticks": 3600
+    },
+    {
+      "agent": "A3",
+      "index": 43,
+      "params": {
+        "steerGain": 2,
+        "frontClear": 0.6,
+        "speedCap": 0.75,
+        "brakeFront": 0.3,
+        "brakeSpeed": 0.6
+      },
+      "outcome": "timeout",
+      "crashed": false,
+      "gatesPassed": 39,
+      "lapsCompleted": 1,
+      "firstLapTicks": 1862,
+      "orderedProgress": 1.95,
+      "ticks": 3600
+    },
+    {
+      "agent": "A3",
+      "index": 44,
+      "params": {
+        "steerGain": 2,
+        "frontClear": 0.6,
+        "speedCap": 1,
+        "brakeFront": 0.15,
+        "brakeSpeed": 0.4
+      },
+      "outcome": "crashed",
+      "crashed": true,
+      "gatesPassed": 4,
+      "lapsCompleted": 0,
+      "firstLapTicks": null,
+      "orderedProgress": 0.2,
+      "ticks": 387
+    },
+    {
+      "agent": "A3",
+      "index": 45,
+      "params": {
+        "steerGain": 2,
+        "frontClear": 0.6,
+        "speedCap": 1,
+        "brakeFront": 0.15,
+        "brakeSpeed": 0.6
+      },
+      "outcome": "crashed",
+      "crashed": true,
+      "gatesPassed": 4,
+      "lapsCompleted": 0,
+      "firstLapTicks": null,
+      "orderedProgress": 0.2,
+      "ticks": 387
+    },
+    {
+      "agent": "A3",
+      "index": 46,
+      "params": {
+        "steerGain": 2,
+        "frontClear": 0.6,
+        "speedCap": 1,
+        "brakeFront": 0.3,
+        "brakeSpeed": 0.4
+      },
+      "outcome": "timeout",
+      "crashed": false,
+      "gatesPassed": 40,
+      "lapsCompleted": 1,
+      "firstLapTicks": 1795,
+      "orderedProgress": 2,
+      "ticks": 3600
+    },
+    {
+      "agent": "A3",
+      "index": 47,
+      "params": {
+        "steerGain": 2,
+        "frontClear": 0.6,
+        "speedCap": 1,
+        "brakeFront": 0.3,
+        "brakeSpeed": 0.6
+      },
+      "outcome": "crashed",
+      "crashed": true,
+      "gatesPassed": 14,
+      "lapsCompleted": 0,
+      "firstLapTicks": null,
+      "orderedProgress": 0.7,
+      "ticks": 1251
+    },
+    {
+      "agent": "A3",
+      "index": 48,
+      "params": {
+        "steerGain": 4,
+        "frontClear": 0.3,
+        "speedCap": 0.5,
+        "brakeFront": 0.15,
+        "brakeSpeed": 0.4
+      },
+      "outcome": "timeout",
+      "crashed": false,
+      "gatesPassed": 30,
+      "lapsCompleted": 1,
+      "firstLapTicks": 2418,
+      "orderedProgress": 1.5,
+      "ticks": 3600
+    },
+    {
+      "agent": "A3",
+      "index": 49,
+      "params": {
+        "steerGain": 4,
+        "frontClear": 0.3,
+        "speedCap": 0.5,
+        "brakeFront": 0.15,
+        "brakeSpeed": 0.6
+      },
+      "outcome": "timeout",
+      "crashed": false,
+      "gatesPassed": 30,
+      "lapsCompleted": 1,
+      "firstLapTicks": 2418,
+      "orderedProgress": 1.5,
+      "ticks": 3600
+    },
+    {
+      "agent": "A3",
+      "index": 50,
+      "params": {
+        "steerGain": 4,
+        "frontClear": 0.3,
+        "speedCap": 0.5,
+        "brakeFront": 0.3,
+        "brakeSpeed": 0.4
+      },
+      "outcome": "timeout",
+      "crashed": false,
+      "gatesPassed": 30,
+      "lapsCompleted": 1,
+      "firstLapTicks": 2418,
+      "orderedProgress": 1.5,
+      "ticks": 3600
+    },
+    {
+      "agent": "A3",
+      "index": 51,
+      "params": {
+        "steerGain": 4,
+        "frontClear": 0.3,
+        "speedCap": 0.5,
+        "brakeFront": 0.3,
+        "brakeSpeed": 0.6
+      },
+      "outcome": "timeout",
+      "crashed": false,
+      "gatesPassed": 30,
+      "lapsCompleted": 1,
+      "firstLapTicks": 2418,
+      "orderedProgress": 1.5,
+      "ticks": 3600
+    },
+    {
+      "agent": "A3",
+      "index": 52,
+      "params": {
+        "steerGain": 4,
+        "frontClear": 0.3,
+        "speedCap": 0.75,
+        "brakeFront": 0.15,
+        "brakeSpeed": 0.4
+      },
+      "outcome": "timeout",
+      "crashed": false,
+      "gatesPassed": 42,
+      "lapsCompleted": 2,
+      "firstLapTicks": 1699,
+      "orderedProgress": 2.1,
+      "ticks": 3600
+    },
+    {
+      "agent": "A3",
+      "index": 53,
+      "params": {
+        "steerGain": 4,
+        "frontClear": 0.3,
+        "speedCap": 0.75,
+        "brakeFront": 0.15,
+        "brakeSpeed": 0.6
+      },
+      "outcome": "timeout",
+      "crashed": false,
+      "gatesPassed": 42,
+      "lapsCompleted": 2,
+      "firstLapTicks": 1699,
+      "orderedProgress": 2.1,
+      "ticks": 3600
+    },
+    {
+      "agent": "A3",
+      "index": 54,
+      "params": {
+        "steerGain": 4,
+        "frontClear": 0.3,
+        "speedCap": 0.75,
+        "brakeFront": 0.3,
+        "brakeSpeed": 0.4
+      },
+      "outcome": "timeout",
+      "crashed": false,
+      "gatesPassed": 42,
+      "lapsCompleted": 2,
+      "firstLapTicks": 1699,
+      "orderedProgress": 2.1,
+      "ticks": 3600
+    },
+    {
+      "agent": "A3",
+      "index": 55,
+      "params": {
+        "steerGain": 4,
+        "frontClear": 0.3,
+        "speedCap": 0.75,
+        "brakeFront": 0.3,
+        "brakeSpeed": 0.6
+      },
+      "outcome": "timeout",
+      "crashed": false,
+      "gatesPassed": 42,
+      "lapsCompleted": 2,
+      "firstLapTicks": 1699,
+      "orderedProgress": 2.1,
+      "ticks": 3600
+    },
+    {
+      "agent": "A3",
+      "index": 56,
+      "params": {
+        "steerGain": 4,
+        "frontClear": 0.3,
+        "speedCap": 1,
+        "brakeFront": 0.15,
+        "brakeSpeed": 0.4
+      },
+      "outcome": "crashed",
+      "crashed": true,
+      "gatesPassed": 5,
+      "lapsCompleted": 0,
+      "firstLapTicks": null,
+      "orderedProgress": 0.25,
+      "ticks": 414
+    },
+    {
+      "agent": "A3",
+      "index": 57,
+      "params": {
+        "steerGain": 4,
+        "frontClear": 0.3,
+        "speedCap": 1,
+        "brakeFront": 0.15,
+        "brakeSpeed": 0.6
+      },
+      "outcome": "crashed",
+      "crashed": true,
+      "gatesPassed": 5,
+      "lapsCompleted": 0,
+      "firstLapTicks": null,
+      "orderedProgress": 0.25,
+      "ticks": 414
+    },
+    {
+      "agent": "A3",
+      "index": 58,
+      "params": {
+        "steerGain": 4,
+        "frontClear": 0.3,
+        "speedCap": 1,
+        "brakeFront": 0.3,
+        "brakeSpeed": 0.4
+      },
+      "outcome": "timeout",
+      "crashed": false,
+      "gatesPassed": 45,
+      "lapsCompleted": 2,
+      "firstLapTicks": 1597,
+      "orderedProgress": 2.25,
+      "ticks": 3600
+    },
+    {
+      "agent": "A3",
+      "index": 59,
+      "params": {
+        "steerGain": 4,
+        "frontClear": 0.3,
+        "speedCap": 1,
+        "brakeFront": 0.3,
+        "brakeSpeed": 0.6
+      },
+      "outcome": "timeout",
+      "crashed": false,
+      "gatesPassed": 48,
+      "lapsCompleted": 2,
+      "firstLapTicks": 1529,
+      "orderedProgress": 2.4,
+      "ticks": 3600
+    },
+    {
+      "agent": "A3",
+      "index": 60,
+      "params": {
+        "steerGain": 4,
+        "frontClear": 0.6,
+        "speedCap": 0.5,
+        "brakeFront": 0.15,
+        "brakeSpeed": 0.4
+      },
+      "outcome": "timeout",
+      "crashed": false,
+      "gatesPassed": 30,
+      "lapsCompleted": 1,
+      "firstLapTicks": 2419,
+      "orderedProgress": 1.5,
+      "ticks": 3600
+    },
+    {
+      "agent": "A3",
+      "index": 61,
+      "params": {
+        "steerGain": 4,
+        "frontClear": 0.6,
+        "speedCap": 0.5,
+        "brakeFront": 0.15,
+        "brakeSpeed": 0.6
+      },
+      "outcome": "timeout",
+      "crashed": false,
+      "gatesPassed": 30,
+      "lapsCompleted": 1,
+      "firstLapTicks": 2419,
+      "orderedProgress": 1.5,
+      "ticks": 3600
+    },
+    {
+      "agent": "A3",
+      "index": 62,
+      "params": {
+        "steerGain": 4,
+        "frontClear": 0.6,
+        "speedCap": 0.5,
+        "brakeFront": 0.3,
+        "brakeSpeed": 0.4
+      },
+      "outcome": "timeout",
+      "crashed": false,
+      "gatesPassed": 30,
+      "lapsCompleted": 1,
+      "firstLapTicks": 2419,
+      "orderedProgress": 1.5,
+      "ticks": 3600
+    },
+    {
+      "agent": "A3",
+      "index": 63,
+      "params": {
+        "steerGain": 4,
+        "frontClear": 0.6,
+        "speedCap": 0.5,
+        "brakeFront": 0.3,
+        "brakeSpeed": 0.6
+      },
+      "outcome": "timeout",
+      "crashed": false,
+      "gatesPassed": 30,
+      "lapsCompleted": 1,
+      "firstLapTicks": 2419,
+      "orderedProgress": 1.5,
+      "ticks": 3600
+    },
+    {
+      "agent": "A3",
+      "index": 64,
+      "params": {
+        "steerGain": 4,
+        "frontClear": 0.6,
+        "speedCap": 0.75,
+        "brakeFront": 0.15,
+        "brakeSpeed": 0.4
+      },
+      "outcome": "timeout",
+      "crashed": false,
+      "gatesPassed": 42,
+      "lapsCompleted": 2,
+      "firstLapTicks": 1700,
+      "orderedProgress": 2.1,
+      "ticks": 3600
+    },
+    {
+      "agent": "A3",
+      "index": 65,
+      "params": {
+        "steerGain": 4,
+        "frontClear": 0.6,
+        "speedCap": 0.75,
+        "brakeFront": 0.15,
+        "brakeSpeed": 0.6
+      },
+      "outcome": "timeout",
+      "crashed": false,
+      "gatesPassed": 42,
+      "lapsCompleted": 2,
+      "firstLapTicks": 1700,
+      "orderedProgress": 2.1,
+      "ticks": 3600
+    },
+    {
+      "agent": "A3",
+      "index": 66,
+      "params": {
+        "steerGain": 4,
+        "frontClear": 0.6,
+        "speedCap": 0.75,
+        "brakeFront": 0.3,
+        "brakeSpeed": 0.4
+      },
+      "outcome": "timeout",
+      "crashed": false,
+      "gatesPassed": 42,
+      "lapsCompleted": 2,
+      "firstLapTicks": 1700,
+      "orderedProgress": 2.1,
+      "ticks": 3600
+    },
+    {
+      "agent": "A3",
+      "index": 67,
+      "params": {
+        "steerGain": 4,
+        "frontClear": 0.6,
+        "speedCap": 0.75,
+        "brakeFront": 0.3,
+        "brakeSpeed": 0.6
+      },
+      "outcome": "timeout",
+      "crashed": false,
+      "gatesPassed": 42,
+      "lapsCompleted": 2,
+      "firstLapTicks": 1700,
+      "orderedProgress": 2.1,
+      "ticks": 3600
+    },
+    {
+      "agent": "A3",
+      "index": 68,
+      "params": {
+        "steerGain": 4,
+        "frontClear": 0.6,
+        "speedCap": 1,
+        "brakeFront": 0.15,
+        "brakeSpeed": 0.4
+      },
+      "outcome": "crashed",
+      "crashed": true,
+      "gatesPassed": 15,
+      "lapsCompleted": 0,
+      "firstLapTicks": null,
+      "orderedProgress": 0.75,
+      "ticks": 1170
+    },
+    {
+      "agent": "A3",
+      "index": 69,
+      "params": {
+        "steerGain": 4,
+        "frontClear": 0.6,
+        "speedCap": 1,
+        "brakeFront": 0.15,
+        "brakeSpeed": 0.6
+      },
+      "outcome": "crashed",
+      "crashed": true,
+      "gatesPassed": 15,
+      "lapsCompleted": 0,
+      "firstLapTicks": null,
+      "orderedProgress": 0.75,
+      "ticks": 1170
+    },
+    {
+      "agent": "A3",
+      "index": 70,
+      "params": {
+        "steerGain": 4,
+        "frontClear": 0.6,
+        "speedCap": 1,
+        "brakeFront": 0.3,
+        "brakeSpeed": 0.4
+      },
+      "outcome": "timeout",
+      "crashed": false,
+      "gatesPassed": 47,
+      "lapsCompleted": 2,
+      "firstLapTicks": 1554,
+      "orderedProgress": 2.35,
+      "ticks": 3600
+    },
+    {
+      "agent": "A3",
+      "index": 71,
+      "params": {
+        "steerGain": 4,
+        "frontClear": 0.6,
+        "speedCap": 1,
+        "brakeFront": 0.3,
+        "brakeSpeed": 0.6
+      },
+      "outcome": "timeout",
+      "crashed": false,
+      "gatesPassed": 48,
+      "lapsCompleted": 2,
+      "firstLapTicks": 1536,
+      "orderedProgress": 2.4,
+      "ticks": 3600
+    },
+    {
+      "agent": "A3-nb",
+      "index": 0,
+      "params": {
+        "steerGain": 1,
+        "frontClear": 0.3,
+        "speedCap": 0.5,
+        "brakeFront": 0,
+        "brakeSpeed": 0
+      },
+      "outcome": "crashed",
+      "crashed": true,
+      "gatesPassed": 4,
+      "lapsCompleted": 0,
+      "firstLapTicks": null,
+      "orderedProgress": 0.2,
+      "ticks": 590
+    },
+    {
+      "agent": "A3-nb",
+      "index": 1,
+      "params": {
+        "steerGain": 1,
+        "frontClear": 0.3,
+        "speedCap": 0.75,
+        "brakeFront": 0,
+        "brakeSpeed": 0
+      },
+      "outcome": "crashed",
+      "crashed": true,
+      "gatesPassed": 4,
+      "lapsCompleted": 0,
+      "firstLapTicks": null,
+      "orderedProgress": 0.2,
+      "ticks": 387
+    },
+    {
+      "agent": "A3-nb",
+      "index": 2,
+      "params": {
+        "steerGain": 1,
+        "frontClear": 0.3,
+        "speedCap": 1,
+        "brakeFront": 0,
+        "brakeSpeed": 0
+      },
+      "outcome": "crashed",
+      "crashed": true,
+      "gatesPassed": 4,
+      "lapsCompleted": 0,
+      "firstLapTicks": null,
+      "orderedProgress": 0.2,
+      "ticks": 354
+    },
+    {
+      "agent": "A3-nb",
+      "index": 3,
+      "params": {
+        "steerGain": 1,
+        "frontClear": 0.6,
+        "speedCap": 0.5,
+        "brakeFront": 0,
+        "brakeSpeed": 0
+      },
+      "outcome": "crashed",
+      "crashed": true,
+      "gatesPassed": 4,
+      "lapsCompleted": 0,
+      "firstLapTicks": null,
+      "orderedProgress": 0.2,
+      "ticks": 592
+    },
+    {
+      "agent": "A3-nb",
+      "index": 4,
+      "params": {
+        "steerGain": 1,
+        "frontClear": 0.6,
+        "speedCap": 0.75,
+        "brakeFront": 0,
+        "brakeSpeed": 0
+      },
+      "outcome": "crashed",
+      "crashed": true,
+      "gatesPassed": 4,
+      "lapsCompleted": 0,
+      "firstLapTicks": null,
+      "orderedProgress": 0.2,
+      "ticks": 390
+    },
+    {
+      "agent": "A3-nb",
+      "index": 5,
+      "params": {
+        "steerGain": 1,
+        "frontClear": 0.6,
+        "speedCap": 1,
+        "brakeFront": 0,
+        "brakeSpeed": 0
+      },
+      "outcome": "crashed",
+      "crashed": true,
+      "gatesPassed": 4,
+      "lapsCompleted": 0,
+      "firstLapTicks": null,
+      "orderedProgress": 0.2,
+      "ticks": 360
+    },
+    {
+      "agent": "A3-nb",
+      "index": 6,
+      "params": {
+        "steerGain": 2,
+        "frontClear": 0.3,
+        "speedCap": 0.5,
+        "brakeFront": 0,
+        "brakeSpeed": 0
+      },
+      "outcome": "timeout",
+      "crashed": false,
+      "gatesPassed": 29,
+      "lapsCompleted": 1,
+      "firstLapTicks": 2458,
+      "orderedProgress": 1.45,
+      "ticks": 3600
+    },
+    {
+      "agent": "A3-nb",
+      "index": 7,
+      "params": {
+        "steerGain": 2,
+        "frontClear": 0.3,
+        "speedCap": 0.75,
+        "brakeFront": 0,
+        "brakeSpeed": 0
+      },
+      "outcome": "crashed",
+      "crashed": true,
+      "gatesPassed": 4,
+      "lapsCompleted": 0,
+      "firstLapTicks": null,
+      "orderedProgress": 0.2,
+      "ticks": 423
+    },
+    {
+      "agent": "A3-nb",
+      "index": 8,
+      "params": {
+        "steerGain": 2,
+        "frontClear": 0.3,
+        "speedCap": 1,
+        "brakeFront": 0,
+        "brakeSpeed": 0
+      },
+      "outcome": "crashed",
+      "crashed": true,
+      "gatesPassed": 4,
+      "lapsCompleted": 0,
+      "firstLapTicks": null,
+      "orderedProgress": 0.2,
+      "ticks": 369
+    },
+    {
+      "agent": "A3-nb",
+      "index": 9,
+      "params": {
+        "steerGain": 2,
+        "frontClear": 0.6,
+        "speedCap": 0.5,
+        "brakeFront": 0,
+        "brakeSpeed": 0
+      },
+      "outcome": "timeout",
+      "crashed": false,
+      "gatesPassed": 29,
+      "lapsCompleted": 1,
+      "firstLapTicks": 2459,
+      "orderedProgress": 1.45,
+      "ticks": 3600
+    },
+    {
+      "agent": "A3-nb",
+      "index": 10,
+      "params": {
+        "steerGain": 2,
+        "frontClear": 0.6,
+        "speedCap": 0.75,
+        "brakeFront": 0,
+        "brakeSpeed": 0
+      },
+      "outcome": "crashed",
+      "crashed": true,
+      "gatesPassed": 4,
+      "lapsCompleted": 0,
+      "firstLapTicks": null,
+      "orderedProgress": 0.2,
+      "ticks": 428
+    },
+    {
+      "agent": "A3-nb",
+      "index": 11,
+      "params": {
+        "steerGain": 2,
+        "frontClear": 0.6,
+        "speedCap": 1,
+        "brakeFront": 0,
+        "brakeSpeed": 0
+      },
+      "outcome": "crashed",
+      "crashed": true,
+      "gatesPassed": 4,
+      "lapsCompleted": 0,
+      "firstLapTicks": null,
+      "orderedProgress": 0.2,
+      "ticks": 384
+    },
+    {
+      "agent": "A3-nb",
+      "index": 12,
+      "params": {
+        "steerGain": 4,
+        "frontClear": 0.3,
+        "speedCap": 0.5,
+        "brakeFront": 0,
+        "brakeSpeed": 0
+      },
+      "outcome": "timeout",
+      "crashed": false,
+      "gatesPassed": 30,
+      "lapsCompleted": 1,
+      "firstLapTicks": 2418,
+      "orderedProgress": 1.5,
+      "ticks": 3600
+    },
+    {
+      "agent": "A3-nb",
+      "index": 13,
+      "params": {
+        "steerGain": 4,
+        "frontClear": 0.3,
+        "speedCap": 0.75,
+        "brakeFront": 0,
+        "brakeSpeed": 0
+      },
+      "outcome": "timeout",
+      "crashed": false,
+      "gatesPassed": 42,
+      "lapsCompleted": 2,
+      "firstLapTicks": 1699,
+      "orderedProgress": 2.1,
+      "ticks": 3600
+    },
+    {
+      "agent": "A3-nb",
+      "index": 14,
+      "params": {
+        "steerGain": 4,
+        "frontClear": 0.3,
+        "speedCap": 1,
+        "brakeFront": 0,
+        "brakeSpeed": 0
+      },
+      "outcome": "crashed",
+      "crashed": true,
+      "gatesPassed": 5,
+      "lapsCompleted": 0,
+      "firstLapTicks": null,
+      "orderedProgress": 0.25,
+      "ticks": 412
+    },
+    {
+      "agent": "A3-nb",
+      "index": 15,
+      "params": {
+        "steerGain": 4,
+        "frontClear": 0.6,
+        "speedCap": 0.5,
+        "brakeFront": 0,
+        "brakeSpeed": 0
+      },
+      "outcome": "timeout",
+      "crashed": false,
+      "gatesPassed": 30,
+      "lapsCompleted": 1,
+      "firstLapTicks": 2419,
+      "orderedProgress": 1.5,
+      "ticks": 3600
+    },
+    {
+      "agent": "A3-nb",
+      "index": 16,
+      "params": {
+        "steerGain": 4,
+        "frontClear": 0.6,
+        "speedCap": 0.75,
+        "brakeFront": 0,
+        "brakeSpeed": 0
+      },
+      "outcome": "timeout",
+      "crashed": false,
+      "gatesPassed": 42,
+      "lapsCompleted": 2,
+      "firstLapTicks": 1700,
+      "orderedProgress": 2.1,
+      "ticks": 3600
+    },
+    {
+      "agent": "A3-nb",
+      "index": 17,
+      "params": {
+        "steerGain": 4,
+        "frontClear": 0.6,
+        "speedCap": 1,
+        "brakeFront": 0,
+        "brakeSpeed": 0
+      },
+      "outcome": "crashed",
+      "crashed": true,
+      "gatesPassed": 5,
+      "lapsCompleted": 0,
+      "firstLapTicks": null,
+      "orderedProgress": 0.25,
+      "ticks": 464
+    },
+    {
+      "agent": "A3-nb-same",
+      "index": null,
+      "params": {
+        "steerGain": 4,
+        "frontClear": 0.3,
+        "speedCap": 1,
+        "brakeFront": 0.3,
+        "brakeSpeed": 0.6
+      },
+      "outcome": "crashed",
+      "crashed": true,
+      "gatesPassed": 5,
+      "lapsCompleted": 0,
+      "firstLapTicks": null,
+      "orderedProgress": 0.25,
+      "ticks": 412
+    }
+  ],
+  "selected": {
+    "A3": {
+      "index": 59,
+      "params": {
+        "steerGain": 4,
+        "frontClear": 0.3,
+        "speedCap": 1,
+        "brakeFront": 0.3,
+        "brakeSpeed": 0.6
+      }
+    },
+    "A3-nb": {
+      "index": 13,
+      "params": {
+        "steerGain": 4,
+        "frontClear": 0.3,
+        "speedCap": 0.75,
+        "brakeFront": 0,
+        "brakeSpeed": 0
+      }
+    }
+  },
+  "resultsHash": "sha256:27451a5ff785dfcec49242b7416768c25bdda962018868dc01ff0819687fff51"
+}

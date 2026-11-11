@@ -17,8 +17,8 @@
 // Boundaries are fixed: a front ray exactly at frontClear counts as clear; exactly at brakeFront it is NOT short;
 // a speed exactly at speedCap or brakeSpeed is NOT above it.
 //
-// The constants are chosen by P5-01 step 3 on the training track only and frozen below; until then
-// PLACEHOLDER_RULE_PARAMS are labelled placeholders that no test depends on.
+// The constants are chosen by P5-01 step 3 on the training track only and frozen below (RULE_A3_PARAMS,
+// RULE_A3_NB_PARAMS); A3-nb-same is RULE_A3_PARAMS with the brake masked.
 import type { Controls } from '../sim/vehicle';
 import { clampControls } from '../sim/vehicle';
 import type { EpisodeDriver, Observation } from './drivers';
@@ -42,15 +42,29 @@ export interface RuleParams {
 }
 
 /**
- * PLACEHOLDER values so the driver can be built and tested before P5-01 step 3. They are NOT tuned and NOT a result:
- * step 3 replaces them with constants chosen on the training track only, and no test depends on their values.
+ * A3's constants, chosen by P5-01 step 3 on the TRAINING track only (stadium-oval) from the predeclared grid and frozen
+ * here (docs/experiments/p5-01-tuning.json and .md; training/ruleTuning.ts). A test checks they equal the committed record.
+ * They are a baseline's constants, not a claim that this is the best possible rule.
  */
-export const PLACEHOLDER_RULE_PARAMS: RuleParams = Object.freeze({
-  steerGain: 2,
-  frontClear: 0.6,
-  speedCap: 0.8,
-  brakeFront: 0.25,
-  brakeSpeed: 0.5,
+export const RULE_A3_PARAMS: RuleParams = Object.freeze({
+  steerGain: 4,
+  frontClear: 0.3,
+  speedCap: 1,
+  brakeFront: 0.3,
+  brakeSpeed: 0.6,
+});
+
+/**
+ * A3-nb's constants: tuned separately over the same grid (brake constants unused, fixed at 0). **A3-nb is not a brake
+ * ablation of A3**: its steering and throttle constants differ. The ablation is A3-nb-same: `RULE_A3_PARAMS` with
+ * `{ brakeEnabled: false }`.
+ */
+export const RULE_A3_NB_PARAMS: RuleParams = Object.freeze({
+  steerGain: 4,
+  frontClear: 0.3,
+  speedCap: 0.75,
+  brakeFront: 0,
+  brakeSpeed: 0,
 });
 
 /** Indices into the nine inputs (ray angles −90, −60, −30, 0, 30, 60, 90 degrees, then speed, then heading error). */

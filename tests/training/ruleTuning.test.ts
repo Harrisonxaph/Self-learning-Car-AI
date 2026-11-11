@@ -1,7 +1,9 @@
 // P5-01 step 3: the tuning module (training track only), the selection rule and the files. A small grid is used for the
 // run tests; the committed full-grid record is checked in a separate describe block.
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import type { RuleParams } from '../../src/ai/ruleBasedDriver';
+import { RULE_A3_NB_PARAMS, RULE_A3_PARAMS, type RuleParams } from '../../src/ai/ruleBasedDriver';
 import {
   betterEpisode,
   MAX_VARIANTS,
@@ -137,5 +139,35 @@ describe('refusals', () => {
     expect(() => runRuleTuning({ engine: ENGINE, source: SOURCE, grid: { ...SMALL, steerGain: [] } })).toThrow(RangeError);
     const big = Array.from({ length: 101 }, (_, i) => 1 + i / 1000);
     expect(() => runRuleTuning({ engine: ENGINE, source: SOURCE, grid: { ...SMALL, steerGain: big } })).toThrow(RangeError);
+  });
+});
+
+describe('the committed tuning record (docs/experiments/p5-01-tuning.json)', () => {
+  const committed = JSON.parse(readFileSync(join(__dirname, '../../docs/experiments/p5-01-tuning.json'), 'utf8')) as ReturnType<typeof runRuleTuning>;
+  it('used the predeclared grid, the training track only, and the documented selection rule', () => {
+    expect(committed.preregisteredGrid).toBe(true);
+    expect(committed.grid).toEqual(TUNING_GRID);
+    expect(committed.track.split).toBe('training');
+    expect(committed.track.id).toBe(TUNING_TRACK_ID);
+    expect(committed.selectionRule).toBe(RULE_SELECTION);
+    expect(committed.episodes).toHaveLength(72 + 18 + 1);
+  });
+  it('the frozen constants in the driver equal the record\'s selected constants', () => {
+    expect(RULE_A3_PARAMS).toEqual(committed.selected.A3.params);
+    expect(RULE_A3_NB_PARAMS).toEqual(committed.selected['A3-nb'].params);
+  });
+  it('the recorded selections are what the rule picks from the recorded episodes', () => {
+    for (const agent of ['A3', 'A3-nb'] as const) {
+      const best = selectBest(committed.episodes.filter((e) => e.agent === agent));
+      expect(committed.selected[agent]).toEqual({ index: best.index, params: best.params });
+    }
+  });
+  it('re-running the full grid reproduces the committed results hash and episodes (determinism and drift guard)', () => {
+    const again = runRuleTuning({ engine: ENGINE, source: SOURCE });
+    expect(again.resultsHash).toBe(committed.resultsHash);
+    expect(again.episodes).toEqual(committed.episodes);
+  });
+  it('the committed report is the one the record produces', () => {
+    expect(readFileSync(join(__dirname, '../../docs/experiments/p5-01-tuning.md'), 'utf8')).toBe(tuningReport(committed));
   });
 });
