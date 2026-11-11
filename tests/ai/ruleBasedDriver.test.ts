@@ -109,6 +109,22 @@ describe('determinism and state', () => {
     expect(driver.decide({ car, inputs: values })).toEqual(first);
     expect(createRuleBasedDriver(P, { brakeEnabled: true }).decide({ car, inputs: values })).toEqual(first);
   });
+  it('is isolated from the caller\'s options object: mutating it later changes neither controls, configuration nor reset()', () => {
+    const brakeObservation = { car, inputs: inputs([1, 1, 1, 0.1, 1, 1, 1], 0.9) };
+    for (const brakeEnabled of [true, false]) {
+      const options = { brakeEnabled };
+      const driver = createRuleBasedDriver(P, options);
+      const before = driver.decide(brakeObservation);
+      const config = JSON.stringify(driver.config);
+      options.brakeEnabled = !brakeEnabled;
+      expect(driver.decide(brakeObservation)).toEqual(before);
+      driver.reset();
+      expect(driver.decide(brakeObservation)).toEqual(before);
+      expect(JSON.stringify(driver.config)).toBe(config);
+      expect(driver.config.brakeEnabled).toBe(brakeEnabled);
+      expect(before.brake).toBe(brakeEnabled ? 1 : 0);
+    }
+  });
   it('does not keep or change the caller\'s inputs or parameters', () => {
     const values = Object.freeze(inputs([0.3, 0.5, 0.7, 0.4, 0.9, 0.2, 0.6], 0.6));
     const params = { ...P };

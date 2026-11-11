@@ -129,11 +129,14 @@ export function createRuleBasedDriver(params: RuleParams, options: { readonly br
     throw new RangeError('createRuleBasedDriver needs options { brakeEnabled: boolean }.');
   }
   const frozen = checkRuleParams(params);
+  // Captured once: the caller's options object is never read again, so changing it later cannot change the driver
+  // (or make its behaviour disagree with its recorded configuration).
+  const brakeEnabled = options.brakeEnabled;
   const config: RuleDriverConfig = Object.freeze({
-    agent: options.brakeEnabled ? 'A3' : 'A3-nb',
+    agent: brakeEnabled ? 'A3' : 'A3-nb',
     algorithm: RULE_BASED_ALGORITHM,
     params: frozen,
-    brakeEnabled: options.brakeEnabled,
+    brakeEnabled,
   });
   return {
     config,
@@ -141,7 +144,7 @@ export function createRuleBasedDriver(params: RuleParams, options: { readonly br
       if (observation === null || typeof observation !== 'object' || observation.inputs === undefined) {
         throw new RangeError("A rule-based driver needs the observation's inputs.");
       }
-      return ruleControls(observation.inputs, frozen, options.brakeEnabled);
+      return ruleControls(observation.inputs, frozen, brakeEnabled);
     },
     reset() {},
   };
