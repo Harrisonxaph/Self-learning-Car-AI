@@ -429,6 +429,61 @@ describe('the validated direction is the checkpoint engine\'s direction (behavio
     expect(progress.gatesPassed).toBe(doc.gates.length + 1);
   });
 
+  describe('a concave circuit (an L-shaped road): the direction is decided by orientation, not a local tangent', () => {
+    const l = (): Doc => ({
+      id: 'l-shaped',
+      version: '1',
+      name: 'L-shaped annulus',
+      outer: [{ x: 0, y: 0 }, { x: 100, y: 0 }, { x: 100, y: 50 }, { x: 50, y: 50 }, { x: 50, y: 100 }, { x: 0, y: 100 }],
+      inner: [{ x: 20, y: 20 }, { x: 80, y: 20 }, { x: 80, y: 30 }, { x: 30, y: 30 }, { x: 30, y: 80 }, { x: 20, y: 80 }],
+      start: { position: { x: 45, y: 65 }, heading: (-3 * Math.PI) / 4 },
+      gates: [
+        { a: { x: 30, y: 70 }, b: { x: 50, y: 50 } },
+        { a: { x: 70, y: 30 }, b: { x: 70, y: 50 } },
+        { a: { x: 80, y: 25 }, b: { x: 100, y: 25 } },
+        { a: { x: 60, y: 20 }, b: { x: 60, y: 0 } },
+        { a: { x: 20, y: 60 }, b: { x: 0, y: 60 } },
+        { a: { x: 25, y: 80 }, b: { x: 25, y: 100 } },
+      ],
+    });
+    // A reference-point path through every gate in order, then gate 0 again (a mechanics probe: it touches no boundary).
+    const path: Vec2[] = [
+      { x: 45, y: 65 }, { x: 35, y: 55 }, { x: 40, y: 40 }, { x: 75, y: 40 }, { x: 90, y: 40 }, { x: 90, y: 15 },
+      { x: 50, y: 10 }, { x: 10, y: 10 }, { x: 10, y: 70 }, { x: 10, y: 90 }, { x: 40, y: 90 }, { x: 45, y: 65 }, { x: 35, y: 55 },
+    ];
+    const credit = (data: unknown) => {
+      const track = loadTrack(data);
+      let progress = createProgress();
+      for (let i = 1; i < path.length; i += 1) progress = advanceProgress(progress, path[i - 1]!, path[i]!, track);
+      return progress;
+    };
+    it('validates, with gate 0 ending at a reflex (concave) vertex, and earns seven ordered crossings and one lap', () => {
+      expect(rulesOf(validateTrack(l()))).toEqual([]);
+      const progress = credit(l());
+      expect(progress.gatesPassed).toBe(7);
+      expect(progress.lapTicks).toHaveLength(1);
+    });
+    it('validates with both boundary arrays stored in the opposite winding, with the same credit', () => {
+      const doc = l();
+      doc.outer.reverse();
+      doc.inner.reverse();
+      expect(rulesOf(validateTrack(doc))).toEqual([]);
+      expect(credit(doc).gatesPassed).toBe(7);
+    });
+    it('still refuses its mirror image and its reversed gate list', () => {
+      const flip = (p: Vec2) => ({ x: 100 - p.x, y: p.y });
+      const mirror = l();
+      mirror.outer = mirror.outer.map(flip);
+      mirror.inner = mirror.inner.map(flip);
+      mirror.gates = mirror.gates.map((g) => ({ a: flip(g.a), b: flip(g.b) }));
+      mirror.start = { position: flip(mirror.start.position), heading: Math.PI - mirror.start.heading };
+      expect(rulesOf(validateTrack(mirror))).toContain('gate-order');
+      const reversed = l();
+      reversed.gates = [reversed.gates[0]!, ...reversed.gates.slice(1).reverse()];
+      expect(rulesOf(validateTrack(reversed))).toContain('gate-order');
+    });
+  });
+
   it('a horizontally mirrored circuit is refused, and its intended crossing earns no credit', () => {
     const doc = oval();
     const flip = (p: Vec2) => ({ x: -p.x, y: p.y });
