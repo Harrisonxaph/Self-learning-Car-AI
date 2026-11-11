@@ -30,6 +30,7 @@ src/
     outputs.ts            maps raw outputs → steering, throttle, brake; brake mask (P2-03)
     drivers.ts            Driver interface; human driver (P1-08); network driver (P2-08 step 2)
     randomDrivers.ts      seeded random-action (A1) and correlated random-action (A7) drivers (P2-08 step 2)
+    ruleBasedDriver.ts    rule-based baseline driver A3 and its no-brake variant A3-nb (P5-01 step 2)
   evolution/              genomes and genetic operators, no DOM
     genome.ts             flat Float64Array of weights and biases; checks and copies (P2-04)
     selection.ts          fitness ranking and tournament selection (P2-04)
@@ -539,6 +540,7 @@ Authorised as step 2 of [the P2-08 plan](experiments/p2-08-plan.md) only. This d
 
 - **Observation:** gains an optional `inputs`, the nine network inputs (`buildInputs`, `INPUT_CONTRACT`) for the car's current state. The evaluation harness always supplies them, so every driver it runs sees the same observation a network sees. The human driver ignores them, and `main.ts` is unchanged.
 - **Episode drivers:** an `EpisodeDriver` is a `Driver` with `reset()`, which returns it to exactly the state it was created in. `evaluateDriver` calls `reset()` before the first tick, so an instance evaluated twice gives the same episode, and nothing from an earlier episode leaks into the next. `decide` is called exactly once per running tick, so a count of `decide` calls is a count of fixed ticks.
+- **Rule-based driver A3 / A3-nb** (`ai/ruleBasedDriver.ts`, P5-01 step 2; `docs/plans/p5-01-plan.md`): `createRuleBasedDriver(params, { brakeEnabled })` is an `EpisodeDriver` that reads only the seven ray readings and the speed from the observation's nine inputs and ignores the heading error (so it uses no gate or centre-line information). Steering is `steerGain × (mean of the +30/+60/+90 degree rays − mean of the −30/−60/−90 rays)`; throttle is 1 when the front ray is at least `frontClear`, else front ÷ `frontClear`, and 0 while the speed is above `speedCap`; brake (A3 only) is 1 when the front ray is below `brakeFront` and the speed is above `brakeSpeed`. A3-nb is identical except its brake is always 0. Boundaries are fixed (a front ray exactly at `brakeFront` is not short; a speed exactly at `brakeSpeed` is not fast). Stateless and deterministic; non-finite or missing inputs and invalid parameters throw `RangeError`. **The constants in the file are labelled placeholders** (`PLACEHOLDER_RULE_PARAMS`, not tuned, no test depends on them); step 3 chooses and freezes them on the training track only. No study has been run and no held-out track is touched.
 - **Random-action drivers** (`ai/randomDrivers.ts`):
   - **A1** `createRandomDriver(seed)`: a new action every tick.
   - **A7** `createCorrelatedRandomDriver(seed, holdTicks = 30)`: each action is held for exactly `holdTicks` ticks (30 = 0.5 s at 1/60 s). Decisions 0 to 29 use the first sample, decision 30 draws the second, and so on. After `reset()` the next decision draws a fresh first sample from the restarted generator.
