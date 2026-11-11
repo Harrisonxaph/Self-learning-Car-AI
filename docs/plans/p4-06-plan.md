@@ -1,0 +1,71 @@
+# P4-06 plan: Silverstone, the first real-world circuit (import, validation and selection)
+
+> **Status: plan only, for Codex review and the owner's merge. Implementation needs its own owner authorisation, and the licence needs the owner's sign-off before any data is committed.**
+> - **Authorisation:** the owner's "Commence p4-06 while I get codex to review open PR" (2026-11-11), read as starting P4-06 with a **plan only**: the roadmap records the Silverstone approval of 2026-10-23 as "planning only", and says each of P4-06, P2-11 and P4-07 "still needs explicit owner implementation approval". Dependencies P4-01, P2-10, P2-05, P2-07 and P3-05 are Complete or merged.
+> - **Scope:** the roadmap entry and issue #57: an importer and the data, Silverstone in the **training** split, selection, scaled episode limits, a deterministic seeded training smoke run, the performance baseline against the P2-11 budget, and the licence and attribution. **Not** in scope: the `racelines/` files, any racing line as a network input, scripted steering, car-to-car interaction (R-01/R-02), the camera (P4-07), the spatial index (P2-11, unless the baseline triggers it), any claim about learning.
+> - **Lessons carried from earlier phases:** convert deterministically and commit the source beside the output so the conversion is reproducible offline; measure before optimising; keep the held-out boundary closed (Silverstone is a **training** circuit, so no generalisation claim rests on it); state the direction convention and every approximation plainly.
+
+## 1. What P4-06 must deliver (ROADMAP, issue #57)
+
+- **Import** Silverstone from the TUMFTM racetrack-database (`tracks/Silverstone.csv`: centre line with right and left widths, metres) into the P4-01 track format; track ID `silverstone`; in the training split.
+- **Acceptance (summarised):** a deterministic converter in `scripts/` that records source URL, commit and file hash, with the committed track equal to its output; boundaries that pass the P4-01 validator, gates about every 50 m and a documented start behind gate 0; a source-commit-plus-content-hash version recorded in experiment manifests and saved models; episode duration and stall timeout scaled to the 5.9 km lap; selectable alongside the synthetic circuits, which are unchanged; a deterministic seeded training run; the brute-force baseline measured against the P2-11 budget on the owner's reference phone, with the figures recorded in #56 and #57; the whole circuit fitted to the canvas; licence confirmed before the data is committed, with attribution and the owner's sign-off.
+- **Tests:** converter golden test; validator on Silverstone; gate order and spacing; start pose inside the road; deterministic training smoke run; E2E selection and display.
+
+## 2. What the data looks like (measured at planning; nothing committed)
+
+The CSV was read from the database's `master` branch **only to plan**; no data or derived file is in this PR. The figures below were measured from that read; the importer will record the exact commit and file hash, and the golden tests pin them.
+
+| Fact | Value | Consequence |
+| --- | --- | --- |
+| Rows | 1,178 data rows (`x_m, y_m, w_tr_right_m, w_tr_left_m`), spacing 4.68 to 5.16 m | about 5 m apart; each boundary has 1,178 points, within the P4-01 cap of 2,000 |
+| Closure | the last row is 5.00 m from the first, the same as the regular spacing | the loop closes implicitly, as the track format expects (the last point is not repeated) |
+| Length | 5,886.8 m | scaled episode limits (section 3) |
+| Extent | about 1,020 m by 1,724 m | the whole circuit fits the canvas, but a 4 m car is about 1 px on a phone: P4-07 |
+| Width | total 11.3 to 17.8 m (right 5.4 to 8.9 m, left 5.8 to 9.0 m) | well above the validator's 4 m minimum |
+| Smallest centre-line radius | 12.3 m, where the half-width is about 7.1 m | no boundary collapses on itself |
+| Direction | clockwise in the database's y-up frame (the real racing direction) | see "Direction" below |
+| Boundaries | a **throw-away prototype** (not committed) offset the centre line by the two widths, put a gate every 10 rows (about 50 m, **118 gates**, within the cap of 200) and a start 10 m behind gate 0: `validateTrack` returned **no errors and no warnings** | the format and validator can describe the circuit as it is; no smoothing or repair is needed |
+
+## 3. Design
+
+- **The converter: `src/tracks/convertRacetrack.ts` (pure, headless) and `scripts/importSilverstone.mjs` (the command line).** The pure function takes the CSV text and a small parameter object and returns the track document; the script handles files, git and the hash. It parses strictly (a comment line, then four finite numbers per row; a malformed or short file is refused with a message), offsets the centre line by the left and right widths using the same central-difference tangent as the prototype, gives each boundary exactly one point per row, rounds to 3 decimals, places a gate on every 10th row (the gate's inner end on the inner boundary and its outer end on the outer one, so it spans the road as the validator requires), puts the start on the centre line 10 m behind gate 0 facing forward, and runs `validateTrack`: **a conversion that does not validate fails**. It draws no random numbers, reads no clock and writes nothing but its output, so the same input gives the same bytes.
+- **Direction (one convention, an honest approximation).** The engine credits one driving direction: the outer boundary on the car's right, counter-clockwise on the screen (`docs/TRACK_FORMAT.md`). Silverstone is run **clockwise** in reality. The importer keeps the circuit's **true shape** (it negates y so the picture is not mirrored on the y-down screen) and lists the points in the **reverse** order, so the simulated cars drive it **anticlockwise**. The alternative, mirroring the circuit, would keep the real direction but distort the geometry of every corner. The track file and the page say so plainly: this is Silverstone's layout driven the opposite way round.
+- **Data and licence.** The committed files are `src/data/tracks/silverstone.json` (the converter's output), `src/data/tracks/sources/Silverstone.csv` (the unmodified source, so the golden test runs offline) and a licence notice (`src/data/tracks/NOTICE.md`) naming the TUM racetrack-database (LGPL-3.0), the OpenStreetMap origin ("© OpenStreetMap contributors", ODbL 1.0), the source URL, the commit and the file hash. The track file records the same in its own header fields. **No data is committed until the owner has confirmed the licences and signed off** (decision 3). The page shows a short credit whenever Silverstone is selected. This plan is not legal advice; it lists what the roadmap requires and what the owner must confirm.
+- **Version and manifest.** The track's `version` is `<source commit, 7 characters>-<first 12 hex characters of the file's content hash>`; the manifest entry (`split: training`, `contentHash`, `provenance` naming the source, commit and conversion date-free script version) pins it. Experiment manifests and saved models already record the track id, version and hash, so a result names exactly this data.
+- **Scaled episode limits.** A lap is 5.9 km, so the synthetic 60 s episode and 5 s stall limit cannot complete it. Each manifest entry may carry **`limits`** (`maxEpisodeSeconds`, `stallSeconds`, `maxLaps`); the synthetic circuits keep the defaults, and Silverstone proposes 420 s, 10 s and 1 lap (a lap at the car's top speed of about 23.7 m/s takes about 250 s). The training page, `evaluateDriver` and the experiment runner read the limits from the selected circuit and record them in the run's configuration.
+- **Selection.** The training circuit choice (the control P4-04 adds; whichever of the two items lands first creates it, the other adds its entries) lists the synthetic training circuits and Silverstone. Validation and held-out circuits are never offered.
+- **Display.** The whole circuit is fitted to the canvas (the existing `fitBounds`). Legible individual cars on a phone need zoom and follow, which is P4-07, a separate follow-up and not a prerequisite for completing P4-06.
+- **The performance baseline (measure first).** About 2,356 boundary segments and 50 cars with 7 rays plus collision each means about 0.9 million segment tests per tick by brute force. A benchmark script and a page readout (the existing `?debug=fps` figures) measure headless ticks per second and the rendered 1× simulation update time on Silverstone, on desktop Chromium for comparison and **on the owner's reference phone** for the decision, against the P2-11 budget (rendered 1× at 60 ticks/s with p95 update at most 8 ms; headless at least 600 ticks/s). The figures, with device, workload and build, go to #56 and #57. **If the budget is met, P2-11 is not needed; if it is missed, P2-11 is triggered and P4-06 stays In Review until P2-11 is Complete.** The plan expects the headless budget to be at risk on a phone, but states that as a hypothesis to be measured, not a result.
+- **Training smoke run.** A short seeded population run on Silverstone (a few generations, a small population, scaled limits) must be deterministic (the same seed gives the same generation records twice) and its cars independent as in P2-05; it makes no claim about learning.
+
+## 4. What is deliberately not claimed
+
+Silverstone is a **training** circuit, so results on it support no generalisation claim; those use held-out circuits. The conversion is Silverstone's published centre line and widths as given by the database (derived from OpenStreetMap), driven in the reverse direction, with straight-line segments between points about 5 m apart and no kerbs, run-offs or elevation; it is not a faithful simulation of the real circuit. The scaled limits and the single lap are choices for training on a long circuit, not properties of Silverstone. The performance figures describe one phone and one workload. No learning claim is made.
+
+## 5. Steps (each needs its own owner authorisation; the roadmap requires the importer and data to be a separate PR)
+
+1. **This plan** (documentation only).
+2. **Importer and data** (`convertRacetrack.ts`, the script, the committed source CSV, the track file, the notice, the manifest entry with `limits` and `provenance`, golden and validator tests). **After the owner's licence sign-off.** No UI, no training change.
+3. **Selection, scaled limits and display** (the circuit choice, reading `limits`, the credit line, the deterministic training smoke run, the E2E).
+4. **The performance baseline** (the benchmark script, desktop figures, the owner's phone figures recorded in #56 and #57, and the P2-11 decision).
+
+## 6. Tests
+
+- **Converter golden test:** a small synthetic CSV (a handful of rows) converts to an exact expected document; the full source file converts to the **committed** `silverstone.json` byte for byte, and the recorded file hash and commit match; the output is deterministic across two runs.
+- **Converter refusals:** an empty file, a missing header comment, a row with fewer or more than four numbers, a non-finite number, fewer than 3 rows and a row count beyond the validator's caps each give a readable message and no output.
+- **Validator on Silverstone:** `validateTrack` returns no errors and no warnings; 118 gates; the gates are in driving order, about 50 m apart (a stated tolerance), and every gate spans the road; the start is inside the road with a clear footprint, behind gate 0 and facing forward; **a scripted gate-pursuit driver completes a lap through the real checkpoint engine** (geometry only, as for P2-10, not a trained or tuned model).
+- **Manifest and enforcement:** `silverstone` is in the training split with a version of the stated form; the content and geometry hashes match; the P4-04 enforcement tests (when present) cover it; the trainer accepts it and evaluation treats it as a training circuit; `limits` are read for it and the defaults for the others.
+- **Page wiring and E2E (Chromium and WebKit, desktop, phone and tablet):** select Silverstone, see the whole circuit fitted and the credit line, run a few generations; the synthetic circuits and every existing test are unchanged.
+- **Training smoke:** two runs with the same seed and settings give identical generation records.
+- **Mutation checks:** weakening the offset, the gate spacing, the start offset or the direction handling fails a test.
+- Not tested here: any model's quality on Silverstone, and any phone (section 7).
+
+## 7. Owner checks (iPhone and iPad, before a completion request)
+
+1. Select Silverstone in the training page: the whole circuit is visible and the credit line is shown; the page stays usable in portrait and landscape.
+2. Run a short training and note the frame rate and step time from `?debug=fps` on your named device; those figures are the performance baseline recorded in #56 and #57 (they decide whether P2-11 is needed).
+3. Replay or watch a car: cars are tiny on a phone (a known limit, P4-07) but the circuit and its direction are clear.
+
+## 8. Limits
+
+One real circuit, one data source, one driving direction (the reverse of the real one). Cars are about 1 px on a phone until P4-07. The training episode is long, so training on Silverstone is slow even if the budget is met; the budget is about interactivity, not speed of learning. ST1 to ST5, the held-out boundary, every study seed and every existing record are untouched.
