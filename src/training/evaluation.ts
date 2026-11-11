@@ -60,7 +60,7 @@ export interface EvaluationSetup {
     readonly trackId: string;
     readonly trackVersion: string;
     readonly trackHash: string;
-    readonly trackSplit: 'training' | 'validation' | 'unregistered';
+    readonly trackSplit: 'training' | 'validation' | 'held-out' | 'unregistered';
   };
 }
 
@@ -71,6 +71,16 @@ export interface EvaluationSetup {
  * track without gates, and TrackLeakageError for a held-out track.
  */
 export function createEvaluationSetup(input: unknown, environment: EvaluationEnvironment): EvaluationSetup {
+  return buildEvaluationSetup(input, environment, () => assertEvaluationTrack(environment.track));
+}
+
+/**
+ * The shared construction behind `createEvaluationSetup`. **Only training/heldOutAccess.ts may call it with a split
+ * check other than assertEvaluationTrack** (a test enforces that no other module references it): it is how a frozen
+ * model reaches a held-out track through the controlled, once-per-protocol entry point, and `createEvaluationSetup`
+ * itself keeps refusing held-out tracks.
+ */
+export function buildEvaluationSetup(input: unknown, environment: EvaluationEnvironment, splitOf: () => EvaluationSetup['versions']['trackSplit']): EvaluationSetup {
   if (input === null || typeof input !== 'object' || Array.isArray(input)) throw new RangeError('Evaluation config must be an object.');
   for (const key of Object.keys(input)) {
     if (!CONFIG_KEYS.includes(key)) throw new RangeError(`Unknown evaluation config field "${key}"; allowed: ${CONFIG_KEYS.join(', ')}.`);
@@ -87,7 +97,7 @@ export function createEvaluationSetup(input: unknown, environment: EvaluationEnv
   const rules = resolveEpisodeRules(merged, environment.timestepSeconds);
   const fitness = resolveFitnessConfig(merged.fitness);
   if (!environment.track || environment.track.gates.length === 0) throw new RangeError('Evaluation needs a track with gates.');
-  const trackSplit = assertEvaluationTrack(environment.track);
+  const trackSplit = splitOf();
   return Object.freeze({
     config: Object.freeze({
       maxEpisodeSeconds: merged.maxEpisodeSeconds,
