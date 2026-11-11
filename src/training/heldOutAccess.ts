@@ -6,8 +6,11 @@
 //    `heldOutTrack(id, frozenModel)`, which refuses anything that did not come unchanged from `freezeModel` and hands
 //    back the registered track itself (a renamed or edited copy is never evaluated);
 //  - a gate is created for one protocol (its hash, one authorisation ID, the listed held-out tracks and the listed
-//    frozen agents) and can be OPENED ONCE; a second open is refused, and a wrong authorisation ID is refused without
-//    using up the opening;
+//    frozen agents) with an OPENING LEDGER supplied by the caller, and the protocol can be OPENED ONCE: the opening is
+//    claimed in the ledger before any access is returned, so a gate re-created for the same protocol (in the same
+//    process or after a restart, from the persisted ledger) is refused; a wrong authorisation ID is refused without
+//    claiming anything. There is deliberately NO hidden module-level state: persistence is the caller's, and the E3
+//    runner must pass a ledger restored from the record's recorded openings;
 //  - an opened session evaluates each listed (agent, track) pair at most once, and nothing outside the lists.
 // The rule-based drivers are frozen the same way as networks: their five constants become a FrozenModel's parameters,
 // with the agent name, algorithm and brake setting in its provenance, so their identity is a content hash too.
@@ -80,9 +83,66 @@ export function driverForFrozenAgent(model: FrozenModel): EpisodeDriver {
     if (!brakeEnabled) throw new RangeError('An A5 model must record brakeEnabled = true.');
     return createNetworkDriver(model.parameters, { brakeEnabled });
   }
-  if (model.parameters.length !== PARAM_ORDER.length) throw new RangeError(`A rule agent's model needs exactly ${PARAM_ORDER.length} parameters.`);
+  checkRuleModel(agent as RuleAgent, model, brakeEnabled);
   const params = Object.fromEntries(PARAM_ORDER.map((key, i) => [key, model.parameters[i]!])) as unknown as RuleParams;
   return createRuleBasedDriver(params, { brakeEnabled });
+}
+
+/**
+ * A frozen rule model must be exactly the agent it names under the supported rule contract: the supported algorithm
+ * version, that agent's brake binding (A3 on, A3-nb and A3-nb-same off) and that agent's frozen constants. An
+ * unchanged `freezeModel` only proves integrity, not that today's rule is what the model describes.
+ */
+function checkRuleModel(agent: RuleAgent, model: FrozenModel, brakeEnabled: boolean): void {
+  const settings = RULE_SETTINGS[agent];
+  if (model.provenance.algorithm !== RULE_BASED_ALGORITHM) {
+    throw new RangeError(`A rule agent's model must record algorithm ${RULE_BASED_ALGORITHM}, got ${String(model.provenance.algorithm)}.`);
+  }
+  if (brakeEnabled !== settings.brakeEnabled) {
+    throw new RangeError(`${agent} is defined with brakeEnabled = ${settings.brakeEnabled}, but the model records ${brakeEnabled}.`);
+  }
+  if (model.parameters.length !== PARAM_ORDER.length) throw new RangeError(`A rule agent's model needs exactly ${PARAM_ORDER.length} parameters.`);
+  PARAM_ORDER.forEach((key, i) => {
+    if (model.parameters[i] !== settings.params[key]) throw new RangeError(`${agent}'s ${key} must be ${settings.params[key]}, got ${model.parameters[i]}.`);
+  });
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// The opening ledger.
+
+/**
+ * The record of which protocols have been opened, supplied by the caller. `claim` records an opening and throws if the
+ * protocol's hash is already there; checking and recording happen in one step, so a repeat is refused whoever asks.
+ * A study persists `openings()` in its record and restores the ledger from it on restart.
+ */
+export interface OpeningLedger {
+  openings(): readonly HeldOutOpening[];
+  claim(opening: HeldOutOpening): void;
+}
+
+/** An in-memory ledger, optionally restored from recorded openings (refused if malformed or a protocol repeats). */
+export function createMemoryLedger(recorded: readonly HeldOutOpening[] = []): OpeningLedger {
+  const openings: HeldOutOpening[] = [];
+  const add = (opening: HeldOutOpening): void => {
+    const checked = checkOpening(opening);
+    if (openings.some((o) => o.protocolHash === checked.protocolHash)) {
+      throw new HeldOutAccessError(`Protocol ${checked.protocolHash} has already been opened (recorded in the opening ledger).`);
+    }
+    openings.push(checked);
+  };
+  if (!Array.isArray(recorded)) throw new HeldOutAccessError('Recorded openings must be an array.');
+  for (const opening of recorded) add(opening);
+  return { openings: () => openings.map((o) => ({ ...o })), claim: add };
+}
+
+function checkOpening(value: unknown): HeldOutOpening {
+  if (value === null || typeof value !== 'object') throw new HeldOutAccessError('An opening must be an object.');
+  const o = value as Record<string, unknown>;
+  if (typeof o.protocolHash !== 'string' || !HASH.test(o.protocolHash)) throw new HeldOutAccessError('An opening\'s protocolHash must be a sha256 hash.');
+  if (typeof o.authorisationId !== 'string' || !AUTHORISATION_ID.test(o.authorisationId)) throw new HeldOutAccessError('An opening\'s authorisationId is malformed.');
+  const trackIds = copyList(o.trackIds, 'opening.trackIds', (v) => typeof v === 'string' && v.length > 0, 'a track ID');
+  const agentIds = copyList(o.agentIds, 'opening.agentIds', (v) => typeof v === 'string' && HASH.test(v), 'a frozen model ID (sha256:…)');
+  return Object.freeze({ protocolHash: o.protocolHash, authorisationId: o.authorisationId, trackIds, agentIds });
 }
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -147,7 +207,10 @@ const copyList = (values: unknown, name: string, check: (v: unknown) => boolean,
  * A gate for one protocol. Throws HeldOutAccessError for a malformed protocol and TrackLeakageError if a listed track
  * is not a registered held-out track. `splits` is for tests (a synthetic registry); the default is the built-in one.
  */
-export function createHeldOutGate(protocol: HeldOutProtocol, splits: TrackSplits = BUILT_IN_TRACK_SPLITS): HeldOutGate {
+export function createHeldOutGate(protocol: HeldOutProtocol, ledger: OpeningLedger, splits: TrackSplits = BUILT_IN_TRACK_SPLITS): HeldOutGate {
+  if (ledger === null || typeof ledger !== 'object' || typeof ledger.claim !== 'function' || typeof ledger.openings !== 'function') {
+    throw new HeldOutAccessError('A held-out gate needs an opening ledger (createMemoryLedger, restored from the record\'s recorded openings).');
+  }
   if (protocol === null || typeof protocol !== 'object') throw new HeldOutAccessError('The protocol must be an object.');
   if (typeof protocol.protocolHash !== 'string' || !HASH.test(protocol.protocolHash)) throw new HeldOutAccessError('protocolHash must be a sha256 hash.');
   if (typeof protocol.authorisationId !== 'string' || !AUTHORISATION_ID.test(protocol.authorisationId)) {
@@ -169,9 +232,15 @@ export function createHeldOutGate(protocol: HeldOutProtocol, splits: TrackSplits
     open(authorisationId: string): HeldOutSession {
       if (authorisationId !== frozenProtocol.authorisationId) throw new HeldOutAccessError('The authorisation ID does not match the protocol\'s; the gate stays closed.');
       if (opened) throw new HeldOutAccessError('This protocol\'s held-out gate has already been opened; it opens once.');
+      const opening: HeldOutOpening = Object.freeze({ ...frozenProtocol });
+      // Claimed in the ledger BEFORE access is returned: a protocol already recorded there (by another gate, or restored
+      // after a restart) is refused here, and a ledger that cannot record the opening leaves the gate closed.
+      if (ledger.openings().some((o) => o.protocolHash === opening.protocolHash)) {
+        throw new HeldOutAccessError(`Protocol ${opening.protocolHash} has already been opened (recorded in the opening ledger); it opens once.`);
+      }
+      ledger.claim(opening);
       opened = true;
       const seen: { modelId: string; trackId: string }[] = [];
-      const opening: HeldOutOpening = Object.freeze({ ...frozenProtocol });
       return Object.freeze({
         opening,
         evaluate(model: FrozenModel, trackId: string, config: unknown = {}): DriverEvaluation {

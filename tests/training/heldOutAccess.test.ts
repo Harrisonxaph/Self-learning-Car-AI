@@ -16,6 +16,7 @@ import { loadTrack } from '../../src/sim/track';
 import { createEvaluationSetup, evaluateDriver } from '../../src/training/evaluation';
 import {
   createHeldOutGate,
+  createMemoryLedger,
   driverForFrozenAgent,
   freezeNetworkAgent,
   freezeRuleAgent,
@@ -60,7 +61,7 @@ const protocol = (agents: readonly string[], over: Partial<HeldOutProtocol> = {}
   agentIds: agents,
   ...over,
 });
-const gateFor = (...models: { id: string }[]) => createHeldOutGate(protocol(models.map((m) => m.id)), SPLITS);
+const gateFor = (...models: { id: string }[]) => createHeldOutGate(protocol(models.map((m) => m.id)), createMemoryLedger(), SPLITS);
 
 describe('the existing guards are untouched', () => {
   it('createEvaluationSetup still refuses the real held-out track and a renamed copy of it', () => {
@@ -117,6 +118,29 @@ describe('frozen agents', () => {
     const net = network();
     expect(driverForFrozenAgent(net).decide({ car, inputs })).toEqual(createNetworkDriver(net.parameters, { brakeEnabled: true }).decide({ car, inputs }));
   });
+  it('refuses a rule model with an unsupported or missing algorithm version', () => {
+    const a3 = freezeRuleAgent('A3');
+    const make = (over: Record<string, string | boolean>) => freezeModel([...a3.parameters], { agent: 'A3', algorithm: 'rule-based-v1', brakeEnabled: true, ...over });
+    expect(() => driverForFrozenAgent(make({}))).not.toThrow();
+    expect(() => driverForFrozenAgent(make({ algorithm: 'unknown-v999' }))).toThrow(/algorithm/);
+    expect(() => driverForFrozenAgent(freezeModel([...a3.parameters], { agent: 'A3', brakeEnabled: true }))).toThrow(/algorithm/);
+  });
+  it('refuses inconsistent brake bindings for every rule agent (A3 on; A3-nb and A3-nb-same off)', () => {
+    for (const [agent, expected] of [['A3', true], ['A3-nb', false], ['A3-nb-same', false]] as const) {
+      const good = freezeRuleAgent(agent);
+      expect(() => driverForFrozenAgent(good)).not.toThrow();
+      const flipped = freezeModel([...good.parameters], { agent, algorithm: 'rule-based-v1', brakeEnabled: !expected });
+      expect(() => driverForFrozenAgent(flipped)).toThrow(/brakeEnabled/);
+    }
+  });
+  it('refuses a rule model whose constants are not the named agent\'s frozen constants', () => {
+    const a3 = freezeRuleAgent('A3');
+    const edited = freezeModel([...a3.parameters].map((v, i) => (i === 0 ? v + 0.5 : v)), { agent: 'A3', algorithm: 'rule-based-v1', brakeEnabled: true });
+    expect(() => driverForFrozenAgent(edited)).toThrow(/steerGain/);
+    // A3-nb's constants under the name A3 are also refused.
+    const nbConstants = freezeModel([...freezeRuleAgent('A3-nb').parameters], { agent: 'A3', algorithm: 'rule-based-v1', brakeEnabled: true });
+    expect(() => driverForFrozenAgent(nbConstants)).toThrow(RangeError);
+  });
   it('refuses a model that records no valid agent, an A5 without the brake, and a rule model of the wrong length', () => {
     expect(() => driverForFrozenAgent(freezeModel([1, 2, 3, 4, 5], {}))).toThrow(RangeError);
     expect(() => driverForFrozenAgent(freezeModel([1, 2, 3, 4, 5], { agent: 'A9', brakeEnabled: true }))).toThrow(RangeError);
@@ -131,7 +155,7 @@ describe('the gate: protocol checks', () => {
   const m = freezeRuleAgent('A3');
   it('accepts a valid protocol and freezes a copy', () => {
     const p = protocol([m.id]);
-    const gate = createHeldOutGate(p, SPLITS);
+    const gate = createHeldOutGate(p, createMemoryLedger(), SPLITS);
     expect(gate.opened).toBe(false);
     expect(Object.isFrozen(gate.protocol)).toBe(true);
     (p.agentIds as string[]).push('sha256:' + 'b'.repeat(64));
@@ -147,14 +171,14 @@ describe('the gate: protocol checks', () => {
     ['a malformed agent ID', { agentIds: ['x'] }],
     ['a repeated agent', { agentIds: [m.id, m.id] }],
   ])('refuses %s', (_name, over) => {
-    expect(() => createHeldOutGate(protocol([m.id], over as never), SPLITS)).toThrow(HeldOutAccessError);
+    expect(() => createHeldOutGate(protocol([m.id], over as never), createMemoryLedger(), SPLITS)).toThrow(HeldOutAccessError);
   });
   it('refuses a listed track that is not a registered held-out track (training, validation or unknown)', () => {
-    for (const id of ['stadium-oval', 'rounded-rectangle', 'nope']) expect(() => createHeldOutGate(protocol([m.id], { trackIds: [id] }), SPLITS)).toThrow(TrackLeakageError);
+    for (const id of ['stadium-oval', 'rounded-rectangle', 'nope']) expect(() => createHeldOutGate(protocol([m.id], { trackIds: [id] }), createMemoryLedger(), SPLITS)).toThrow(TrackLeakageError);
   });
   it('the default registry is the built-in one: the real held-out track is accepted in a protocol, and a synthetic one is not', () => {
-    expect(createHeldOutGate(protocol([m.id], { trackIds: ['hairpin-chicane'] })).opened).toBe(false);
-    expect(() => createHeldOutGate(protocol([m.id]))).toThrow(TrackLeakageError);
+    expect(createHeldOutGate(protocol([m.id], { trackIds: ['hairpin-chicane'] }), createMemoryLedger()).opened).toBe(false);
+    expect(() => createHeldOutGate(protocol([m.id]), createMemoryLedger())).toThrow(TrackLeakageError);
   });
 });
 
@@ -176,6 +200,78 @@ describe('the gate: opening once', () => {
     const opening = gateFor(m).open('issue-33#comment-1').opening;
     expect(opening).toEqual({ protocolHash: `sha256:${'a'.repeat(64)}`, authorisationId: 'issue-33#comment-1', trackIds: [HELD], agentIds: [m.id] });
     expect(Object.isFrozen(opening)).toBe(true);
+  });
+});
+
+describe('the opening ledger (per protocol, supplied by the caller, no hidden module state)', () => {
+  const m = freezeRuleAgent('A3');
+  const AUTH = 'issue-33#comment-1';
+  it('a second gate for the same protocol on the same ledger is refused, even with the same authorisation', () => {
+    const ledger = createMemoryLedger();
+    createHeldOutGate(protocol([m.id]), ledger, SPLITS).open(AUTH);
+    const again = createHeldOutGate(protocol([m.id]), ledger, SPLITS);
+    expect(() => again.open(AUTH)).toThrow(/already been opened/);
+    expect(again.opened).toBe(false);
+  });
+  it('a gate re-created after a restart from the RECORDED opening is refused', () => {
+    const first = createMemoryLedger();
+    const opening = createHeldOutGate(protocol([m.id]), first, SPLITS).open(AUTH).opening;
+    // "Restart": a new process restores its ledger from the openings the study recorded.
+    const restored = createMemoryLedger([JSON.parse(JSON.stringify(opening))]);
+    expect(() => createHeldOutGate(protocol([m.id]), restored, SPLITS).open(AUTH)).toThrow(/already been opened/);
+  });
+  it('the ledger keys on the protocol hash: another protocol may open, even with the same authorisation ID', () => {
+    const ledger = createMemoryLedger();
+    createHeldOutGate(protocol([m.id]), ledger, SPLITS).open(AUTH);
+    const other = createHeldOutGate(protocol([m.id], { protocolHash: `sha256:${'c'.repeat(64)}` }), ledger, SPLITS);
+    expect(() => other.open(AUTH)).not.toThrow();
+    expect(ledger.openings().map((o) => o.protocolHash)).toEqual([`sha256:${'a'.repeat(64)}`, `sha256:${'c'.repeat(64)}`]);
+  });
+  it('a different authorisation ID does not reopen the same protocol', () => {
+    const ledger = createMemoryLedger();
+    createHeldOutGate(protocol([m.id]), ledger, SPLITS).open(AUTH);
+    expect(() => createHeldOutGate(protocol([m.id], { authorisationId: 'another-1' }), ledger, SPLITS).open('another-1')).toThrow(/already been opened/);
+  });
+  it('a wrong authorisation claims nothing; the opening is claimed before access is returned', () => {
+    const ledger = createMemoryLedger();
+    const gate = createHeldOutGate(protocol([m.id]), ledger, SPLITS);
+    expect(() => gate.open('nope')).toThrow(HeldOutAccessError);
+    expect(ledger.openings()).toEqual([]);
+    const session = gate.open(AUTH);
+    expect(ledger.openings()).toEqual([session.opening]);
+  });
+  it('a ledger that cannot record the opening leaves the gate closed and gives no access', () => {
+    const broken = { openings: () => [], claim: () => { throw new HeldOutAccessError('disk full'); } };
+    const gate = createHeldOutGate(protocol([m.id]), broken, SPLITS);
+    expect(() => gate.open(AUTH)).toThrow(/disk full/);
+    expect(gate.opened).toBe(false);
+  });
+  it('the gate checks the ledger itself, so even a ledger whose claim does not refuse repeats cannot reopen a recorded protocol', () => {
+    const recorded = [{ protocolHash: `sha256:${'a'.repeat(64)}`, authorisationId: AUTH, trackIds: [HELD], agentIds: [m.id] }];
+    const lax = { openings: () => recorded, claim: () => undefined };
+    const gate = createHeldOutGate(protocol([m.id]), lax, SPLITS);
+    expect(() => gate.open(AUTH)).toThrow(/already been opened/);
+    expect(gate.opened).toBe(false);
+  });
+  it('the ledger copies what it returns, so a caller cannot edit the record', () => {
+    const ledger = createMemoryLedger();
+    createHeldOutGate(protocol([m.id]), ledger, SPLITS).open(AUTH);
+    (ledger.openings()[0] as { authorisationId: string }).authorisationId = 'tampered';
+    expect(ledger.openings()[0]!.authorisationId).toBe(AUTH);
+  });
+  it('a gate needs a ledger; recorded openings are validated and may not repeat a protocol', () => {
+    expect(() => createHeldOutGate(protocol([m.id]), undefined as never, SPLITS)).toThrow(HeldOutAccessError);
+    expect(() => createHeldOutGate(protocol([m.id]), {} as never, SPLITS)).toThrow(HeldOutAccessError);
+    const good = { protocolHash: `sha256:${'a'.repeat(64)}`, authorisationId: AUTH, trackIds: [HELD], agentIds: [m.id] };
+    expect(() => createMemoryLedger([good, good])).toThrow(/already been opened/);
+    expect(() => createMemoryLedger([{ ...good, protocolHash: 'x' }])).toThrow(HeldOutAccessError);
+    expect(() => createMemoryLedger([{ ...good, agentIds: [] }])).toThrow(HeldOutAccessError);
+    expect(() => createMemoryLedger(null as never)).toThrow(HeldOutAccessError);
+    expect(() => createMemoryLedger([null as never])).toThrow(HeldOutAccessError);
+  });
+  it('two independent ledgers are independent: persistence is the caller\'s duty', () => {
+    expect(() => createHeldOutGate(protocol([m.id]), createMemoryLedger(), SPLITS).open(AUTH)).not.toThrow();
+    expect(() => createHeldOutGate(protocol([m.id]), createMemoryLedger(), SPLITS).open(AUTH)).not.toThrow();
   });
 });
 
