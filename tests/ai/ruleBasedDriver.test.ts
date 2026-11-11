@@ -1,7 +1,7 @@
 // The rule-based driver A3 / A3-nb (P5-01 step 2): decisions for known inputs, the one-difference property, boundaries,
 // determinism and hostile input. Parameters are chosen here, so no test depends on the placeholders' values.
 import { describe, expect, it } from 'vitest';
-import { createRuleBasedDriver, PLACEHOLDER_RULE_PARAMS, RULE_BASED_ALGORITHM, ruleControls, checkRuleParams, type RuleParams } from '../../src/ai/ruleBasedDriver';
+import { createRuleBasedDriver, RULE_A3_NB_PARAMS, RULE_A3_PARAMS, RULE_BASED_ALGORITHM, ruleControls, checkRuleParams, type RuleParams } from '../../src/ai/ruleBasedDriver';
 import type { Car } from '../../src/sim/collision';
 
 const P: RuleParams = { steerGain: 2, frontClear: 0.6, speedCap: 0.8, brakeFront: 0.25, brakeSpeed: 0.5 };
@@ -165,7 +165,9 @@ describe('hostile input is refused, never a NaN control', () => {
     expect(() => createRuleBasedDriver(P, undefined as never)).toThrow(RangeError);
     expect(() => createRuleBasedDriver(P, { brakeEnabled: 1 as never })).toThrow(RangeError);
   });
-  it('accepts the placeholder parameters (they are valid, and labelled as not tuned)', () => {
-    expect(() => checkRuleParams(PLACEHOLDER_RULE_PARAMS)).not.toThrow();
+  it('accepts the tuned constants, which are valid', () => {
+    expect(() => checkRuleParams(RULE_A3_PARAMS)).not.toThrow();
+    expect(() => checkRuleParams(RULE_A3_NB_PARAMS)).not.toThrow();
+    expect(Object.isFrozen(RULE_A3_PARAMS) && Object.isFrozen(RULE_A3_NB_PARAMS)).toBe(true);
   });
 });
