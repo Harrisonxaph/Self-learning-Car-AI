@@ -7,7 +7,8 @@ import hairpinChicane from '../../src/data/tracks/hairpin-chicane.json';
 import roundedRectangle from '../../src/data/tracks/rounded-rectangle.json';
 import stadiumOval from '../../src/data/tracks/stadium-oval.json';
 import { DEFAULT_VEHICLE_PHYSICS } from '../../src/sim/config';
-import { loadTrack, TrackFormatError } from '../../src/sim/track';
+import { advanceProgress, createProgress, forwardCrossing } from '../../src/sim/checkpoints';
+import { loadTrack, TrackFormatError, type Track, type Vec2 } from '../../src/sim/track';
 import {
   describeTrackErrors,
   loadValidatedTrack,
@@ -257,20 +258,21 @@ describe('rule 13: gates are in driving order, once around', () => {
     doc.gates = [...doc.gates.slice(0, 10), ...doc.gates.slice(0, 10)].map(clone);
     expect(rulesOf(validateTrack(doc))).toEqual(expect.arrayContaining(['gates-apart']));
   });
-  it('accepts the whole list reversed as an order, and then refuses the start (it faces the old way)', () => {
+  it('refuses the whole list reversed: the order is fine, but every gate now counts forwards the wrong way round', () => {
     const doc = oval();
     doc.gates.reverse();
-    const rules = rulesOf(validateTrack(doc));
-    expect(rules).not.toContain('gate-order');
-    expect(rules).toContain('start-heading');
+    const result = validateTrack(doc);
+    expect(messageOf(result, 'gate-order')).toContain('wrong way');
+    expect(rulesOf(result)).toContain('start-heading');
   });
 });
 
-describe('rule 14: the start faces the driving direction and is behind gate 0', () => {
+describe('rule 14: the start faces the gate-0 forward direction and is behind gate 0', () => {
   it('refuses a start that faces backwards and reports the angle', () => {
     const doc = oval();
     doc.start.heading = Math.PI;
     expect(expectRule(doc, 'start-heading')).toContain('180');
+    expect(expectRule(doc, 'start-heading')).toContain('forward direction of gate 0');
   });
   it('refuses a start that is past gate 0', () => {
     const doc = oval();
@@ -321,7 +323,7 @@ describe('all errors are collected', () => {
     const doc = oval();
     doc.start.heading = Math.PI;
     expect(() => loadValidatedTrack(doc)).toThrow(TrackFormatError);
-    expect(() => loadValidatedTrack(doc)).toThrow(/driving direction/);
+    expect(() => loadValidatedTrack(doc)).toThrow(/forward direction of gate 0/);
   });
 });
 
@@ -378,32 +380,97 @@ describe('hostile input is a refusal, never an exception', () => {
   });
 });
 
-describe('winding order and cost', () => {
-  it('accepts a mirrored track (the opposite winding)', () => {
+/** The points just ahead of each gate (in the checkpoint engine's forward direction) and the gate's midpoint. */
+function lap(track: Track): { gate: number; from: Vec2; to: Vec2 }[] {
+  const ahead = (k: number, distance: number): Vec2 => {
+    const g = track.gates[k]!;
+    const dx = g.b.x - g.a.x;
+    const dy = g.b.y - g.a.y;
+    const length = Math.hypot(dx, dy);
+    return { x: (g.a.x + g.b.x) / 2 + (dy / length) * distance, y: (g.a.y + g.b.y) / 2 - (dx / length) * distance };
+  };
+  const moves: { gate: number; from: Vec2; to: Vec2 }[] = [];
+  let from = track.start.position;
+  const order = [...track.gates.keys(), 0];
+  for (const k of order) {
+    const to = ahead(k, 0.5);
+    moves.push({ gate: k, from, to });
+    from = to;
+  }
+  return moves;
+}
+
+describe('the validated direction is the checkpoint engine\'s direction (behaviour, not only geometry)', () => {
+  /** Drive the validated circuit gate by gate through the real checkpoint code and return the final progress. */
+  function drive(data: unknown): ReturnType<typeof createProgress> {
+    const result = validateTrack(data);
+    expect(rulesOf(result)).toEqual([]);
+    const track = loadTrack(data);
+    let progress = createProgress();
+    for (const move of lap(track)) progress = advanceProgress(progress, move.from, move.to, track);
+    return progress;
+  }
+  it.each([
+    ['stadium-oval', stadiumOval],
+    ['rounded-rectangle', roundedRectangle],
+    ['hairpin-chicane', hairpinChicane],
+  ])('%s: crossing every gate in the validated direction earns one full lap of ordered credit', (_name, data) => {
+    const progress = drive(data);
+    const gates = (data as unknown as Doc).gates.length;
+    expect(progress.gatesPassed).toBe(gates + 1);
+    expect(progress.lapTicks).toHaveLength(1);
+  });
+
+  it('a track stored with the opposite boundary winding (gates unchanged) validates and earns the same credit', () => {
     const doc = oval();
-    const flip = (p: { x: number; y: number }) => ({ x: -p.x, y: p.y });
+    doc.outer.reverse();
+    doc.inner.reverse();
+    const progress = drive(doc);
+    expect(progress.gatesPassed).toBe(doc.gates.length + 1);
+  });
+
+  it('a horizontally mirrored circuit is refused, and its intended crossing earns no credit', () => {
+    const doc = oval();
+    const flip = (p: Vec2) => ({ x: -p.x, y: p.y });
     doc.outer = doc.outer.map(flip);
     doc.inner = doc.inner.map(flip);
     doc.gates = doc.gates.map((g) => ({ a: flip(g.a), b: flip(g.b) }));
     doc.start = { position: flip(doc.start.position), heading: Math.PI };
-    expect(rulesOf(validateTrack(doc))).toEqual([]);
+    const result = validateTrack(doc);
+    expect(rulesOf(result)).toEqual(expect.arrayContaining(['gate-order', 'start-heading']));
+    // The crossing a car facing the mirrored start would make (towards -x through gate 0) is not forward credit.
+    expect(forwardCrossing(doc.gates[0]!, { x: 1, y: 40 }, { x: -1, y: 40 })).toBeNull();
   });
 
-  it('validates a maximum-size valid track within a generous time and without an exception', () => {
+  it('reversing the gate list after gate 0 with a repositioned start is refused, and that crossing earns no credit', () => {
+    const doc = oval();
+    doc.gates = [doc.gates[0]!, ...doc.gates.slice(1).reverse()];
+    doc.start = { position: { x: 6, y: 40 }, heading: Math.PI };
+    expect(validateTrack(doc).ok).toBe(false);
+    expect(forwardCrossing(doc.gates[0]!, { x: 1, y: 40 }, { x: -1, y: 40 })).toBeNull();
+  });
+});
+
+describe('cost', () => {
+  it('validates a maximum-size valid track within a generous time, and it is drivable through the checkpoint engine', () => {
     const n = TRACK_LIMITS.maxPoints;
     const ring = (radius: number) => Array.from({ length: n }, (_, i) => ({ x: radius * Math.cos((2 * Math.PI * i) / n), y: radius * Math.sin((2 * Math.PI * i) / n) }));
     const outer = ring(1000);
     const inner = ring(980);
     const step = n / TRACK_LIMITS.maxGates;
-    const gates = Array.from({ length: TRACK_LIMITS.maxGates }, (_, k) => ({ a: inner[k * step]!, b: outer[k * step]! }));
-    const angle = -0.004;
+    // The outer boundary must be on the car's right: the ring is driven with the angle decreasing.
+    const gates = Array.from({ length: TRACK_LIMITS.maxGates }, (_, k) => {
+      const i = (n - k * step) % n;
+      return { a: inner[i]!, b: outer[i]! };
+    });
+    const angle = 0.004;
     const doc = {
       id: 'big-ring',
       version: '1',
       name: 'Big ring',
       outer,
       inner,
-      start: { position: { x: 990 * Math.cos(angle), y: 990 * Math.sin(angle) }, heading: angle + Math.PI / 2 },
+      start: { position: { x: 990 * Math.cos(angle), y: 990 * Math.sin(angle) }, heading: Math.atan2(-Math.cos(angle), Math.sin(angle)) },
       gates,
     };
     const started = performance.now();
@@ -412,6 +479,10 @@ describe('winding order and cost', () => {
     expect(rulesOf(result)).toEqual([]);
     expect(result.ok).toBe(true);
     expect(elapsed).toBeLessThan(5000);
+    const track = loadTrack(doc);
+    let progress = createProgress();
+    for (const move of lap(track)) progress = advanceProgress(progress, move.from, move.to, track);
+    expect(progress.gatesPassed).toBe(TRACK_LIMITS.maxGates + 1);
   });
 });
 
@@ -424,7 +495,7 @@ describe('manifest integration', () => {
     const manifest = clone(manifestData);
     manifest.tracks[0]!.contentHash = trackContentHash(loadTrack(broken));
     expect(() => loadTrackSplits(manifest, { ...FILES, 'stadium-oval.json': broken })).toThrow(TrackSplitError);
-    expect(() => loadTrackSplits(manifest, { ...FILES, 'stadium-oval.json': broken })).toThrow(/not a valid track.*driving direction/);
+    expect(() => loadTrackSplits(manifest, { ...FILES, 'stadium-oval.json': broken })).toThrow(/not a valid track.*forward direction of gate 0/);
   });
   it('a split label in a file that disagrees with the manifest fails the load', () => {
     const labelled = { ...oval(), split: 'held-out' };

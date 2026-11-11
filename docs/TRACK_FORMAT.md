@@ -27,6 +27,15 @@ Version 1 **is the shape of the three built-in files** (`src/data/tracks/*.json`
 - Boundaries are closed polylines: the last point joins back to the first, which is not repeated. Gates run in driving order from the inner boundary (`a`) to the outer boundary (`b`); gate 0 is the start/finish line.
 - **The split of a built-in track is decided by the manifest** (`src/data/tracks/index.json`). A `split` label inside a built-in file must equal the manifest's, or the manifest fails to load, so a held-out track cannot relabel itself.
 
+## Driving direction (one convention, shared with the checkpoint engine)
+
+The checkpoint engine (`src/sim/checkpoints.ts`) credits a gate only when a car crosses it **forwards**, and fixes forwards for a gate from its inner end `a` to its outer end `b` as `(dy, -dx)` of `b - a`. A car therefore drives with the **outer boundary on its right**, which on the screen (y down) is counter-clockwise for the outer polygon. The validator uses exactly this convention:
+
+- `gate-order` requires the gates to be listed in one direction round the outer boundary **and** every gate to count forwards in that same direction. A horizontally mirrored circuit, or one whose gates are listed the other way round, is **refused**, because a car driving it would cross every gate backwards and earn no checkpoint or lap.
+- `start-heading` measures against gate 0's forward direction, not against "towards gate 1".
+- **Boundary storage winding is separate.** The `outer` and `inner` arrays may be stored clockwise or counter-clockwise (reversing both point lists, with the gates unchanged, still validates and earns the same credit). Only the driving direction is fixed. To describe a circuit that must be driven the other way round, mirror it so the outer boundary is on the right.
+- Tests drive each accepted circuit through the real `advanceProgress` and require one full lap of ordered credit, and show that the refused mirrored and reversed circuits earn none.
+
 ## Rules
 
 `validateTrack(data, { physics?, minRoadWidth? })` returns `{ ok: true, track, warnings }` or `{ ok: false, errors, skipped }`. Every error is `{ rule, message }`: a stable rule id and one sentence that says what to change. All problems found are reported (the list is capped at 20 in `describeTrackErrors`, with "and N more"). It never throws. `loadValidatedTrack` returns the `Track` or throws `TrackFormatError` with the messages.
@@ -45,8 +54,8 @@ Version 1 **is the shape of the three built-in files** (`src/data/tracks/*.json`
 | `gate-count` | at least 3 gates | `gates must be an array of at least 3.` |
 | `gate-spans-road` | each gate has length, its inner end lies on the inner boundary and its outer end on the outer one (within 1e-6 m), and it crosses no boundary between its ends | `Gate 5: its outer end (…) is 0.5 m from the outer boundary; it must lie on it, so the gate spans the whole road.` |
 | `gates-apart` | no two gates touch | `Gates 5 and 6 touch each other; gates must be separate lines across the road.` |
-| `gate-order` | the gates' outer ends run one way round the loop, exactly once, in the listed order | `The gates are not in driving order once around the loop: gate 5 does not follow gate 4.` |
-| `start-heading` | the start faces within 45° of the driving direction at gate 0 (the way from gate 0 towards gate 1) and sits behind gate 0 | `The start faces 180° away from the driving direction at gate 0; it must be within 45°.` |
+| `gate-order` | the gates' outer ends run one way round the loop, exactly once, in the listed order; **and every gate counts forwards along that way** (the checkpoint engine's direction, see below) | `The gates are not in driving order once around the loop: gate 5 does not follow gate 4.` or `Gate 0 counts forwards the wrong way for the order the gates are listed in: …` |
+| `start-heading` | the start faces within 45° of gate 0's forward direction and sits behind gate 0 | `The start faces 180° away from the forward direction of gate 0 (…); it must be within 45°.` |
 
 If a wall rule (`degenerate`, `boundary-simple`, `boundaries-apart`, `inner-inside-outer`) fails, the rules that need valid walls (`road-width`, `start-on-road`, `gate-spans-road`, `gate-order`, `start-heading`) are not run and are listed in `skipped`, rather than reporting meaningless follow-on errors. `gates-apart`, `gate-count`, `identity` and `size` always run.
 

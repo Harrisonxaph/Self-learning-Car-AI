@@ -230,7 +230,8 @@ function validate(data: unknown, options: TrackValidationOptions): TrackValidati
     // Rules 11, 13 and 14: the gates.
     const located = checkGates(track, fail);
     if (located !== null) {
-      checkGateOrder(located, track.outer.length, fail);
+      const listed = checkGateOrder(located.map((l) => l.s), track.outer.length, fail);
+      if (listed !== 0) checkGateDirection(located, listed, fail);
       checkStartHeading(track, fail);
     } else {
       skipped.push('gate-order', 'start-heading');
@@ -357,8 +358,8 @@ function positionOn(points: readonly Vec2[], p: Vec2): { s: number; distance: nu
 }
 
 /** Rule 11. Returns each gate's position along the outer boundary, or null if any gate failed. */
-function checkGates(track: Track, fail: (rule: TrackRule, message: string) => void): number[] | null {
-  const positions: number[] = [];
+function checkGates(track: Track, fail: (rule: TrackRule, message: string) => void): LocatedGate[] | null {
+  const positions: LocatedGate[] = [];
   let ok = true;
   const tolerance = TRACK_LIMITS.gateTolerance;
   track.gates.forEach((gate, k) => {
@@ -397,14 +398,15 @@ function checkGates(track: Track, fail: (rule: TrackRule, message: string) => vo
         }
       }
     }
-    if (gateOk) positions.push(onOuter.s);
+    if (gateOk) positions.push({ s: onOuter.s, along: alongRoad(track, gate, onOuter.s) });
     else ok = false;
   });
   return ok ? positions : null;
 }
 
 /** Rule 13. The gates' positions along the outer boundary must run one way round the loop, once, in the listed order. */
-function checkGateOrder(positions: readonly number[], n: number, fail: (rule: TrackRule, message: string) => void): void {
+/** Returns +1 or -1 for the direction (by increasing outer-boundary index) the gates are listed in, or 0 after reporting an order error. */
+function checkGateOrder(positions: readonly number[], n: number, fail: (rule: TrackRule, message: string) => void): 1 | -1 | 0 {
   const step = (from: number, to: number, direction: 1 | -1): number => (((direction * (to - from)) % n) + n) % n;
   const attempt = (direction: 1 | -1): { sum: number; bad: number } => {
     let sum = 0;
@@ -419,35 +421,84 @@ function checkGateOrder(positions: readonly number[], n: number, fail: (rule: Tr
   const forward = attempt(1);
   const backward = attempt(-1);
   const good = (r: { sum: number; bad: number }): boolean => r.bad < 0 && Math.abs(r.sum - n) < 1e-6;
-  if (good(forward) || good(backward)) return;
+  if (good(forward)) return 1;
+  if (good(backward)) return -1;
   const best = forward.bad >= 0 && backward.bad >= 0 ? (forward.sum <= backward.sum ? forward : backward) : forward.bad >= 0 ? backward : forward;
   const i = best.bad >= 0 ? best.bad : positions.length - 1;
   fail('gate-order', `The gates are not in driving order once around the loop: gate ${(i + 1) % positions.length} does not follow gate ${i}. List the gates in the order a car passes them, going round the track one way.`);
+  return 0;
 }
 
-/** Rule 14. The start faces the way the gates go, and sits just behind gate 0. */
+/** Rule 14. The start faces the way the checkpoint engine counts gate 0 forwards, and sits just behind it. */
 function checkStartHeading(track: Track, fail: (rule: TrackRule, message: string) => void): void {
   const g0 = track.gates[0]!;
-  const g1 = track.gates[1]!;
   const m0 = { x: (g0.a.x + g0.b.x) / 2, y: (g0.a.y + g0.b.y) / 2 };
-  const m1 = { x: (g1.a.x + g1.b.x) / 2, y: (g1.a.y + g1.b.y) / 2 };
-  let nx = -(g0.b.y - g0.a.y);
-  let ny = g0.b.x - g0.a.x;
-  const length = Math.hypot(nx, ny);
-  nx /= length;
-  ny /= length;
-  if ((m1.x - m0.x) * nx + (m1.y - m0.y) * ny < 0) {
-    nx = -nx;
-    ny = -ny;
-  }
+  const [nx, ny] = forwardNormal(g0);
   const heading = track.start.heading;
   const cosine = Math.cos(heading) * nx + Math.sin(heading) * ny;
   const angle = Math.acos(Math.max(-1, Math.min(1, cosine)));
   if (angle > TRACK_LIMITS.maxStartAngle) {
-    fail('start-heading', `The start faces ${fmt((angle * 180) / Math.PI)}° away from the driving direction at gate 0; it must be within ${fmt((TRACK_LIMITS.maxStartAngle * 180) / Math.PI)}°. Turn the start to face the way the gates go.`);
+    fail('start-heading', `The start faces ${fmt((angle * 180) / Math.PI)}° away from the forward direction of gate 0 (the way a car must cross it to earn a checkpoint: the outer boundary on its right); it must be within ${fmt((TRACK_LIMITS.maxStartAngle * 180) / Math.PI)}°. Turn the start to face that way.`);
   }
   const p = track.start.position;
   if ((p.x - m0.x) * nx + (p.y - m0.y) * ny >= 0) {
-    fail('start-heading', `The start ${at(p)} is not behind gate 0; it must start before the start/finish line, in the driving direction.`);
+    fail('start-heading', `The start ${at(p)} is not behind gate 0; it must start before the start/finish line, on the side a car crosses it from.`);
+  }
+}
+
+/** One located gate: where its outer end lies along the outer boundary, and which way the gate counts forwards along it. */
+interface LocatedGate {
+  readonly s: number;
+  /** +1 if crossing the gate forwards moves in the direction of increasing outer-boundary index, -1 if decreasing, 0 if neither. */
+  readonly along: number;
+}
+
+/**
+ * The unit direction in which the checkpoint engine counts the gate: for a gate from the inner end `a` to the outer
+ * end `b` it is (dy, -dx) of b - a (sim/checkpoints.ts), so a car drives with the outer boundary on its right.
+ */
+function forwardNormal(gate: { readonly a: Vec2; readonly b: Vec2 }): [number, number] {
+  const dx = gate.b.x - gate.a.x;
+  const dy = gate.b.y - gate.a.y;
+  const length = Math.hypot(dx, dy);
+  return [dy / length, -dx / length];
+}
+
+/** Which way along the outer boundary (by increasing index) crossing the gate forwards moves. */
+function alongRoad(track: Track, gate: { readonly a: Vec2; readonly b: Vec2 }, s: number): number {
+  const n = track.outer.length;
+  const edge = (k: number): [number, number] => {
+    const a = track.outer[((k % n) + n) % n]!;
+    const b = track.outer[(((k + 1) % n) + n) % n]!;
+    const length = Math.hypot(b.x - a.x, b.y - a.y);
+    return [(b.x - a.x) / length, (b.y - a.y) / length];
+  };
+  const k = Math.floor(s);
+  const fraction = s - k;
+  let tangent: [number, number];
+  if (fraction < 1e-9) {
+    const before = edge(k - 1);
+    const after = edge(k);
+    tangent = [before[0] + after[0], before[1] + after[1]];
+  } else if (fraction > 1 - 1e-9) {
+    const before = edge(k);
+    const after = edge(k + 1);
+    tangent = [before[0] + after[0], before[1] + after[1]];
+  } else {
+    tangent = edge(k);
+  }
+  const [nx, ny] = forwardNormal(gate);
+  const dot = nx * tangent[0] + ny * tangent[1];
+  return Math.abs(dot) < 1e-6 ? 0 : Math.sign(dot);
+}
+
+/**
+ * Rule 13 (direction). The listed order runs one way round the outer boundary; every gate must count forwards that same
+ * way, or a car driving the circuit would cross each gate backwards and earn no checkpoint.
+ */
+function checkGateDirection(located: readonly LocatedGate[], listed: 1 | -1, fail: (rule: TrackRule, message: string) => void): void {
+  const wrong = located.findIndex((l) => l.along !== listed);
+  if (wrong >= 0) {
+    fail('gate-order', `Gate ${wrong} counts forwards the wrong way for the order the gates are listed in: the checkpoint engine credits a gate only when the car crosses it with the outer boundary on its right (a gate runs from its inner end a to its outer end b). Drive the circuit the other way round, or mirror the track so the outer boundary is on the right.`);
   }
 }
