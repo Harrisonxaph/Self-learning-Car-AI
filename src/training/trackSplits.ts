@@ -18,6 +18,7 @@ import hairpinChicane from '../data/tracks/hairpin-chicane.json';
 import roundedRectangle from '../data/tracks/rounded-rectangle.json';
 import stadiumOval from '../data/tracks/stadium-oval.json';
 import { loadTrack, type Track } from '../sim/track';
+import { describeTrackErrors, validateTrack } from '../sim/trackValidation';
 import { sha256Hex } from '../utils/sha256';
 
 export const TRACK_SPLITS_FORMAT = 'self-driving-ai-evolution/track-splits';
@@ -102,6 +103,10 @@ export function loadTrackSplits(manifest: unknown, files: Readonly<Record<string
     } catch (error) {
       return fail(`file "${file}" for track "${id}" does not load: ${(error as Error).message}`);
     }
+    const geometry = validateTrack(files[file!]);
+    if (!geometry.ok) fail(`file "${file}" for track "${id}" is not a valid track: ${describeTrackErrors(geometry.errors)}`);
+    const label = (files[file!] as { split?: unknown }).split;
+    if (label !== undefined && label !== split) fail(`file "${file}" for track "${id}" is labelled "${String(label)}", but the manifest says "${split}" (the manifest decides the split).`);
     if (track.id !== id) fail(`file "${file}" has id "${track.id}", but the manifest says "${id}".`);
     if (track.version !== version) fail(`track "${id}" has version "${track.version}", but the manifest says "${version}".`);
     const actual = trackContentHash(track);
