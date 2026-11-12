@@ -815,3 +815,35 @@ html.evaluating .stage {
 .ev-table thead th {
   color: #9fb0c0;
 }
+
+/* Camera controls (P4-07): the same 44 px buttons as the training controls, in one compact row under the canvas. */
+.camera-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.2rem 0.5rem;
+}
+
+.camera-controls .tc-button:disabled {
+  opacity: 0.55;
+}
+
+.camera-controls .tc-button[aria-pressed='true'] {
+  outline: 2px solid #ffb000;
+}
+
+.camera-status {
+  flex: 1 1 8rem;
+  font-size: 0.85rem;
+}
+
+#sim-canvas:focus-visible {
+  outline: 3px solid #ffb000;
+  outline-offset: -3px;
+}
+
+html.editing .camera-controls,
+html.evaluating .camera-controls {
+  display: none;
+}
