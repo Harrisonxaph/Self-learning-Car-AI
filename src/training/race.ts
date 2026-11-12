@@ -8,7 +8,7 @@
 // trajectory in a race is identical to its solo run on the same circuit under the same rules, whatever the human does.
 //
 // The race ends for a car when it completes the chosen laps (`completed`), touches a wall (`crashed`), goes
-// stallSeconds without a new gate credit (`stalled`) or the race clock runs out (`timeout`, RACE_SECONDS_PER_LAP per
+// RACE_STALL_SECONDS without a new gate credit (`stalled`) or the race clock runs out (`timeout`, RACE_SECONDS_PER_LAP per
 // chosen lap). The same rules judge both cars. Nothing here draws, reads a clock or stores anything; a countdown,
 // a camera and drawing are the page's concern and never enter this module.
 import { createNetworkDriver, type EpisodeDriver } from '../ai/drivers';
@@ -23,6 +23,13 @@ import { resolveEpisodeRules, type EpisodeOutcome } from './fitness';
 /** Race clock per chosen lap, in simulated seconds (the P5-03 plan's proposal; the result records the limit it used). */
 export const RACE_SECONDS_PER_LAP = 60;
 
+/**
+ * The race's own stall limit, in simulated seconds without a new gate credit, for BOTH cars (the P5-03 plan, section 3 and decision 4). It is not
+ * read from the champion: only its physics, timestep and brake setting are inherited, so a model saved with another training stall limit
+ * races under the same rule as every other.
+ */
+export const RACE_STALL_SECONDS = 5;
+
 /** Laps a race may be set to: whole laps, at least 1 and at most this. */
 export const MAX_RACE_LAPS = 10;
 
@@ -31,8 +38,6 @@ export interface RaceInput {
   /** The champion's own recorded physics and timestep: both cars drive under them. */
   readonly physics: VehiclePhysics;
   readonly timestepSeconds: number;
-  /** The champion's own stall limit in simulated seconds, applied to both cars. */
-  readonly stallSeconds: number;
   /** Whole laps the race is run over. */
   readonly laps: number;
   /** The champion's parameters (copied). */
@@ -59,7 +64,7 @@ export interface RaceState {
   readonly ai: EpisodeState;
 }
 
-/** The checked setup for a race. Throws RangeError naming the field for a lap count that is not a whole number in [1, MAX_RACE_LAPS], or an unusable timestep or stall limit. */
+/** The checked setup for a race. Throws RangeError naming the field for a lap count that is not a whole number in [1, MAX_RACE_LAPS], or an unusable timestep. */
 export function createRaceSetup(input: RaceInput): RaceSetup {
   if (input === null || typeof input !== 'object') throw new RangeError('A race needs a setup object.');
   const { laps } = input;
@@ -69,7 +74,7 @@ export function createRaceSetup(input: RaceInput): RaceSetup {
   if (typeof input.brakeEnabled !== 'boolean') throw new RangeError('A race needs "brakeEnabled" to be true or false.');
   const raceSeconds = RACE_SECONDS_PER_LAP * laps;
   const rules = resolveEpisodeRules(
-    { maxEpisodeSeconds: raceSeconds, stallSeconds: input.stallSeconds, maxLaps: laps },
+    { maxEpisodeSeconds: raceSeconds, stallSeconds: RACE_STALL_SECONDS, maxLaps: laps },
     input.timestepSeconds,
   );
   const genome = Float64Array.from(input.genome);

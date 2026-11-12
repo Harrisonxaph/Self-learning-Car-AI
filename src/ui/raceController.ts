@@ -284,7 +284,6 @@ export function createRaceController(deps: RaceDeps): RaceController {
           track: circuit.track,
           physics: c.physics,
           timestepSeconds: c.timestepSeconds,
-          stallSeconds: c.stallSeconds,
           laps: lapCount,
           genome: modelParameters(loaded.model),
           brakeEnabled: c.brakeEnabled,

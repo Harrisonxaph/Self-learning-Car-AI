@@ -265,9 +265,24 @@ describe('storage trouble', () => {
   });
 });
 
+describe('a champion saved with another training stall limit races under the five-second rule', () => {
+  it.each([0.1, 1, 30])('stallSeconds %s in the saved model does not change the race cutoff', (stall) => {
+    const storage = new MemoryStorage();
+    const store = createModelStore({ storage: () => storage, registry: TRAINING_REGISTRY, evaluationTracks: EVALUATION_TRACKS, evaluationBinding: entryBelongsTo });
+    const model = makeModel(21, 'rc-stall') as unknown as { training: { configuration: { stallSeconds: number } } };
+    model.training.configuration.stallSeconds = stall;
+    expect(store.save(model as never).ok).toBe(true);
+    const controller = createRaceController({ store, trainingCircuits: names('training'), validationCircuits: names('validation') });
+    controller.select('rc-stall');
+    expect(controller.start()).toBe(true);
+    const dt = controller.view()!.setup.context.environment.timestepSeconds;
+    expect(controller.view()!.setup.context.rules.stallTicks).toBe(Math.ceil(5 / dt - 1e-9));
+  });
+});
+
 describe("the frame clock follows the champion's own timestep", () => {
   const setupFor = (timestepSeconds: number) =>
-    createRaceSetup({ track: loadTrack(stadiumOval), physics: DEFAULT_VEHICLE_PHYSICS, timestepSeconds, stallSeconds: 5, laps: 1, genome: new Float64Array(PARAMETER_COUNT), brakeEnabled: true });
+    createRaceSetup({ track: loadTrack(stadiumOval), physics: DEFAULT_VEHICLE_PHYSICS, timestepSeconds, laps: 1, genome: new Float64Array(PARAMETER_COUNT), brakeEnabled: true });
   it('a 0.1 s champion gets 10 ticks per real second, not 60 (which would run the race six times too fast)', () => {
     const slow = createFixedStepClock(raceClockConfig(setupFor(0.1)));
     expect(slow.advance(0.5)).toBe(5);

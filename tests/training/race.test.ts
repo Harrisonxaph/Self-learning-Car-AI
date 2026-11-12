@@ -16,6 +16,7 @@ import {
   createRaceRunner,
   createRaceSetup,
   MAX_RACE_LAPS,
+  RACE_STALL_SECONDS,
   raceDone,
   raceResult,
   RACE_SECONDS_PER_LAP,
@@ -36,7 +37,6 @@ const input = (over: Partial<RaceInput> = {}): RaceInput => ({
   track,
   physics: DEFAULT_VEHICLE_PHYSICS,
   timestepSeconds: DT,
-  stallSeconds: 5,
   laps: 1,
   genome: genome(1),
   brakeEnabled: true,
@@ -79,6 +79,7 @@ describe('createRaceSetup', () => {
     expect(setup.raceSeconds).toBe(3 * RACE_SECONDS_PER_LAP);
     expect(setup.context.rules.maxLaps).toBe(3);
     expect(setup.context.rules.maxEpisodeTicks).toBe(Math.ceil((180 / DT) - 1e-9));
+    expect(RACE_STALL_SECONDS).toBe(5);
     expect(setup.context.rules.stallTicks).toBe(Math.ceil(5 / DT - 1e-9));
     expect(setup.context.environment.physics).toBe(DEFAULT_VEHICLE_PHYSICS);
     expect(setup.context.environment.timestepSeconds).toBe(DT);
@@ -92,7 +93,6 @@ describe('createRaceSetup', () => {
     expect(() => createRaceSetup(input({ genome: Float64Array.from({ length: PARAMETER_COUNT }, () => NaN) }))).toThrow(RangeError);
     expect(() => createRaceSetup(input({ brakeEnabled: 'yes' as unknown as boolean }))).toThrow(/brakeEnabled/);
     expect(() => createRaceSetup(input({ timestepSeconds: 0 }))).toThrow(RangeError);
-    expect(() => createRaceSetup(input({ stallSeconds: NaN }))).toThrow(RangeError);
     expect(() => createRaceSetup(null as unknown as RaceInput)).toThrow(RangeError);
   });
 
@@ -102,6 +102,26 @@ describe('createRaceSetup', () => {
     const before = Array.from(setup.genome);
     g.fill(0);
     expect(Array.from(setup.genome)).toEqual(before);
+  });
+});
+
+describe("the stall rule is the race's own: five seconds for both cars, whatever the champion was trained with", () => {
+  it("does not depend on the champion (the input has no stall field), at any timestep", () => {
+    for (const dt of [1 / 60, 0.05, 0.1]) {
+      const setup = createRaceSetup(input({ timestepSeconds: dt }));
+      expect(setup.context.rules.stallTicks).toBe(Math.ceil(5 / dt - 1e-9));
+      expect(setup.context.rules.stallTicks * dt).toBeGreaterThanOrEqual(5 - 1e-9);
+    }
+    const extra = createRaceSetup({ ...input(), stallSeconds: 0.1 } as RaceInput);
+    expect(extra.context.rules.stallTicks).toBe(createRaceSetup(input()).context.rules.stallTicks);
+  });
+  it('an idle human and an idle AI are both stalled at the same tick', () => {
+    const setup = createRaceSetup({ ...input({ genome: genome(5) }), stallSeconds: 0.1 } as RaceInput);
+    const states = run(setup, () => IDLE, 4000);
+    const last = states[states.length - 1]!;
+    expect(last.human.episode.outcome).toBe('stalled');
+    expect(last.human.episode.tick).toBe(Math.ceil(5 / DT - 1e-9));
+    expect(last.ai.episode.tick).toBe(Math.ceil(5 / DT - 1e-9));
   });
 });
 
