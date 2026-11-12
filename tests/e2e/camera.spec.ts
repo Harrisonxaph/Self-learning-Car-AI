@@ -191,3 +191,25 @@ test('the editor and the evaluate page show no camera controls', async ({ page }
   await expect(page.locator('#evaluate-panel')).toBeVisible();
   await expect(page.locator('#camera-controls')).toBeHidden();
 });
+
+test('Space and Enter activate a focused camera button on the driving page, instead of braking', async ({ page }) => {
+  await openDrive(page);
+  await page.locator('#cam-in').focus();
+  const z0 = await num(page, 'cameraZoom');
+  await page.keyboard.press('Space');
+  await expect.poll(() => num(page, 'cameraZoom')).toBeGreaterThan(z0);
+  const z1 = await num(page, 'cameraZoom');
+  await page.keyboard.press('Enter');
+  await expect.poll(() => num(page, 'cameraZoom')).toBeGreaterThan(z1);
+  await page.locator('#cam-follow').focus();
+  await page.keyboard.press('Space');
+  await expect(page.locator('#cam-follow')).toHaveAttribute('aria-pressed', 'true');
+  await page.locator('#cam-fit').focus();
+  await page.keyboard.press('Space');
+  await expect.poll(async () => (await data(page)).cameraMode).toBe('fit');
+  // the brake was never held: pressing Space on a button leaves the car free to be driven away at once
+  await page.keyboard.down('ArrowUp');
+  await page.waitForTimeout(700);
+  await page.keyboard.up('ArrowUp');
+  expect(await num(page, 'carSpeed')).toBeGreaterThan(0);
+});
