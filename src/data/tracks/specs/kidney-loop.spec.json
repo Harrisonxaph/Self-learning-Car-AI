@@ -1,0 +1,13 @@
+{
+  "id": "kidney-loop",
+  "version": "1",
+  "name": "Kidney loop",
+  "width": 12,
+  "half": [
+    { "type": "arc", "turn": "left", "radius": 100, "degrees": 50 },
+    { "type": "arc", "turn": "left", "radius": 70, "degrees": 70 },
+    { "type": "arc", "turn": "right", "radius": 90, "degrees": 25 },
+    { "type": "arc", "turn": "left", "radius": 30, "degrees": 85 }
+  ],
+  "solve": { "segment": 0, "field": "radius", "range": [20, 900] }
+}

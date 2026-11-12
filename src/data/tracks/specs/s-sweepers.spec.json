@@ -1,0 +1,15 @@
+{
+  "id": "s-sweepers",
+  "version": "1",
+  "name": "S sweepers",
+  "width": 13,
+  "half": [
+    { "type": "straight", "length": 10 },
+    { "type": "arc", "turn": "left", "radius": 60, "degrees": 30 },
+    { "type": "arc", "turn": "right", "radius": 60, "degrees": 15 },
+    { "type": "straight", "length": 10 },
+    { "type": "arc", "turn": "left", "radius": 60, "degrees": 165 },
+    { "type": "straight", "length": 0 }
+  ],
+  "solve": { "segment": 5, "field": "length", "range": [0, 400] }
+}

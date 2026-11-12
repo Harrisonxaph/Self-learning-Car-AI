@@ -40,7 +40,7 @@ const expected = (c: (typeof CANDIDATES)[number]) => {
     seeds: [...PILOT_SEEDS],
     configuration: { generations: c.generations, episodesPerTrack: setup.config.populationSize, holdTicks: 30, training },
     streams: currentStreams(),
-    tracks: trackReferences('stadium-oval', 'rounded-rectangle'),
+    tracks: trackReferences('stadium-oval', 'rounded-rectangle', 1),
     metric: METRIC,
     analysis: { delta: 0.25, bootstrap: { ...BOOTSTRAP }, wilcoxon: WILCOXON, decisionRule: DECISION_RULE },
     code: { revision: FROZEN_REVISION },

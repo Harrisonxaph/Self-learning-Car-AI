@@ -18,7 +18,7 @@ import { A5_SELECTION } from './agents';
 import { bootstrapMeanInterval, iqr, median } from './analysis';
 import { episodeResult, resolveBaselineConfig, type EpisodeResult } from './baselines';
 import { createEvaluationSetup, evaluateDriver, type EvaluationSetup } from './evaluation';
-import { canonicalJson, jsonDifferences, manifestRecord, type ExperimentEngine, type ExperimentSource } from './experiment';
+import { canonicalJson, jsonDifferences, manifestEpochOf, manifestRecord, type ExperimentEngine, type ExperimentSource } from './experiment';
 import {
   createHeldOutGate,
   createMemoryLedger,
@@ -62,7 +62,7 @@ import {
   type Json,
   type StudyContext,
 } from './study';
-import { BUILT_IN_TRACK_SPLITS, freezeModel, trackContentHash, trainingTrack, validationTrack, type FrozenModel, type TrackSplits } from './trackSplits';
+import { BUILT_IN_TRACK_SPLITS, epochIds, freezeModel, LATEST_SPLIT_EPOCH, trackContentHash, trainingTrack, validationTrack, type FrozenModel, type TrackSplits } from './trackSplits';
 import { DEFAULT_SIM_CONFIG, DEFAULT_VEHICLE_PHYSICS } from '../sim/config';
 
 export const E3_MANIFEST_FORMAT = 'self-driving-ai-evolution/p5-01-e3-manifest';
@@ -158,7 +158,14 @@ export function parseE3Manifest(input: unknown, splits: TrackSplits = BUILT_IN_T
   // trainingTrack / validationTrack throw TrackLeakageError for a circuit outside its split, held-out included.
   same(trainingRef, { id: str(trainingRef.id, 'manifest.tracks.training.id', fail), contentHash: trackContentHash(trainingTrack(trainingRef.id as string, splits)) }, 'manifest.tracks.training', fail);
   same(validationRef, { id: str(validationRef.id, 'manifest.tracks.validation.id', fail), contentHash: trackContentHash(validationTrack(validationRef.id as string, splits)) }, 'manifest.tracks.validation', fail);
-  same(t.splitManifestHash, manifestRecord(splits).hash, 'manifest.tracks.splitManifestHash', fail);
+  // The built-in registry: the manifest names a split epoch by its hash, and every circuit it lists must belong to that epoch.
+  const epoch = splits === BUILT_IN_TRACK_SPLITS ? manifestEpochOf(t.splitManifestHash) ?? LATEST_SPLIT_EPOCH : undefined;
+  same(t.splitManifestHash, manifestRecord(splits, epoch).hash, 'manifest.tracks.splitManifestHash', fail);
+  if (epoch !== undefined) {
+    for (const id of [trainingRef.id as string, validationRef.id as string, ...dense(t.heldOut, 'manifest.tracks.heldOut', fail).map((h) => (h as { id?: unknown }).id as string)]) {
+      if (!epochIds(epoch).includes(id)) fail(`manifest.tracks lists "${id}", which is not part of the track set (split epoch ${epoch}) the manifest names.`);
+    }
+  }
   const heldList = dense(t.heldOut, 'manifest.tracks.heldOut', fail).map((h, i) => {
     const ref = exact(h, `manifest.tracks.heldOut[${i}]`, ['id', 'contentHash'], fail);
     const entry = splits.tracks.find((x) => x.id === ref.id);

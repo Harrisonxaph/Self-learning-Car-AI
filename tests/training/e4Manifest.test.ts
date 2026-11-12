@@ -56,7 +56,7 @@ const expected = (): Json => {
     seeds: [2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010],
     configuration: { generations: 100, training },
     streams: currentStreams(),
-    tracks: trackReferences('stadium-oval', 'rounded-rectangle'),
+    tracks: trackReferences('stadium-oval', 'rounded-rectangle', 1),
     metric: METRIC,
     analysis: { delta: 0.25, bootstrap: { resamples: 10_000, seed: 20261103, level: 0.95, method: 'percentile-nearest-rank-v1' }, wilcoxon: WILCOXON, decisionRule: 'p2-09-e4-decision-v1', brakeUsageThreshold: 0.05 },
     code: { revision: FROZEN_REVISION },
@@ -142,7 +142,7 @@ describe('training and validation are kept apart; no held-out track', () => {
   it('names a training and a validation track by split, and never the held-out track', () => {
     const raw = readFileSync(MANIFEST_PATH, 'utf8');
     expect(raw).not.toContain('hairpin-chicane');
-    expect(load().tracks).toEqual(trackReferences('stadium-oval', 'rounded-rectangle'));
+    expect(load().tracks).toEqual(trackReferences('stadium-oval', 'rounded-rectangle', 1));
   });
 
   it.each([

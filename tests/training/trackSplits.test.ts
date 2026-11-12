@@ -5,8 +5,8 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import manifestData from '../../src/data/tracks/index.json';
+import { BUILT_IN_FILES } from '../helpers/builtInTrackFiles';
 import hairpinChicane from '../../src/data/tracks/hairpin-chicane.json';
-import roundedRectangle from '../../src/data/tracks/rounded-rectangle.json';
 import stadiumOval from '../../src/data/tracks/stadium-oval.json';
 import { createProgress, forwardCrossing, stepRacer, type Racer } from '../../src/sim/checkpoints';
 import { createCar, segmentsTouch } from '../../src/sim/collision';
@@ -35,7 +35,7 @@ import { createTrainer, DEFAULT_TRAINING_CONFIG } from '../../src/training/train
 import { sha256Hex } from '../../src/utils/sha256';
 
 const PHYSICS = DEFAULT_VEHICLE_PHYSICS;
-const FILES = { 'stadium-oval.json': stadiumOval, 'rounded-rectangle.json': roundedRectangle, 'hairpin-chicane.json': hairpinChicane };
+const FILES = BUILT_IN_FILES;
 const clone = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
 const env = (track: Track) => ({ track, physics: PHYSICS, timestepSeconds: DEFAULT_SIM_CONFIG.timestepSeconds });
 
@@ -151,6 +151,11 @@ const BUILT_IN = [
   { id: 'stadium-oval', split: 'training', width: 14, gates: 20, radius: [38, 42], rightTurns: false },
   { id: 'rounded-rectangle', split: 'validation', width: 12, gates: 14, radius: [14, 16], rightTurns: false },
   { id: 'hairpin-chicane', split: 'held-out', width: 11, gates: 18, radius: [11, 13], rightTurns: true },
+  // P4-04: radius is the tightest centre-line radius the corners() helper finds (a chord estimate, so a little below the true one).
+  { id: 'kidney-loop', split: 'training', width: 12, gates: 17, radius: [20, 40], rightTurns: true },
+  { id: 's-sweepers', split: 'validation', width: 13, gates: 23, radius: [50, 62], rightTurns: true },
+  { id: 'long-sweepers', split: 'held-out', width: 10, gates: 24, radius: [50, 62], rightTurns: false },
+  { id: 'technical-narrow', split: 'held-out', width: 8, gates: 23, radius: [15, 30], rightTurns: true },
 ] as const;
 
 describe('the built-in circuits', () => {
@@ -229,8 +234,9 @@ describe('the built-in circuits', () => {
       return { id, minRadius: Math.round(minRadius), right: rightTurns > 0, width: Math.round(minWidth(track)), gates: track.gates.length };
     });
     expect(signatures.map((s) => s.right)).toEqual(BUILT_IN.map((b) => b.rightTurns)); // only held-out turns right
-    expect(new Set(signatures.map((s) => s.minRadius)).size).toBe(3);
-    expect(new Set(signatures.map((s) => s.width)).size).toBe(3);
+    // Seven circuits: every width is one of 8, 10, 11, 12, 13, 14 m (two are 12 m) and no two circuits share a tightest radius, a width and a gate count.
+    expect(new Set(signatures.map((s) => `${s.minRadius}/${s.width}/${s.gates}`)).size).toBe(BUILT_IN.length);
+    expect(new Set(signatures.map((s) => s.width)).size).toBeGreaterThanOrEqual(6);
   });
 });
 
@@ -258,7 +264,7 @@ describe('loadTrackSplits', () => {
     ['an unknown split', (m: ReturnType<typeof manifest>) => void (m.tracks[1]!.split = 'test'), /unknown split "test"/],
     ['a track in two splits', (m: ReturnType<typeof manifest>) => void m.tracks.push({ ...m.tracks[0]!, split: 'validation', file: 'copy.json' }), /listed more than once/],
     ['a file listed twice', (m: ReturnType<typeof manifest>) => void m.tracks.push({ ...m.tracks[0]!, id: 'other' }), /file "stadium-oval.json" is listed more than once/],
-    ['an empty split', (m: ReturnType<typeof manifest>) => void m.tracks.splice(2, 1), /"held-out" split has no tracks/],
+    ['an empty split', (m: ReturnType<typeof manifest>) => void (m.tracks = m.tracks.filter((t) => t.split !== 'held-out')), /"held-out" split has no tracks/],
     ['a missing file', (m: ReturnType<typeof manifest>) => void (m.tracks[1]!.file = 'nowhere.json'), /missing/],
     ['an ID that differs from the file', (m: ReturnType<typeof manifest>) => void (m.tracks[1]!.id = 'square'), /has id "rounded-rectangle"/],
     ['a version that differs from the file', (m: ReturnType<typeof manifest>) => void (m.tracks[1]!.version = '2'), /version "1"/],
@@ -289,9 +295,9 @@ describe('loadTrackSplits', () => {
 
 describe('split boundaries', () => {
   it('lists each split and gives each accessor only its own split', () => {
-    expect(tracksIn('training').map((t) => t.id)).toEqual(['stadium-oval']);
-    expect(tracksIn('validation').map((t) => t.id)).toEqual(['rounded-rectangle']);
-    expect(tracksIn('held-out').map((t) => t.id)).toEqual(['hairpin-chicane']);
+    expect(tracksIn('training').map((t) => t.id)).toEqual(['stadium-oval', 'kidney-loop']);
+    expect(tracksIn('validation').map((t) => t.id)).toEqual(['rounded-rectangle', 's-sweepers']);
+    expect(tracksIn('held-out').map((t) => t.id)).toEqual(['hairpin-chicane', 'long-sweepers', 'technical-narrow']);
     expect(() => tracksIn('test' as never)).toThrow(TrackLeakageError);
     expect(trainingTrack('stadium-oval').id).toBe('stadium-oval');
     expect(validationTrack('rounded-rectangle').id).toBe('rounded-rectangle');
