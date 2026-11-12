@@ -895,7 +895,7 @@ Dependencies are taken from the table above.
 
 - **Priority:** P1 · **Status:** Complete (owner-reported iPhone and iPad checks passed and owner completion approval 2026-11-12; see the changelog row of that date) · **Issue:** [#30](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/30) · **Stretch target:** ST3
 - **Plan (merged, implementation authorised):** [`docs/plans/p4-03-plan.md`](plans/p4-03-plan.md) (merged in #169 after Codex technical approval at `31adfb5`). Relayed owner instruction (Claude Code, 2026-11-12), recorded on [#30](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/30#issuecomment-6827526776): "Start p4-03".
-- **Implementation:** `feat/p4-03-custom-tracks` (a track store with the model store's safety rules, a held-out boundary that refuses every built-in layout and ID uniformly, saved tracks in the editor and as evaluation circuits). Not Complete: the owner's iPad and iPhone checks (plan section 7) are outstanding.
+- **Implementation:** `feat/p4-03-custom-tracks` (a track store with the model store's safety rules, a held-out boundary that refuses every built-in layout and ID uniformly, saved tracks in the editor and as evaluation circuits). Complete (2026-11-12): the owner-reported iPhone and iPad checks (plan section 7) passed and the owner approved completion; see the changelog row of that date and the device record in `docs/TESTING.md`.
 - **Depends on:** P4-01, P4-05
 - **Description:** Store custom tracks in localStorage with JSON export/import, using the same safety rules as models, and make saved custom tracks selectable in the P4-05 evaluation runner.
 - **Acceptance criteria:**
@@ -953,7 +953,7 @@ Dependencies are taken from the table above.
 
 - **Priority:** P1 · **Status:** In Review · **Issue:** [#58](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/58)
 - **Plan (merged, implementation authorised):** [`docs/plans/p4-07-plan.md`](plans/p4-07-plan.md) (merged in #171 after Codex technical approval at `6541fc6`). Relayed owner instruction (Claude Code, 2026-11-12), recorded on [#58](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/58#issuecomment-6831876132): "Continue development" (after #170 and #171 merged), read as authorising implementation of the next item with a merged plan.
-- **Implementation:** `feat/p4-07-camera` (a pure render-only camera, gestures and controls on the race canvas, follow targets, results proven unchanged). Not Complete: the owner's iPhone and iPad checks and the reference-device draw-time measurement (plan section 6) are outstanding.
+- **Implementation:** `feat/p4-07-camera` (a pure render-only camera, gestures and controls on the race canvas, follow targets, results proven unchanged). Not Complete: the owner-reported iPhone and iPad checks passed (2026-11-12, see the changelog and `docs/TESTING.md`), but the reference-device draw-time measurement (plan section 6) has not been taken, so it stays In Review.
 - **Depends on:** P1-04, P2-05
 - **Description:** A render-only camera with fit-whole-track, zoom and follow-a-car (default: current best car) modes, so large circuits stay legible on phones. Silverstone is about 1.0 × 1.7 km, so a fitted 4 m car is about 1 px on a phone. The camera never changes simulation state, sensors or results.
 - **Acceptance criteria:**
