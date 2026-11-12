@@ -37,24 +37,30 @@ export function startEvaluatePage(controller: EvaluateController): EvaluatePage 
     cleanups.push(() => target.removeEventListener(type, handler));
   };
 
+  let modelSignature = '';
   const renderModels = (): void => {
     const models = controller.models();
     const chosen = controller.selected();
-    const options: HTMLOptionElement[] = [];
-    const none = document.createElement('option');
-    none.value = '';
-    none.textContent = models.length === 0 ? 'No saved champions' : 'Choose a champion…';
-    options.push(none);
-    for (const m of models) {
-      const option = document.createElement('option');
-      option.value = m.id;
-      option.textContent = m.usable ? m.label : `${m.label} (cannot be run)`;
-      options.push(option);
+    // The options are rebuilt only when the list itself changes, so a focused select is never replaced under the person.
+    const signature = JSON.stringify(models.map((m) => [m.id, m.label, m.usable]));
+    if (signature !== modelSignature) {
+      modelSignature = signature;
+      const options: HTMLOptionElement[] = [];
+      const none = document.createElement('option');
+      none.value = '';
+      none.textContent = models.length === 0 ? 'No saved champions' : 'Choose a champion…';
+      options.push(none);
+      for (const m of models) {
+        const option = document.createElement('option');
+        option.value = m.id;
+        option.textContent = m.usable ? m.label : `${m.label} (cannot be run)`;
+        options.push(option);
+      }
+      select.replaceChildren(...options);
     }
-    select.replaceChildren(...options);
-    select.value = chosen ?? '';
+    if (select.value !== (chosen ?? '')) select.value = chosen ?? '';
     const current = models.find((m) => m.id === chosen);
-    note.textContent =
+    const text =
       models.length === 0
         ? 'No saved champions yet. Save one in the training view (?mode=train), then come back.'
         : current === undefined
@@ -62,43 +68,50 @@ export function startEvaluatePage(controller: EvaluateController): EvaluatePage 
           : current.usable
             ? `Trained on ${current.trainedOn ?? 'an unknown circuit'}.`
             : (current.reason ?? 'This champion cannot be run.');
+    if (note.textContent !== text) note.textContent = text;
   };
 
-  let circuitSignature = '';
+  // The circuit checkboxes are built ONCE and then updated in place: replacing a focused checkbox would drop keyboard focus.
+  const boxes = new Map<string, { box: HTMLInputElement; text: HTMLSpanElement; name: string }>();
   const renderCircuits = (): void => {
     const circuits = controller.circuits();
     const running = controller.state() === 'running';
-    const signature = JSON.stringify(circuits.map((c) => [c.id, c.checked, c.trainedOn])) + running;
-    if (signature === circuitSignature) return;
-    circuitSignature = signature;
-    const groups: [string, 'training' | 'validation'][] = [['Other training circuits', 'training'], ['Validation circuits', 'validation']];
-    circuitList.replaceChildren(
-      ...groups.map(([title, split]) => {
-        const group = document.createElement('div');
-        group.className = 'ev-group';
-        group.setAttribute('role', 'group');
-        group.setAttribute('aria-label', title);
-        const heading = document.createElement('p');
-        heading.className = 'ev-group-title';
-        heading.textContent = title;
-        group.append(heading);
-        for (const c of circuits.filter((x) => x.split === split)) {
-          const label = document.createElement('label');
-          label.className = 'ev-circuit';
-          const box = document.createElement('input');
-          box.type = 'checkbox';
-          box.checked = c.checked;
-          box.disabled = running;
-          box.dataset.circuit = c.id;
-          box.addEventListener('change', () => controller.toggle(c.id));
-          const text = document.createElement('span');
-          text.textContent = c.trainedOn ? `${c.name} (the training circuit)` : c.name;
-          label.append(box, text);
-          group.append(label);
-        }
-        return group;
-      }),
-    );
+    if (boxes.size === 0) {
+      const groups: [string, 'training' | 'validation'][] = [['Other training circuits', 'training'], ['Validation circuits', 'validation']];
+      circuitList.replaceChildren(
+        ...groups.map(([title, split]) => {
+          const group = document.createElement('div');
+          group.className = 'ev-group';
+          group.setAttribute('role', 'group');
+          group.setAttribute('aria-label', title);
+          const heading = document.createElement('p');
+          heading.className = 'ev-group-title';
+          heading.textContent = title;
+          group.append(heading);
+          for (const c of circuits.filter((x) => x.split === split)) {
+            const label = document.createElement('label');
+            label.className = 'ev-circuit';
+            const box = document.createElement('input');
+            box.type = 'checkbox';
+            box.dataset.circuit = c.id;
+            box.addEventListener('change', () => controller.toggle(c.id));
+            const text = document.createElement('span');
+            label.append(box, text);
+            group.append(label);
+            boxes.set(c.id, { box, text, name: c.name });
+          }
+          return group;
+        }),
+      );
+    }
+    for (const c of circuits) {
+      const entry = boxes.get(c.id);
+      if (!entry) continue;
+      if (entry.box.checked !== c.checked) entry.box.checked = c.checked;
+      if (entry.box.disabled !== running) entry.box.disabled = running;
+      const text = c.trainedOn ? `${entry.name} (the training circuit)` : entry.name;
+      if (entry.text.textContent !== text) entry.text.textContent = text;
+    }
   };
 
   const cell = (text: string): HTMLTableCellElement => {
@@ -126,12 +139,20 @@ export function startEvaluatePage(controller: EvaluateController): EvaluatePage 
     return tr;
   };
 
+  let wasRunning = false;
   const render = (): void => {
     renderModels();
     renderCircuits();
+    const running = controller.state() === 'running';
+    // Keyboard focus follows the work: Run is disabled while running, so focus moves to Cancel, and back to Run when it ends.
+    const runHadFocus = document.activeElement === run;
+    const cancelHadFocus = document.activeElement === cancel;
     run.disabled = !controller.canRun();
-    cancel.disabled = controller.state() !== 'running';
-    select.disabled = controller.state() === 'running';
+    cancel.disabled = !running;
+    select.disabled = running;
+    if (running && !wasRunning && runHadFocus) cancel.focus();
+    if (!running && wasRunning && (cancelHadFocus || document.activeElement === document.body)) (run.disabled ? select : run).focus();
+    wasRunning = running;
     progress.textContent = controller.progress();
     message.textContent = controller.message();
     const results = controller.results();

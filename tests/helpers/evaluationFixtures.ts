@@ -5,13 +5,17 @@ import { loadTrack } from '../../src/sim/track';
 import { buildModel, type ModelDocument } from '../../src/persistence/modelFormat';
 import type { StorageLike } from '../../src/persistence/modelStore';
 import { summariseRows, type EvaluationEntry, type EvaluationRow } from '../../src/persistence/evaluationEntry';
-import { evaluateModelOnCircuit } from '../../src/ui/modelEvaluation';
+import { EVALUATION_REGISTRY, entryBelongsTo, evaluateModelOnCircuit } from '../../src/ui/modelEvaluation';
 import { createTrainer, DEFAULT_TRAINING_CONFIG } from '../../src/training/trainer';
 import { tracksIn } from '../../src/training/trackSplits';
 
 const ENV = { track: loadTrack(stadiumOval), physics: DEFAULT_VEHICLE_PHYSICS, timestepSeconds: DEFAULT_SIM_CONFIG.timestepSeconds };
 export const TRAINING_REGISTRY = tracksIn('training');
 export const EVALUATION_TRACKS = [...tracksIn('training'), ...tracksIn('validation')];
+/** How entries are recognised in the tests: the allowed circuits and that an entry belongs to its model. */
+export const BINDING = { registry: EVALUATION_REGISTRY, belongsTo: undefined };
+export const bindingFor = (model: ModelDocument) => ({ registry: EVALUATION_REGISTRY, belongsTo: (e: EvaluationEntry) => entryBelongsTo(model, e) });
+export { entryBelongsTo };
 export const OPTIONS = { recordedAt: '2026-11-12T12:00:00.000Z', appVersion: '0.0.0', codeVersion: 'test' };
 
 export function makeModel(seed: number, id: string, generations = 1): ModelDocument {

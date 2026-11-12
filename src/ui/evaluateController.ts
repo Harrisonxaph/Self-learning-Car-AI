@@ -5,7 +5,7 @@
 import { recogniseEvaluations, type EvaluationEntry } from '../persistence/evaluationEntry';
 import type { ModelStore, StoreEntry } from '../persistence/modelStore';
 import { describeEntry } from './savedChampionsView';
-import { evaluateModelOnCircuit, type EvaluateOptions } from './modelEvaluation';
+import { EVALUATION_REGISTRY, SLICE_TICKS, entryBelongsTo, startEvaluationJob, type EvaluateOptions, type EvaluationJob } from './modelEvaluation';
 
 export interface CircuitChoice {
   readonly id: string;
@@ -38,8 +38,10 @@ export interface EvaluateDeps {
   readonly codeVersion: string;
   /** Runs `callback` after the page has had a chance to draw; returns a function that cancels it. */
   readonly defer: (callback: () => void) => () => void;
-  /** For tests: the evaluator (default: the real one), so a refusal can be shown to run nothing. */
-  readonly evaluate?: typeof evaluateModelOnCircuit;
+  /** For tests: starts a job (default: the real one), so slices and refusals can be observed. */
+  readonly startJob?: typeof startEvaluationJob;
+  /** Simulation ticks of work per slice (default SLICE_TICKS): small enough for the page to paint and take a Cancel between slices. */
+  readonly sliceTicks?: number;
 }
 
 export interface EvaluateController {
@@ -66,7 +68,8 @@ export interface EvaluateController {
 
 export function createEvaluateController(deps: EvaluateDeps): EvaluateController {
   const { store } = deps;
-  const evaluate = deps.evaluate ?? evaluateModelOnCircuit;
+  const startJob = deps.startJob ?? startEvaluationJob;
+  const sliceTicks = deps.sliceTicks ?? SLICE_TICKS;
   // The only circuits this page can ever offer: the caller's lists, each ID once.
   const seen = new Set<string>();
   const offered: { id: string; name: string; split: 'training' | 'validation' }[] = [];
@@ -119,7 +122,7 @@ export function createEvaluateController(deps: EvaluateDeps): EvaluateController
     if (selectedId === null) return [];
     const inspected = store.inspect(selectedId);
     if (!inspected.ok) return [];
-    return [...recogniseEvaluations(inspected.model.evaluation).entries].reverse();
+    return [...recogniseEvaluations(inspected.model.evaluation, { registry: EVALUATION_REGISTRY, belongsTo: (e) => entryBelongsTo(inspected.model, e) }).entries].reverse();
   };
 
   const finish = (text: string): void => {
@@ -132,7 +135,7 @@ export function createEvaluateController(deps: EvaluateDeps): EvaluateController
 
   const runNext = (modelId: string, queue: readonly string[], index: number, stored: number): void => {
     if (cancelRequested) {
-      finish(`Cancelled. ${stored} of ${queue.length} circuit${queue.length === 1 ? '' : 's'} finished and stored; nothing partial was kept.`);
+      finish(`Cancelled. ${stored} of ${queue.length} circuit${queue.length === 1 ? '' : 's'} finished and stored; the circuit in progress was discarded and nothing partial was kept.`);
       return;
     }
     if (index >= queue.length) {
@@ -141,29 +144,39 @@ export function createEvaluateController(deps: EvaluateDeps): EvaluateController
     }
     const id = queue[index]!;
     const name = offered.find((c) => c.id === id)?.name ?? id;
+    const stop = (why: string): void => {
+      messageText = why;
+      finish(`Stopped after ${stored} of ${queue.length}: ${why}`);
+    };
     progressText = `Evaluating ${name} (${index + 1} of ${queue.length})…`;
     notify();
-    cancelDefer = deps.defer(() => {
+    let job: EvaluationJob | null = null;
+    const slice = (): void => {
       cancelDefer = null;
       if (cancelRequested) return runNext(modelId, queue, index, stored);
-      const loaded = store.load(modelId);
-      if (!loaded.ok) {
-        messageText = loaded.message;
-        return finish(`Stopped after ${stored} of ${queue.length}: ${loaded.message}`);
+      if (job === null) {
+        const loaded = store.load(modelId);
+        if (!loaded.ok) return stop(loaded.message);
+        const options: EvaluateOptions = { recordedAt: deps.now(), appVersion: deps.appVersion, codeVersion: deps.codeVersion };
+        const started = startJob(loaded.model, id, options);
+        if (!started.ok) return stop(started.message);
+        job = started.job;
       }
-      const options: EvaluateOptions = { recordedAt: deps.now(), appVersion: deps.appVersion, codeVersion: deps.codeVersion };
-      const result = evaluate(loaded.model, id, options);
-      if (!result.ok) {
-        messageText = result.message;
-        return finish(`Stopped after ${stored} of ${queue.length}: ${result.message}`);
+      job.step(sliceTicks);
+      if (!job.done()) {
+        const p = job.progress();
+        progressText = `Evaluating ${name} (${index + 1} of ${queue.length}): episode ${p.episode} of ${p.episodes}, tick ${p.tick}…`;
+        notify();
+        cancelDefer = deps.defer(slice);
+        return;
       }
+      const result = job.result();
+      if (!result.ok) return stop(result.message);
       const appended = store.appendEvaluation(modelId, result.entry);
-      if (!appended.ok) {
-        messageText = appended.message;
-        return finish(`Stopped after ${stored} of ${queue.length}: ${appended.message}`);
-      }
+      if (!appended.ok) return stop(appended.message);
       runNext(modelId, queue, index + 1, stored + 1);
-    });
+    };
+    cancelDefer = deps.defer(slice);
   };
 
   return {
@@ -219,7 +232,7 @@ export function createEvaluateController(deps: EvaluateDeps): EvaluateController
         // Nothing is in flight: stop now, and the circuits already finished stay stored.
         cancelDefer();
         cancelDefer = null;
-        finish('Cancelled. The circuits already finished stay stored; nothing partial was kept.');
+        finish('Cancelled. The circuits already finished stay stored; the circuit in progress was discarded and nothing partial was kept.');
       }
     },
     progress: () => progressText,
@@ -229,7 +242,7 @@ export function createEvaluateController(deps: EvaluateDeps): EvaluateController
       if (selectedId === null) return 0;
       const inspected = store.inspect(selectedId);
       if (!inspected.ok) return 0;
-      const r = recogniseEvaluations(inspected.model.evaluation);
+      const r = recogniseEvaluations(inspected.model.evaluation, { registry: EVALUATION_REGISTRY, belongsTo: (e) => entryBelongsTo(inspected.model, e) });
       return inspected.model.evaluation.length - r.entries.length;
     },
     refresh,

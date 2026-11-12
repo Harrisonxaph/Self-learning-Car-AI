@@ -7,15 +7,20 @@ import { MAX_EVALUATION_ENTRIES, recogniseEvaluations } from '../../src/persiste
 import { importModelText } from '../../src/persistence/modelImport';
 import { MAX_MODEL_BYTES, type ModelDocument } from '../../src/persistence/modelFormat';
 import { MODEL_KEY_PREFIX, createModelStore } from '../../src/persistence/modelStore';
+import { entryBelongsTo } from '../../src/ui/modelEvaluation';
 import { EVALUATION_TRACKS, MemoryStorage, TRAINING_REGISTRY, makeModel, realEntry } from '../helpers/evaluationFixtures';
 
 const legacy = (name: string): string => readFileSync(new URL(`../fixtures/pre-p4-05/${name}`, import.meta.url), 'utf8');
-const storeOn = (storage: MemoryStorage) => createModelStore({ storage: () => storage, registry: TRAINING_REGISTRY, evaluationTracks: EVALUATION_TRACKS });
+const storeOn = (storage: MemoryStorage) => createModelStore({ storage: () => storage, registry: TRAINING_REGISTRY, evaluationTracks: EVALUATION_TRACKS, evaluationBinding: entryBelongsTo });
 const stored = (storage: MemoryStorage, id: string) => storage.data.get(`${MODEL_KEY_PREFIX}${id}`)!;
 const base = makeModel(11, 'ap-1');
 const entry = realEntry(base, 'kidney-loop');
-const withEvaluation = (id: string, evaluation: unknown[]): ModelDocument => ({ ...base, id, evaluation });
-const nth = (n: number) => Array.from({ length: n }, (_, i) => ({ ...entry, recordedAt: `2026-11-12T12:00:${String(i).padStart(2, '0')}.000Z` }));
+/** A copy of the base champion under another id, with an entry made FOR that champion (an entry belongs to its model). */
+const asModel = (id: string): { model: ModelDocument; own: ReturnType<typeof realEntry> } => {
+  const model: ModelDocument = { ...base, id };
+  return { model, own: realEntry(model, 'kidney-loop') };
+};
+const nthOf = (own: ReturnType<typeof realEntry>, n: number) => Array.from({ length: n }, (_, i) => ({ ...own, recordedAt: `2026-11-12T12:00:${String(i).padStart(2, '0')}.000Z` }));
 const opaque = (n: number) => Array.from({ length: n }, (_, i) => ({ kind: 'legacy-note', index: i }));
 
 function setup(model: ModelDocument) {
@@ -97,39 +102,47 @@ describe('the cap counts recognised entries only (fixtures round-trip byte for b
     expect((JSON.parse(stored(storage, imported.model.id)) as ModelDocument).evaluation).toHaveLength(121);
   });
   it('120 opaque entries near the size limit: refused with the size message, stored document byte-identical', () => {
-    const filler = 'x'.repeat(MAX_MODEL_BYTES - JSON.stringify({ ...base, id: 'ap-big', evaluation: opaque(120) }).length - 400);
-    const big = withEvaluation('ap-big', [...opaque(120), { kind: 'legacy-blob', filler }]);
+    const { model: bigBase, own } = asModel('ap-big');
+    // The champion fits under the limit, but not with this entry added (the entry is about half a kilobyte more than the slack).
+    const slack = Math.floor(JSON.stringify(own).length / 2);
+    const without = JSON.stringify({ ...bigBase, evaluation: [...opaque(120), { kind: 'legacy-blob', filler: '' }] }).length;
+    const big: ModelDocument = { ...bigBase, evaluation: [...opaque(120), { kind: 'legacy-blob', filler: 'x'.repeat(MAX_MODEL_BYTES - without - slack) }] };
+    expect(JSON.stringify(big).length).toBeLessThanOrEqual(MAX_MODEL_BYTES);
     const { storage, store } = setup(big);
     const text = stored(storage, 'ap-big');
-    expect(store.appendEvaluation('ap-big', entry)).toMatchObject({ ok: false, reason: 'size' });
+    expect(store.appendEvaluation('ap-big', own)).toMatchObject({ ok: false, reason: 'size' });
     expect(stored(storage, 'ap-big')).toBe(text);
   });
   it('60 recognised entries: append REFUSED with the cap message, stored document byte-identical', () => {
-    const { storage, store } = setup(withEvaluation('ap-60', nth(60)));
+    const { model, own } = asModel('ap-60');
+    const { storage, store } = setup({ ...model, evaluation: nthOf(own, 60) });
     const text = stored(storage, 'ap-60');
-    expect(store.appendEvaluation('ap-60', entry)).toMatchObject({ ok: false, reason: 'cap' });
+    expect(store.appendEvaluation('ap-60', own)).toMatchObject({ ok: false, reason: 'cap' });
     expect(stored(storage, 'ap-60')).toBe(text);
     expect(recogniseEvaluations((JSON.parse(text) as ModelDocument).evaluation).entries).toHaveLength(60);
   });
   it('49 recognised + 60 opaque: ACCEPTED (the 50th), then the next is REFUSED; the opaque entries are untouched throughout', () => {
-    const mixed = [...nth(49), ...opaque(60)];
-    const { storage, store } = setup(withEvaluation('ap-mix', mixed));
-    expect(store.appendEvaluation('ap-mix', entry)).toEqual({ ok: true, recognised: 50 });
-    expect(store.appendEvaluation('ap-mix', entry)).toMatchObject({ ok: false, reason: 'cap' });
+    const { model, own } = asModel('ap-mix');
+    const mixed = [...nthOf(own, 49), ...opaque(60)];
+    const { storage, store } = setup({ ...model, evaluation: mixed });
+    expect(store.appendEvaluation('ap-mix', own)).toEqual({ ok: true, recognised: 50 });
+    expect(store.appendEvaluation('ap-mix', own)).toMatchObject({ ok: false, reason: 'cap' });
     const after = (JSON.parse(stored(storage, 'ap-mix')) as ModelDocument).evaluation;
     expect(JSON.stringify(after.slice(0, 109))).toBe(JSON.stringify(mixed));
     expect(after).toHaveLength(110);
   });
   it('50 recognised + 5 opaque: REFUSED (the cap counts the 50 recognised only), byte-identical', () => {
-    const { storage, store } = setup(withEvaluation('ap-50', [...nth(50), ...opaque(5)]));
+    const { model, own } = asModel('ap-50');
+    const { storage, store } = setup({ ...model, evaluation: [...nthOf(own, 50), ...opaque(5)] });
     const text = stored(storage, 'ap-50');
-    expect(store.appendEvaluation('ap-50', entry)).toMatchObject({ ok: false, reason: 'cap' });
+    expect(store.appendEvaluation('ap-50', own)).toMatchObject({ ok: false, reason: 'cap' });
     expect(stored(storage, 'ap-50')).toBe(text);
     expect(MAX_EVALUATION_ENTRIES).toBe(50);
   });
   it('40 entries that claim our kind but fail validation + 3 recognised: import not refused, a warning is shown, append ACCEPTED, nothing counted or shown', () => {
     const broken = Array.from({ length: 40 }, (_, i) => ({ kind: entry.kind, note: `broken ${i}` }));
-    const model = withEvaluation('ap-bad', [...broken, ...nth(3)]);
+    const { model: bare, own } = asModel('ap-bad');
+    const model: ModelDocument = { ...bare, evaluation: [...broken, ...nthOf(own, 3)] };
     const text = JSON.stringify(model, null, 2);
     const imported = importModelText(text, { registry: TRAINING_REGISTRY });
     expect(imported.ok).toBe(true);
@@ -140,7 +153,7 @@ describe('the cap counts recognised entries only (fixtures round-trip byte for b
     const r = recogniseEvaluations(loaded.model.evaluation);
     expect(r.entries).toHaveLength(3);
     expect(r.invalidClaims).toBe(40);
-    expect(store.appendEvaluation('ap-bad', entry)).toEqual({ ok: true, recognised: 4 });
+    expect(store.appendEvaluation('ap-bad', own)).toEqual({ ok: true, recognised: 4 });
   });
   it('the legacy fixtures still round-trip byte for byte after an append is refused or accepted elsewhere', () => {
     for (const name of ['champion-opaque-51.json', 'champion-opaque-120.json']) {
@@ -152,5 +165,51 @@ describe('the cap counts recognised entries only (fixtures round-trip byte for b
       if (!out.ok) throw new Error(out.message);
       expect(out.text).toBe(text);
     }
+  });
+});
+
+describe('an entry is stored only for the champion it was made for', () => {
+  it('refuses an entry made for another champion, without writing', () => {
+    const { storage, store } = setup(base);
+    const other = makeModel(14, 'ap-other');
+    const foreign = realEntry(other, 'kidney-loop');
+    const text = stored(storage, base.id);
+    const writes = storage.writes;
+    const result = store.appendEvaluation(base.id, foreign);
+    expect(result).toMatchObject({ ok: false, reason: 'invalid' });
+    if (!result.ok) expect(result.message).toMatch(/was made for champion "ap-other", not this one/);
+    expect(stored(storage, base.id)).toBe(text);
+    expect(storage.writes).toBe(writes);
+  });
+  it('refuses an entry made for a champion that has since been replaced under the same id', () => {
+    const { storage, store } = setup(base);
+    const stale = entry; // made for `base`
+    const changed = makeModel(15, base.id); // the same id, different parameters
+    expect(store.save(changed).ok).toBe(true);
+    const text = stored(storage, base.id);
+    const result = store.appendEvaluation(base.id, stale);
+    expect(result).toMatchObject({ ok: false, reason: 'invalid' });
+    if (!result.ok) expect(result.message).toMatch(/different version of this champion/);
+    expect(stored(storage, base.id)).toBe(text);
+  });
+  it('an existing entry that no longer belongs (an imported or stale one) is kept untouched, warned about and not counted or shown', () => {
+    const changed = makeModel(16, 'ap-stale');
+    const staleEntry = realEntry({ ...changed, id: 'ap-stale', training: { ...changed.training } }, 'kidney-loop');
+    const replaced = makeModel(17, 'ap-stale');
+    const { storage, store } = setup({ ...replaced, evaluation: [staleEntry, ...opaque(2)] });
+    const loaded = store.load('ap-stale');
+    if (!loaded.ok) throw new Error(loaded.message);
+    expect(loaded.warnings.join(' ')).toMatch(/1 evaluation entry claims a kind this app recognises but is not valid for this champion/);
+    expect(recogniseEvaluations(loaded.model.evaluation, { registry: EVALUATION_TRACKS, belongsTo: (e) => entryBelongsTo(loaded.model, e) }).entries).toHaveLength(0);
+    const text = stored(storage, 'ap-stale');
+    expect(JSON.parse(text).evaluation).toHaveLength(3); // untouched
+    expect(store.appendEvaluation('ap-stale', realEntry(replaced, 'kidney-loop'))).toEqual({ ok: true, recognised: 1 });
+  });
+  it('a champion with a 100-character id stores and re-reads its entry', () => {
+    const id = 'q'.repeat(100);
+    const m = { ...base, id };
+    const { storage, store } = setup(m);
+    expect(store.appendEvaluation(id, realEntry(m, 'kidney-loop'))).toEqual({ ok: true, recognised: 1 });
+    expect(JSON.parse(stored(storage, id)).evaluation).toHaveLength(1);
   });
 });

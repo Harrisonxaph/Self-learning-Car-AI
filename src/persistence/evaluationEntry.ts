@@ -5,7 +5,9 @@
 // the array (entries of other kinds, and entries that claim this kind but fail validation) is opaque: kept untouched, never
 // counted and never shown as a result. The array itself is never validated beyond "is an array" (as before), so no existing
 // model file is ever rejected, truncated or rewritten because of what it holds.
+import { createRng } from '../utils/rng';
 import { sha256Hex } from '../utils/sha256';
+import { MODEL_ID_PATTERN } from './modelFormat';
 
 export const EVALUATION_KIND = 'p4-05-evaluation-v1';
 export const EVALUATION_PROTOCOL = 'p4-05-evaluation-v1';
@@ -15,6 +17,15 @@ export const EVALUATION_OUTCOMES = Object.freeze(['completed', 'crashed', 'stall
 export type EvaluationOutcome = (typeof EVALUATION_OUTCOMES)[number];
 export const EVALUATION_SPLITS = Object.freeze(['training', 'validation'] as const);
 export type EvaluationSplit = (typeof EVALUATION_SPLITS)[number];
+
+/** The protocol's fixed limits (p4-05-evaluation-v1): the trainer's own episode defaults, and the fitness version it scores under. */
+export const PROTOCOL_LIMITS = Object.freeze({ maxEpisodeSeconds: 60, stallSeconds: 5, maxLaps: 3, fitnessVersion: 1 });
+/** The fixed perturbed-start seeds; seed 0 is the nominal start. */
+export const EVALUATION_SEEDS: readonly number[] = Object.freeze([1, 2, 3, 4]);
+/** The largest start offsets: 1.0 m sideways and 3 degrees of heading. */
+export const START_BOUNDS = Object.freeze({ lateralMetres: 1.0, headingRadians: (3 * Math.PI) / 180 });
+/** Numeric slack when comparing recorded poses and times that came from floating-point arithmetic. */
+const EPSILON = 1e-6;
 
 export interface EvaluationRow {
   /** 0 is the circuit's nominal start; 1 to 4 are the recorded perturbed starts. */
@@ -55,6 +66,17 @@ export interface EvaluationStart {
   readonly heading: number;
 }
 
+/** The start of seed `seed` for a nominal start pose: the nominal start for 0, otherwise a bounded offset from the seeded RNG. */
+export function evaluationStartFor(nominal: { readonly position: { readonly x: number; readonly y: number }; readonly heading: number }, seed: number): EvaluationStart {
+  const { position, heading } = nominal;
+  if (seed === 0) return { seed, lateralMetres: 0, headingRadians: 0, x: position.x, y: position.y, heading };
+  const rng = createRng(seed);
+  const lateral = Math.round(rng.range(-START_BOUNDS.lateralMetres, START_BOUNDS.lateralMetres) * 1000) / 1000;
+  const turn = Math.round(rng.range(-START_BOUNDS.headingRadians, START_BOUNDS.headingRadians) * 1e6) / 1e6;
+  // To the left of the heading on the y-down screen is (sin h, -cos h).
+  return { seed, lateralMetres: lateral, headingRadians: turn, x: position.x + Math.sin(heading) * lateral, y: position.y - Math.cos(heading) * lateral, heading: heading + turn };
+}
+
 export interface EvaluationEntry {
   readonly kind: typeof EVALUATION_KIND;
   readonly protocol: typeof EVALUATION_PROTOCOL;
@@ -78,7 +100,8 @@ export interface EvaluationEntry {
 
 /** The configuration hash recorded with every entry. */
 export function evaluationConfigHash(config: EvaluationEntry['config'], fitnessVersion: number, timestepSeconds: number): string {
-  return `sha256:${sha256Hex(JSON.stringify({ protocol: EVALUATION_PROTOCOL, config, fitnessVersion, timestepSeconds }))}`;
+  // A fixed field order, so the hash does not depend on the key order of the JSON the entry came from.
+  return `sha256:${sha256Hex(JSON.stringify([EVALUATION_PROTOCOL, config.maxEpisodeSeconds, config.stallSeconds, config.maxLaps, fitnessVersion, timestepSeconds]))}`;
 }
 
 /** The summary of rows: every denominator is the number of episodes, so timeouts and stalls stay in them. */
@@ -117,16 +140,59 @@ const HASH = /^sha256:[0-9a-f]{64}$/;
 
 export type EntryValidation = { readonly ok: true; readonly entry: EvaluationEntry } | { readonly ok: false; readonly errors: readonly string[] };
 
+/** A built-in circuit an entry may name. `track` (when given) lets the validator check the recorded starts and the gate count. */
+export interface RegistryTrack {
+  readonly id: string;
+  readonly version: string;
+  readonly split: string;
+  readonly contentHash: string;
+  readonly track?: { readonly start: { readonly position: { readonly x: number; readonly y: number }; readonly heading: number }; readonly gates: readonly unknown[] };
+}
+
+export interface EntryContext {
+  /** The allowed circuits (the built-in training and validation circuits). When given, the entry's circuit must be one of them. */
+  readonly registry?: readonly RegistryTrack[] | undefined;
+  /** Whether the entry belongs to the model that holds it (id, frozen identity, driving configuration): a message when it does not, otherwise null. */
+  readonly belongsTo?: ((entry: EvaluationEntry) => string | null) | undefined;
+}
+
+/** JSON text with object keys in sorted order, so two equal structures compare equal whatever their key order. */
+export function stableStringify(value: unknown): string {
+  return JSON.stringify(value, (_key, v: unknown) =>
+    typeof v === 'object' && v !== null && !Array.isArray(v) ? Object.fromEntries(Object.entries(v as Record<string, unknown>).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))) : v,
+  );
+}
+
+const near = (a: number, b: number, tolerance = EPSILON): boolean => Math.abs(a - b) <= tolerance * Math.max(1, Math.abs(a), Math.abs(b));
+
+/** Whether two summaries are the same, by field, whatever the order of their keys. */
+export function summariesEqual(a: unknown, b: EvaluationSummary): boolean {
+  if (!isObject(a) || !isObject(a.outcomes)) return false;
+  const o = a.outcomes;
+  return (
+    a.episodes === b.episodes &&
+    a.lapCompletion === b.lapCompletion &&
+    a.collisionRate === b.collisionRate &&
+    a.meanOrderedProgress === b.meanOrderedProgress &&
+    a.meanFirstLapSeconds === b.meanFirstLapSeconds &&
+    a.firstLapSamples === b.firstLapSamples &&
+    o.completed === b.outcomes.completed &&
+    o.crashed === b.outcomes.crashed &&
+    o.stalled === b.outcomes.stalled &&
+    o.timeout === b.outcomes.timeout &&
+    Object.keys(o).length === 4 &&
+    Object.keys(a).length === 7
+  );
+}
+
 /**
- * Strict validation of one entry: every field, finite numbers, whole counts, outcomes from the list, a split that is
- * training or validation (never held-out), one row per recorded start in order, and a summary equal to the one recomputed
- * from the rows. `registry` (optional) also checks the circuit's recorded version and content hash against the built-in
- * tracks. Never throws.
+ * Validates one entry against the recorded protocol: every field; the fixed limits; exactly five starts (seed 0 and seeds 1 to 4),
+ * with, when the circuit is given, the exact start poses the protocol derives; rows whose numbers are consistent (ticks within the
+ * episode budget, laps and gates, a first-lap time equal to its ticks times the timestep, an outcome that fits its numbers); a
+ * summary equal to the one recomputed from the rows (whatever the key order); a split that is training or validation, never
+ * held-out; and, when given, the allowed circuit and the model the entry belongs to. It does not re-run the simulation. Never throws.
  */
-export function validateEvaluationEntry(
-  value: unknown,
-  registry?: readonly { readonly id: string; readonly version: string; readonly split: string; readonly contentHash: string }[],
-): EntryValidation {
+export function validateEvaluationEntry(value: unknown, context: EntryContext = {}): EntryValidation {
   const errors: string[] = [];
   const fail = (message: string): void => {
     if (errors.length < 8) errors.push(message);
@@ -136,63 +202,80 @@ export function validateEvaluationEntry(
     if (value.kind !== EVALUATION_KIND) fail(`"kind" must be "${EVALUATION_KIND}".`);
     if (value.protocol !== EVALUATION_PROTOCOL) fail(`"protocol" must be "${EVALUATION_PROTOCOL}".`);
     const config = isObject(value.config) ? value.config : null;
-    if (config === null || !isNum(config.maxEpisodeSeconds) || config.maxEpisodeSeconds <= 0 || !isNum(config.stallSeconds) || config.stallSeconds <= 0 || !isInt(config.maxLaps, 1)) {
-      fail('"config" must give positive maxEpisodeSeconds and stallSeconds and a whole maxLaps of at least 1.');
+    if (config === null || config.maxEpisodeSeconds !== PROTOCOL_LIMITS.maxEpisodeSeconds || config.stallSeconds !== PROTOCOL_LIMITS.stallSeconds || config.maxLaps !== PROTOCOL_LIMITS.maxLaps) {
+      fail(`"config" must be the protocol's limits (${PROTOCOL_LIMITS.maxEpisodeSeconds} s episodes, ${PROTOCOL_LIMITS.stallSeconds} s stall, ${PROTOCOL_LIMITS.maxLaps} laps).`);
     }
-    if (!isInt(value.fitnessVersion, 1)) fail('"fitnessVersion" must be a whole number.');
-    if (!isNum(value.timestepSeconds) || value.timestepSeconds <= 0 || value.timestepSeconds > 0.1) fail('"timestepSeconds" must be a number above 0 and at most 0.1.');
+    if (value.fitnessVersion !== PROTOCOL_LIMITS.fitnessVersion) fail(`"fitnessVersion" must be ${PROTOCOL_LIMITS.fitnessVersion}.`);
+    const dt = value.timestepSeconds;
+    if (!isNum(dt) || dt <= 0 || dt > 0.1) fail('"timestepSeconds" must be a number above 0 and at most 0.1.');
     if (typeof value.configHash !== 'string' || !HASH.test(value.configHash)) fail('"configHash" must be a sha256 hash.');
-    else if (config !== null && isNum(value.timestepSeconds) && isInt(value.fitnessVersion, 1) && value.configHash !== evaluationConfigHash(config as EvaluationEntry['config'], value.fitnessVersion, value.timestepSeconds)) {
+    else if (config !== null && isNum(dt) && value.configHash !== evaluationConfigHash(PROTOCOL_LIMITS, PROTOCOL_LIMITS.fitnessVersion, dt)) {
       fail('"configHash" does not match the recorded configuration.');
     }
-    if (!isStr(value.modelId, 64)) fail('"modelId" must be a short string.');
+    if (typeof value.modelId !== 'string' || !MODEL_ID_PATTERN.test(value.modelId)) fail('"modelId" must be a saved champion id (1 to 100 letters, digits, dots, dashes or underscores).');
     if (typeof value.frozenModelId !== 'string' || !HASH.test(value.frozenModelId)) fail('"frozenModelId" must be a sha256 hash.');
     if (typeof value.brakeEnabled !== 'boolean') fail('"brakeEnabled" must be true or false.');
     const track = isObject(value.track) ? value.track : null;
+    let known: RegistryTrack | undefined;
     if (track === null || !isStr(track.id, 64) || !isStr(track.version, 64) || typeof track.contentHash !== 'string' || !HASH.test(track.contentHash)) {
       fail('"track" must give an id, a version and a content hash.');
     } else if (!(EVALUATION_SPLITS as readonly unknown[]).includes(track.split)) {
       fail('"track.split" must be "training" or "validation": a held-out circuit is never evaluated here.');
-    } else if (registry !== undefined) {
-      const known = registry.find((t) => t.id === track.id);
-      if (!known) fail(`"track.id" ${String(track.id)} is not a built-in circuit.`);
+    } else if (context.registry !== undefined) {
+      known = context.registry.find((t) => t.id === track.id);
+      if (!known) fail(`"track.id" ${String(track.id)} is not a built-in training or validation circuit.`);
       else if (known.version !== track.version || known.contentHash !== track.contentHash || known.split !== track.split) fail('"track" does not match the built-in circuit it names.');
     }
     const starts = Array.isArray(value.starts) ? value.starts : null;
     const rows = Array.isArray(value.rows) ? value.rows : null;
-    if (starts === null || rows === null || starts.length === 0 || starts.length > 20 || rows.length !== starts.length) {
-      fail('"starts" and "rows" must be arrays of the same length (1 to 20).');
+    const wanted = 1 + EVALUATION_SEEDS.length;
+    if (starts === null || rows === null || starts.length !== wanted || rows.length !== wanted) {
+      fail(`"starts" and "rows" must each hold exactly ${wanted} items (the nominal start and seeds ${EVALUATION_SEEDS.join(', ')}).`);
     } else {
+      const maxTicks = isNum(dt) && dt > 0 ? Math.max(1, Math.ceil(PROTOCOL_LIMITS.maxEpisodeSeconds / dt - 1e-9)) : Number.MAX_SAFE_INTEGER;
       starts.forEach((s, i) => {
-        if (!isObject(s) || s.seed !== i || !isNum(s.lateralMetres) || !isNum(s.headingRadians) || !isNum(s.x) || !isNum(s.y) || !isNum(s.heading)) fail(`starts[${i}] must have seed ${i} and finite offsets and pose.`);
-      });
-      rows.forEach((r, i) => {
-        if (
-          !isObject(r) ||
-          r.seed !== i ||
-          !(EVALUATION_OUTCOMES as readonly unknown[]).includes(r.outcome) ||
-          !isInt(r.ticks) ||
-          !isInt(r.gatesPassed) ||
-          !isInt(r.gates, 1) ||
-          !isInt(r.laps) ||
-          !isNum(r.orderedProgress) ||
-          !(r.firstLapTicks === null || isInt(r.firstLapTicks, 1)) ||
-          !(r.firstLapSeconds === null || (isNum(r.firstLapSeconds) && r.firstLapSeconds > 0)) ||
-          (r.firstLapTicks === null) !== (r.firstLapSeconds === null) ||
-          (r.laps >= 1) !== (r.firstLapTicks !== null) ||
-          r.orderedProgress !== r.gatesPassed / (r.gates as number)
-        ) {
-          fail(`rows[${i}] is not a valid row (outcome, whole counts, progress = gates ÷ gates per lap, and a first-lap time only when a lap completed).`);
+        if (!isObject(s) || s.seed !== i || !isNum(s.lateralMetres) || !isNum(s.headingRadians) || !isNum(s.x) || !isNum(s.y) || !isNum(s.heading)) {
+          fail(`starts[${i}] must have seed ${i} and finite offsets and pose.`);
+          return;
+        }
+        if (Math.abs(s.lateralMetres) > START_BOUNDS.lateralMetres + EPSILON || Math.abs(s.headingRadians) > START_BOUNDS.headingRadians + EPSILON) fail(`starts[${i}] is outside the protocol's start bounds.`);
+        if (i === 0 && (s.lateralMetres !== 0 || s.headingRadians !== 0)) fail('starts[0] must be the nominal start (no offsets).');
+        if (known?.track) {
+          const want = evaluationStartFor(known.track.start, i);
+          if (!near(s.x, want.x) || !near(s.y, want.y) || !near(s.heading, want.heading) || !near(s.lateralMetres, want.lateralMetres) || !near(s.headingRadians, want.headingRadians)) {
+            fail(`starts[${i}] is not the start the protocol derives for ${String(track?.id)}.`);
+          }
         }
       });
-      if (errors.length === 0) {
-        const recomputed = summariseRows(rows as EvaluationRow[]);
-        if (JSON.stringify(recomputed) !== JSON.stringify(value.summary)) fail('"summary" does not match the rows.');
-      }
+      rows.forEach((r, i) => {
+        const bad = (why: string): void => fail(`rows[${i}] is not valid: ${why}.`);
+        if (!isObject(r) || r.seed !== i) return bad('it must have the matching seed');
+        if (!(EVALUATION_OUTCOMES as readonly unknown[]).includes(r.outcome)) return bad('unknown outcome');
+        if (!isInt(r.ticks, 1) || r.ticks > maxTicks) return bad(`ticks must be a whole number from 1 to the ${maxTicks}-tick episode budget`);
+        if (!isInt(r.gates, 1) || !isInt(r.gatesPassed) || !isInt(r.laps) || !isNum(r.orderedProgress)) return bad('gates, gatesPassed and laps must be whole numbers');
+        const gates = r.gates as number;
+        if (known?.track && gates !== known.track.gates.length) return bad('the gate count is not the circuit\'s');
+        if ((r.laps as number) > PROTOCOL_LIMITS.maxLaps) return bad(`laps cannot exceed ${PROTOCOL_LIMITS.maxLaps}`);
+        if ((r.gatesPassed as number) > gates * PROTOCOL_LIMITS.maxLaps + 1) return bad('more gate credits than the lap limit allows');
+        if (r.orderedProgress !== (r.gatesPassed as number) / gates) return bad('progress must be gates passed over gates per lap');
+        if ((r.laps as number) >= 1 && (r.gatesPassed as number) < (r.laps as number) * gates + 1) return bad('a completed lap needs every gate and the start line credited again');
+        if ((r.laps as number) === 0) {
+          if (r.firstLapTicks !== null || r.firstLapSeconds !== null) return bad('a first-lap time is only recorded when a lap completed');
+        } else {
+          if (!isInt(r.firstLapTicks, 1) || (r.firstLapTicks as number) > (r.ticks as number)) return bad('the first lap cannot take more ticks than the episode');
+          if (!isNum(r.firstLapSeconds) || !isNum(dt) || !near(r.firstLapSeconds, (r.firstLapTicks as number) * dt, 1e-9)) return bad('the first-lap seconds must equal its ticks times the timestep');
+        }
+        if (r.outcome === 'completed' && r.laps !== PROTOCOL_LIMITS.maxLaps) return bad(`a completed episode has exactly ${PROTOCOL_LIMITS.maxLaps} laps`);
+        if (r.outcome === 'timeout' && r.ticks !== maxTicks) return bad('a timeout uses the whole episode budget');
+      });
+      if (errors.length === 0 && !summariesEqual(value.summary, summariseRows(rows as EvaluationRow[]))) fail('"summary" does not match the rows.');
     }
     for (const key of ['recordedAt', 'appVersion', 'codeVersion', 'runtime'] as const) if (!isStr(value[key], 300)) fail(`"${key}" must be a short string.`);
     if (errors.length > 0) return { ok: false, errors };
-    return { ok: true, entry: value as unknown as EvaluationEntry };
+    const entry = value as unknown as EvaluationEntry;
+    const mismatch = context.belongsTo?.(entry) ?? null;
+    if (mismatch !== null) return { ok: false, errors: [mismatch] };
+    return { ok: true, entry };
   } catch {
     return { ok: false, errors: ['The entry could not be checked.'] };
   }
@@ -200,20 +283,20 @@ export function validateEvaluationEntry(
 
 export interface RecognisedEvaluations {
   readonly entries: readonly EvaluationEntry[];
-  /** Entries that claim this app's kind but failed validation: kept untouched, uncounted, never shown as results. */
+  /** Entries that claim this app's kind but failed validation (or belong to another model): kept untouched, uncounted, never shown as results. */
   readonly invalidClaims: number;
-  /** Everything else, including other kinds. */
+  /** Everything else, including other kinds and the invalid claims. */
   readonly opaque: number;
 }
 
 /** Splits an `evaluation` array into recognised entries and the rest. The array is never changed. */
-export function recogniseEvaluations(evaluation: readonly unknown[]): RecognisedEvaluations {
+export function recogniseEvaluations(evaluation: readonly unknown[], context: EntryContext = {}): RecognisedEvaluations {
   const entries: EvaluationEntry[] = [];
   let invalidClaims = 0;
   let opaque = 0;
   for (const item of evaluation) {
     if (isObject(item) && item.kind === EVALUATION_KIND) {
-      const checked = validateEvaluationEntry(item);
+      const checked = validateEvaluationEntry(item, context);
       if (checked.ok) entries.push(checked.entry);
       else {
         invalidClaims += 1;

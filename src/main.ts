@@ -19,6 +19,7 @@ import { tracksIn, trainingTrack } from './training/trackSplits';
 import { circuitFromSearch, searchForCircuit } from './ui/trainingCircuit';
 import { createModelStore } from './persistence/modelStore';
 import { createEvaluateController } from './ui/evaluateController';
+import { entryBelongsTo } from './ui/modelEvaluation';
 import { startEvaluatePage } from './ui/evaluatePage';
 import { createWorld, elapsedSeconds, restartWorld, stepWorld, type World } from './sim/world';
 import {
@@ -226,6 +227,7 @@ function startEvaluating(): void {
     storage: () => window.localStorage,
     registry: training,
     evaluationTracks: [...training, ...validation],
+    evaluationBinding: entryBelongsTo,
   });
   const controller = createEvaluateController({
     store,

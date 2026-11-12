@@ -7,18 +7,24 @@ import { DEFAULT_VEHICLE_PHYSICS } from '../../src/sim/config';
 import { loadTrack } from '../../src/sim/track';
 import { validateEvaluationEntry } from '../../src/persistence/evaluationEntry';
 import { modelParameters } from '../../src/persistence/modelFormat';
-import { evaluateDriver } from '../../src/training/evaluation';
+import { createEvaluationSetup, evaluateDriver } from '../../src/training/evaluation';
+import { createNetworkDriver } from '../../src/ai/drivers';
 import {
+  EVALUATION_REGISTRY,
   EVALUATION_SEEDS,
+  SLICE_TICKS,
   START_BOUNDS,
+  entryBelongsTo,
   evaluateModel,
   evaluateModelOnCircuit,
   evaluationStart,
+  frozenIdentity,
   replayEntry,
   resolveCircuit,
+  startEvaluationJob,
 } from '../../src/ui/modelEvaluation';
 import { BUILT_IN_TRACK_SPLITS, TrackLeakageError, tracksIn } from '../../src/training/trackSplits';
-import { EVALUATION_TRACKS, OPTIONS, makeModel } from '../helpers/evaluationFixtures';
+import { EVALUATION_TRACKS, OPTIONS, bindingFor, makeModel } from '../helpers/evaluationFixtures';
 
 const model = makeModel(7, 'me-1');
 const TRAINING = tracksIn('training').map((t) => t.id);
@@ -88,7 +94,7 @@ describe('determinism and replay', () => {
     for (const id of EVALUATION_TRACKS.map((t) => t.id)) {
       const r = evaluateModelOnCircuit(model, id, OPTIONS);
       if (!r.ok) throw new Error(r.message);
-      expect(validateEvaluationEntry(r.entry, EVALUATION_TRACKS).ok).toBe(true);
+      expect(validateEvaluationEntry(r.entry, bindingFor(model)).ok).toBe(true);
       expect(['training', 'validation']).toContain(r.entry.track.split);
     }
   });
@@ -111,19 +117,14 @@ describe('what may be evaluated: held-out stays out (circuits, not hashes)', () 
   });
   it.each([...HELD_OUT, 'renamed-copy-of-a-held-out-circuit'])('refuses %s before any episode runs, even for a valid frozen model', (id) => {
     let episodes = 0;
-    const spy: typeof evaluateDriver = (driver, setup, options) => {
-      episodes += 1;
-      return evaluateDriver(driver, setup, options);
-    };
-    const result = evaluateModelOnCircuit(model, id, { ...OPTIONS, evaluate: spy });
-    expect(result.ok).toBe(false);
+    const spy = { ...OPTIONS, onEpisode: () => { episodes += 1; } };
+    expect(evaluateModelOnCircuit(model, id, spy).ok).toBe(false);
+    expect(startEvaluationJob(model, id, spy).ok).toBe(false);
     expect(episodes).toBe(0);
-    const batch = evaluateModel(model, ['kidney-loop', id], { ...OPTIONS, evaluate: spy });
-    expect(batch.ok).toBe(false);
-    expect(episodes).toBeGreaterThan(0); // the first, permitted circuit ran...
-    const ran = episodes;
-    evaluateModel(model, [id, 'kidney-loop'], { ...OPTIONS, evaluate: spy });
-    expect(episodes).toBe(ran); // ...but a refusal first runs nothing at all
+    expect(evaluateModel(model, [id, 'kidney-loop'], spy).ok).toBe(false);
+    expect(episodes).toBe(0); // a refusal first runs nothing at all
+    expect(evaluateModel(model, ['kidney-loop', id], spy).ok).toBe(false);
+    expect(episodes).toBe(5); // the permitted circuit ran its five episodes before the refusal
   });
   it('refuses a held-out geometry under another registered ID or a renamed copy (only IDs are accepted, never a track)', () => {
     const held = BUILT_IN_TRACK_SPLITS.tracks.find((t) => t.split === 'held-out')!.track;
@@ -147,5 +148,149 @@ describe('hostile models are messages, never exceptions', () => {
     expect(a.ok).toBe(false);
     const nan = { ...model, parameters: { ...model.parameters, values: Array.from({ length: modelParameters(model).length }, () => Number.NaN) } };
     expect(evaluateModelOnCircuit(nan, 'kidney-loop', OPTIONS).ok).toBe(false);
+  });
+});
+
+describe('the job runs the shared episode path in bounded slices', () => {
+  it('gives exactly the rows evaluateDriver gives for the same starts (the slices change nothing)', () => {
+    const circuit = resolveCircuit('s-sweepers');
+    const driver = createNetworkDriver(modelParameters(model), { brakeEnabled: model.training.configuration.brakeEnabled });
+    const setup = createEvaluationSetup({}, { track: circuit.track, physics: { ...DEFAULT_VEHICLE_PHYSICS, ...model.training.configuration.physics }, timestepSeconds: model.training.configuration.timestepSeconds });
+    const made = evaluateModelOnCircuit(model, 's-sweepers', OPTIONS);
+    if (!made.ok) throw new Error(made.message);
+    [0, 1, 2, 3, 4].forEach((seed) => {
+      const s0 = evaluationStart(circuit.track, seed);
+      const direct = evaluateDriver(driver, setup, { start: { position: { x: s0.x, y: s0.y }, heading: s0.heading } });
+      const row = made.entry.rows[seed]!;
+      expect(row.outcome).toBe(direct.episode.outcome);
+      expect(row.ticks).toBe(direct.episode.tick);
+      expect(row.gatesPassed).toBe(direct.episode.gatesPassed);
+      expect(row.orderedProgress).toBe(direct.orderedProgress);
+      expect(row.laps).toBe(direct.episode.lapTicks.length);
+    });
+  });
+  it('slicing at any size gives the identical entry (1 tick, 7 ticks, a slice, everything)', () => {
+    const whole = evaluateModelOnCircuit(model, 'rounded-rectangle', OPTIONS);
+    if (!whole.ok) throw new Error(whole.message);
+    for (const size of [1, 7, SLICE_TICKS, 1_000_000]) {
+      const started = startEvaluationJob(model, 'rounded-rectangle', OPTIONS);
+      if (!started.ok) throw new Error(started.message);
+      let calls = 0;
+      while (!started.job.done()) {
+        started.job.step(size);
+        calls += 1;
+        if (size === 1 && calls > 200_000) throw new Error('did not finish');
+      }
+      const result = started.job.result();
+      if (!result.ok) throw new Error(result.message);
+      expect(result.entry).toEqual(whole.entry);
+    }
+  });
+  it('an expensive supported model (a 0.001 s timestep, stalled episodes) takes many bounded slices and reports progress in each', () => {
+    const slow = clone(model);
+    (slow.training.configuration as { timestepSeconds: number }).timestepSeconds = 0.001;
+    const started = startEvaluationJob(slow, 'kidney-loop', OPTIONS);
+    if (!started.ok) throw new Error(started.message);
+    const seen: string[] = [];
+    let slices = 0;
+    let longest = 0;
+    while (!started.job.done()) {
+      const before = started.job.progress();
+      started.job.step(SLICE_TICKS);
+      slices += 1;
+      const after = started.job.progress();
+      seen.push(`${after.episode}:${after.tick}`);
+      // At most one slice of ticks ran: within one episode the tick advanced by at most SLICE_TICKS.
+      if (after.episode === before.episode) longest = Math.max(longest, after.tick - before.tick);
+      expect(slices).toBeLessThan(200_000);
+    }
+    expect(slices).toBeGreaterThan(20); // many yields, not one long block
+    expect(longest).toBeLessThanOrEqual(SLICE_TICKS);
+    expect(new Set(seen).size).toBeGreaterThan(20); // progress changed between slices (a heartbeat)
+    const result = started.job.result();
+    expect(result.ok).toBe(true);
+  });
+  it('a job that is not finished has no entry, and nothing is stored by abandoning it', () => {
+    const started = startEvaluationJob(model, 'kidney-loop', OPTIONS);
+    if (!started.ok) throw new Error(started.message);
+    started.job.step(10);
+    expect(started.job.done()).toBe(false);
+    expect(started.job.result()).toMatchObject({ ok: false });
+  });
+});
+
+describe('an entry belongs to the champion that made it', () => {
+  const entry = (() => {
+    const r = evaluateModelOnCircuit(model, 'kidney-loop', OPTIONS);
+    if (!r.ok) throw new Error(r.message);
+    return r.entry;
+  })();
+  it('matches its own champion and no other, and not the same id with different parameters, brake setting or physics', () => {
+    expect(entryBelongsTo(model, entry)).toBeNull();
+    expect(entryBelongsTo(makeModel(8, 'me-other'), entry)).toMatch(/not this one/);
+    const sameId = makeModel(8, 'me-1');
+    expect(frozenIdentity(sameId).id).not.toBe(frozenIdentity(model).id);
+    expect(entryBelongsTo(sameId, entry)).toMatch(/different version of this champion/);
+    const brake = clone(model);
+    (brake.training.configuration as { brakeEnabled: boolean }).brakeEnabled = false;
+    expect(entryBelongsTo(brake, entry)).not.toBeNull();
+    const physics = clone(model);
+    (physics.training.configuration.physics as { engineAcceleration: number }).engineAcceleration += 1;
+    expect(entryBelongsTo(physics, entry)).toMatch(/different version/);
+    const timestep = clone(model);
+    (timestep.training.configuration as { timestepSeconds: number }).timestepSeconds = 0.01;
+    expect(entryBelongsTo(timestep, entry)).toMatch(/different version/);
+  });
+  it('is part of recognition: an entry for another champion is not shown for this one', () => {
+    expect(validateEvaluationEntry(entry, bindingFor(makeModel(9, 'me-3'))).ok).toBe(false);
+    expect(validateEvaluationEntry(entry, { registry: EVALUATION_REGISTRY, belongsTo: (e) => entryBelongsTo(model, e) }).ok).toBe(true);
+  });
+});
+
+describe('replay never confirms what it did not compare', () => {
+  const made = (() => {
+    const r = evaluateModelOnCircuit(model, 'rounded-rectangle', OPTIONS);
+    if (!r.ok) throw new Error(r.message);
+    return r.entry;
+  })();
+  const bad = (mutate: (e: Record<string, any>) => void) => { // eslint-disable-line @typescript-eslint/no-explicit-any
+    const e = clone(made) as unknown as Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
+    mutate(e);
+    return replayEntry(e as never, model, OPTIONS);
+  };
+  it('an untouched entry replays identically, whatever the key order of its copy', () => {
+    expect(replayEntry(made, model, OPTIONS)).toEqual({ identical: true, differences: [] });
+    const reordered = Object.fromEntries(Object.entries(clone(made)).reverse());
+    expect(replayEntry(reordered as never, model, OPTIONS).identical).toBe(true);
+  });
+  it.each<[string, (e: Record<string, any>) => void]>([ // eslint-disable-line @typescript-eslint/no-explicit-any
+    ['empty rows with the original starts and summary', (e) => { e.rows = []; }],
+    ['one row too few', (e) => { e.rows.pop(); }],
+    ['one row too many', (e) => { e.rows.push({ ...e.rows[0], seed: 5 }); }],
+    ['fewer starts', (e) => { e.starts.pop(); }],
+    ['an altered configuration', (e) => { e.config.maxLaps = 9; }],
+    ['another protocol', (e) => { e.protocol = 'p4-05-evaluation-v2'; }],
+    ['another circuit hash', (e) => { e.track.contentHash = `sha256:${'2'.repeat(64)}`; }],
+    ['another frozen identity', (e) => { e.frozenModelId = `sha256:${'3'.repeat(64)}`; }],
+    ['a changed row', (e) => { e.rows[2].ticks += 1; }],
+  ])('reports %s', (_name, mutate) => {
+    const result = bad(mutate);
+    expect(result.identical).toBe(false);
+    expect(result.differences.length).toBeGreaterThan(0);
+  });
+  it('another model and another circuit are reported', () => {
+    expect(replayEntry(made, makeModel(8, 'me-other'), OPTIONS).identical).toBe(false);
+    expect(replayEntry(made, makeModel(8, 'me-1'), OPTIONS).identical).toBe(false);
+  });
+});
+
+describe('every supported model id can be evaluated', () => {
+  it.each([1, 65, 100])('a saved champion with a %i-character id evaluates and its entry validates', (length) => {
+    const id = 'm'.repeat(length);
+    const m = makeModel(13, id);
+    const r = evaluateModelOnCircuit(m, 'stadium-oval', OPTIONS);
+    if (!r.ok) throw new Error(r.message);
+    expect(r.entry.modelId).toBe(id);
+    expect(validateEvaluationEntry(r.entry, bindingFor(m)).ok).toBe(true);
   });
 });
