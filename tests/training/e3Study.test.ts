@@ -38,10 +38,11 @@ import {
   type E3Manifest,
 } from '../../src/training/e3Study';
 import { createHeldOutGate, createMemoryLedger, HeldOutAccessError } from '../../src/training/heldOutAccess';
+
 import { canonicalJson, manifestRecord } from '../../src/training/experiment';
 import { E4_DELTA } from '../../src/training/e4Study';
-import { METRIC, StudyCompatibilityError, StudyManifestError, StudyRecordError, type StudyContext } from '../../src/training/study';
-import { loadTrackSplits, trackContentHash, trainingTrack, validationTrack } from '../../src/training/trackSplits';
+import { hashOf, METRIC, StudyCompatibilityError, StudyManifestError, StudyRecordError, type StudyContext } from '../../src/training/study';
+import { freezeModel, loadTrackSplits, trackContentHash, trainingTrack, validationTrack } from '../../src/training/trackSplits';
 import { loadTrack } from '../../src/sim/track';
 
 type Json = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -340,5 +341,115 @@ describe('the analysis', () => {
   });
   it('is canonical JSON', () => {
     expect(e3AnalysisJson(analysis)).toBe(`${canonicalJson(JSON.parse(JSON.stringify(analysis)))}\n`);
+  });
+});
+
+describe('A5 network dimensions are checked before anything is accepted or opened', () => {
+  const withParameters = (parameters: number[]): Json => {
+    const bad = clone(seed1) as Json;
+    bad.a5.model.parameters = parameters;
+    bad.a5.model.id = freezeModel(parameters, bad.a5.model.provenance).id;
+    bad.resultsHash = hashOf(bad.a5);
+    return bad;
+  };
+  it.each([[[0]], [[...(seed1.a5.model as Json).parameters, 0]], [(seed1.a5.model as Json).parameters.slice(1)]])(
+    'a consistent-hash record with %j parameters is refused by the parser',
+    (parameters) => {
+      expect(() => parseE3SeedRecord(withParameters(parameters), manifest, ENGINE, SPLITS)).toThrow(/not a usable A5 network/);
+    },
+  );
+  it('the held-out run refuses it before the opening is claimed', () => {
+    const shared = createMemoryLedger();
+    const gate = newGate(shared);
+    expect(() => runE3HeldOut(manifest, [withParameters([0]), seed2], rules, gate, CONTEXT, SPLITS)).toThrow(StudyRecordError);
+    expect(shared.openings()).toEqual([]);
+    expect(gate.opened).toBe(false);
+  });
+  it('a valid record still parses and replays', () => {
+    expect(parseE3SeedRecord(seed1, manifest, ENGINE, SPLITS).seed).toBe(7501);
+    expect(replayE3SeedRecord(seed1, manifest, ENGINE, undefined, SPLITS).identical).toBe(true);
+  });
+});
+
+describe('the manifest\'s frozen source is enforced', () => {
+  const A = 'a'.repeat(40);
+  const B = 'b'.repeat(40);
+  const at = (revision: string | null, dirty: boolean | null = revision === null ? null : false): StudyContext => ({
+    ...CONTEXT,
+    source: revision === null ? CONTEXT.source : { revision, dirty, unavailableReason: null, appVersion: '0.0.0' },
+  });
+  const pinned = (): Json => ({ ...MANIFEST(), code: { revision: A } });
+  const pm = pinned();
+  const p1 = runE3Seed(pm, 7501, at(A), SPLITS);
+  const p2 = runE3Seed(pm, 7502, at(A), SPLITS);
+  const pr = runE3Rules(pm, at(A), SPLITS);
+  it('runs refuse another commit, a dirty tree and an unknown revision', () => {
+    expect(() => runE3Seed(pm, 7501, at(B), SPLITS)).toThrow(/differs from the manifest's frozen commit/);
+    expect(() => runE3Seed(pm, 7501, at(A, true), SPLITS)).toThrow(/modified/);
+    expect(() => runE3Rules(pm, at(null), SPLITS)).toThrow(/unknown/);
+    expect(p1.source.revision).toBe(A);
+  });
+  it.each<[string, (r: Json) => void]>([
+    ['another commit', (r) => { r.source.revision = B; }],
+    ['a dirty tree', (r) => { r.source.dirty = true; }],
+  ])('the parsers refuse a seed or rules record from %s', (_name, mutate) => {
+    const seed = clone(p1) as Json;
+    mutate(seed);
+    expect(() => parseE3SeedRecord(seed, pm, ENGINE, SPLITS)).toThrow(StudyRecordError);
+    const rule = clone(pr) as Json;
+    mutate(rule);
+    expect(() => parseE3RulesRecord(rule, pm, ENGINE, SPLITS)).toThrow(StudyRecordError);
+  });
+  it('mixed-source records fail before the held-out opening is claimed', () => {
+    const mixed = clone(p2) as Json;
+    mixed.source.revision = B;
+    const shared = createMemoryLedger();
+    const gate = createHeldOutGate(e3HeldOutProtocol(pm, [p1, p2], SPLITS), shared, SPLITS);
+    expect(() => runE3HeldOut(pm, [p1, mixed], pr, gate, at(A), SPLITS)).toThrow(/frozen commit/);
+    const mixedRules = clone(pr) as Json;
+    mixedRules.source.revision = B;
+    expect(() => runE3HeldOut(pm, [p1, p2], mixedRules, gate, at(A), SPLITS)).toThrow(/frozen commit/);
+    expect(() => runE3HeldOut(pm, [p1, p2], pr, gate, at(B), SPLITS)).toThrow(/frozen commit/);
+    expect(shared.openings()).toEqual([]);
+    expect(gate.opened).toBe(false);
+  });
+  it('matching clean records run, parse and replay (replay may report a different current source)', () => {
+    const gate = createHeldOutGate(e3HeldOutProtocol(pm, [p1, p2], SPLITS), createMemoryLedger(), SPLITS);
+    const record = runE3HeldOut(pm, [p1, p2], pr, gate, at(A), SPLITS);
+    expect(parseE3HeldOutRecord(record, pm, [p1, p2], ENGINE, SPLITS).source.revision).toBe(A);
+    const replay = replayE3HeldOutRecord(record, pm, [p1, p2], ENGINE, at(B).source, SPLITS);
+    expect(replay.identical).toBe(true);
+    expect(replay.sameSourceRevision).toBe(false);
+  });
+  it('a confirmatory manifest has no null pin to fall back on; an unpinned mechanics manifest imposes nothing', () => {
+    expect(() => parseE3Manifest({ ...MANIFEST(), label: 'confirmatory', code: { revision: null } }, SPLITS)).toThrow();
+    expect(runE3Seed(manifest, 7501, at(B), SPLITS).source.revision).toBe(B);
+  });
+});
+
+describe('the analysis says what it is', () => {
+  const analysis = analyseE3(manifest, seedRecords, rules, held, ENGINE, SPLITS);
+  it('carries the label, the actual seed count and a mechanics-only notice', () => {
+    expect(analysis.label).toBe('mechanics');
+    expect(analysis.seedCount).toBe(2);
+    expect(String(analysis.evidence)).toContain('MECHANICS ONLY');
+    expect(String(analysis.evidence)).toContain('Not study evidence and not acceptance evidence');
+  });
+  it('the report prints the label and the real n, never a hardcoded ten', () => {
+    const report = renderE3Report(analysis);
+    expect(report).toContain('(mechanics)');
+    expect(report).toContain('MECHANICS ONLY');
+    expect(report).toContain('2 independent seeds');
+    expect(report).not.toContain('Ten seeds');
+    const one = renderE3Report({ ...analysis, seedCount: 1 });
+    expect(one).toContain('1 independent seed ');
+    expect(one).toContain('- 1 independent seed and');
+  });
+  it('a numerically positive mechanics contrast is still labelled mechanics', () => {
+    const tracks = (analysis.tracks as Json[]).map((x) => ({ ...x, contrasts: Object.fromEntries(Object.entries(x.contrasts).map(([k, c]) => [k, { ...(c as Json), meanDifference: 0.9, interval: [0.8, 1], outcome: 'a5-higher' }])) }));
+    const report = renderE3Report({ ...analysis, tracks });
+    expect(report).toContain('a5-higher');
+    expect(report).toContain('MECHANICS ONLY');
+    expect(report.indexOf('MECHANICS ONLY')).toBeLessThan(report.indexOf('a5-higher'));
   });
 });

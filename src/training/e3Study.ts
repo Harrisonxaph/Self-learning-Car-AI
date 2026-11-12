@@ -250,11 +250,26 @@ function evaluateFrozen(model: FrozenModel, setup: EvaluationSetup, gates: numbe
   return episodeResult(episode, setup.config.fitness, setup.rules, gates);
 }
 
+/**
+ * A manifest that names a frozen commit (always, when confirmatory; optionally in mechanics) only accepts runs and
+ * records made from a clean checkout of exactly that commit. A null pin (mechanics only) imposes nothing. Replay is a
+ * different question and reports the current source separately; it never goes through this check.
+ */
+function checkSourcePin(manifest: E3Manifest, source: ExperimentSource, fail: Fail): void {
+  const pinned = manifest.code.revision;
+  if (pinned === null) return;
+  if (source.revision === null) fail(`the source revision is unknown, but the manifest is frozen at ${pinned}; run it from a clean checkout of that commit.`);
+  else if (source.dirty !== false) fail(`the working tree was modified, but the manifest is frozen at ${pinned}; run it from a clean checkout of that commit.`);
+  else if (source.revision !== pinned) fail(`the source revision ${source.revision} differs from the manifest's frozen commit ${pinned}.`);
+}
+
 function checkManifestAndContext(manifestInput: unknown, context: StudyContext, splits: TrackSplits): E3Manifest {
   const manifest = parseE3Manifest(manifestInput, splits);
-  checkContext(context, (message) => {
+  const fail: Fail = (message) => {
     throw new StudyRecordError(`Study context: ${message}`);
-  });
+  };
+  checkContext(context, fail);
+  checkSourcePin(manifest, context.source, fail);
   return manifest;
 }
 
@@ -343,6 +358,7 @@ export function parseE3SeedRecord(input: unknown, manifestInput: unknown, engine
   const seed = int(r.seed, 'record.seed', 0, 0xffffffff, fail);
   if (!manifest.seeds.includes(seed)) fail(`record.seed ${seed} is not one of the manifest's seeds.`);
   checkContext({ engine: r.engine as ExperimentEngine, source: r.source as ExperimentSource, recordedAt: r.recordedAt as string }, fail);
+  checkSourcePin(manifest, r.source as ExperimentSource, fail);
   const a = exact(r.a5, 'record.a5', A5_KEYS, fail);
   same(a.generation, manifest.configuration.generations - 1, 'record.a5.generation', fail);
   int(a.index, 'record.a5.index', 0, manifest.configuration.training.populationSize - 1, fail);
@@ -353,6 +369,12 @@ export function parseE3SeedRecord(input: unknown, manifestInput: unknown, engine
     rebuilt = freezeModel(dense(model.parameters, 'record.a5.model.parameters', fail) as number[], model.provenance as Record<string, string | number | boolean>);
   } catch (error) {
     return fail(`record.a5.model is not a valid frozen model: ${(error as Error).message}`);
+  }
+  try {
+    // freezeModel proves integrity only; building the driver checks the parameter count (the network's architecture) too.
+    driverForFrozenAgent(rebuilt);
+  } catch (error) {
+    return fail(`record.a5.model is not a usable A5 network: ${(error as Error).message}`);
   }
   if (rebuilt.id !== model.id) fail('record.a5.model.id does not match its parameters and provenance.');
   const training = manifest.tracks.training;
@@ -432,6 +454,7 @@ export function parseE3RulesRecord(input: unknown, manifestInput: unknown, engin
   const r = header(input, RULES_KEYS, E3_RULES_FORMAT, 'rules record', fail);
   compat(r, manifest, engine, 'E3 rules record');
   checkContext({ engine: r.engine as ExperimentEngine, source: r.source as ExperimentSource, recordedAt: r.recordedAt as string }, fail);
+  checkSourcePin(manifest, r.source as ExperimentSource, fail);
   const agents = exact(r.agents, 'record.agents', [...RULE_AGENTS], fail);
   const ids = ruleIds();
   const check = episodeCheck(manifest, manifest.tracks.validation.id, splits);
@@ -531,6 +554,8 @@ export function runE3HeldOut(
   const seeds = checkSeedRecords(manifest, seedRecords, context.engine, splits);
   parseE3RulesRecord(rulesRecord, manifest, context.engine, splits);
   const agents = frozenAgents(manifest, seeds);
+  // Every frozen agent must build a driver before the opening is claimed, so a bad model can never use up the one look.
+  for (const { model } of agents) driverForFrozenAgent(model);
   const protocol = e3HeldOutProtocol(manifest, seeds, splits);
   if (canonicalJson(gate.protocol) !== canonicalJson(protocol)) {
     throw new HeldOutAccessError('The gate was not made for this study\'s protocol (manifest hash, authorisation, held-out circuits and frozen agents must match exactly).');
@@ -579,6 +604,7 @@ export function parseE3HeldOutRecord(
   const r = header(input, HELDOUT_KEYS, E3_HELDOUT_FORMAT, 'held-out record', fail);
   compat(r, manifest, engine, 'E3 held-out record');
   checkContext({ engine: r.engine as ExperimentEngine, source: r.source as ExperimentSource, recordedAt: r.recordedAt as string }, fail);
+  checkSourcePin(manifest, r.source as ExperimentSource, fail);
   const agents = frozenAgents(manifest, seeds);
   const protocol = e3HeldOutProtocol(manifest, seeds, splits);
   const opening = exact(r.opening, 'record.opening', ['protocolHash', 'authorisationId', 'trackIds', 'agentIds'], fail);
@@ -618,7 +644,7 @@ export function replayE3HeldOutRecord(
   const manifest = manifestInput as E3Manifest;
   const seeds = seedRecords.map((r) => r as E3SeedRecord);
   const gate = createHeldOutGate(e3HeldOutProtocol(manifest, seeds, splits), createMemoryLedger(), splits);
-  const fresh = runE3HeldOut(manifest, seedRecords, makeRulesPlaceholder(manifest, engine, splits), gate, {
+  const fresh = runE3HeldOut(manifest, seedRecords, makeRulesPlaceholder(manifest, { engine, source: record.source, recordedAt: record.recordedAt }, splits), gate, {
     engine,
     source: record.source,
     recordedAt: record.recordedAt,
@@ -629,8 +655,8 @@ export function replayE3HeldOutRecord(
 }
 
 /** A valid rules record for replay's internal run (its content is not compared; the held-out record has no rules block). */
-function makeRulesPlaceholder(manifest: E3Manifest, engine: ExperimentEngine, splits: TrackSplits): E3RulesRecord {
-  return runE3Rules(manifest, { engine, source: { revision: null, dirty: null, unavailableReason: 'replay', appVersion: '0' } as ExperimentSource, recordedAt: '2000-01-01T00:00:00Z' }, splits);
+function makeRulesPlaceholder(manifest: E3Manifest, context: StudyContext, splits: TrackSplits): E3RulesRecord {
+  return runE3Rules(manifest, context, splits);
 }
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -725,6 +751,12 @@ export function analyseE3(
     format: 'self-driving-ai-evolution/p5-01-e3-analysis',
     version: E3_VERSION,
     manifestHash: e3ManifestHash(manifest),
+    label: manifest.label,
+    evidence:
+      manifest.label === 'mechanics'
+        ? 'MECHANICS ONLY: a check that the machinery runs. Not study evidence and not acceptance evidence, whatever the numbers say.'
+        : 'Confirmatory study analysis under the manifest\'s predeclared rule.',
+    seedCount: manifest.seeds.length,
     metric: manifest.analysis.metric,
     decisionRule: manifest.analysis.decisionRule,
     delta: manifest.analysis.delta,
@@ -742,7 +774,9 @@ export const e3AnalysisJson = (analysis: Json): string => `${canonicalJson(analy
 
 /** A short Markdown report of an analysis, deterministic for a given analysis. */
 export function renderE3Report(analysis: Json): string {
-  const lines: string[] = ['# P5-01 E3: evolved A5 against the hand-written rule agents', '', `Manifest \`${String(analysis.manifestHash)}\`. Metric ${String(analysis.metric)}; predeclared meaningful difference ${String(analysis.delta)}; seeds ${(analysis.seeds as number[]).join(', ')}.`, '', `**${String(analysis.claim)}**`, ''];
+  const label = String(analysis.label);
+  const n = analysis.seedCount as number;
+  const lines: string[] = [`# P5-01 E3 (${label}): evolved A5 against the hand-written rule agents`, '', ...(label === 'mechanics' ? [`> **${String(analysis.evidence)}**`, ''] : []), `Label ${label}; ${n} independent seed${n === 1 ? '' : 's'}. Manifest \`${String(analysis.manifestHash)}\`. Metric ${String(analysis.metric)}; predeclared meaningful difference ${String(analysis.delta)}; seeds ${(analysis.seeds as number[]).join(', ')}.`, '', `**${String(analysis.claim)}**`, ''];
   for (const t of analysis.tracks as Json[]) {
     lines.push(`## ${String(t.trackId)} (${String(t.split)})`, '', '| Rule agent | A5 − rule (mean) | 95% interval | A5 higher / tied / rule higher | Outcome |', '| --- | --- | --- | --- | --- |');
     for (const agent of RULE_AGENTS) {
@@ -752,6 +786,6 @@ export function renderE3Report(analysis: Json): string {
     }
     lines.push('');
   }
-  lines.push('## Limits', '', '- The rule agents are deterministic, so each contributes one value per circuit; the interval is over A5\'s training seeds.', '- A3-nb was tuned separately from A3; only A3 against A3-nb-same is a brake ablation.', '- Ten seeds and a few circuits: an interval is a guide, not proof.', '');
+  lines.push('## Limits', '', '- The rule agents are deterministic, so each contributes one value per circuit; the interval is over A5\'s training seeds.', '- A3-nb was tuned separately from A3; only A3 against A3-nb-same is a brake ablation.', `- ${n} independent seed${n === 1 ? '' : 's'} and a few circuits: an interval is a guide, not proof.`, '');
   return lines.join('\n');
 }
