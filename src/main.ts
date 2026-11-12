@@ -75,6 +75,9 @@ const trackLayer = createTrackLayer(() => {
   return { canvas: layerCanvas, context: layerContext };
 });
 
+/** The saved-tracks panel logic, created on first use by the editor. Declared BEFORE the page dispatch below: a `let` read earlier than its declaration runs is a temporal-dead-zone error in an unbundled dev server (the production bundle hides it). */
+let trackLibrary: TrackLibrary | undefined;
+
 if (pageMode(window.location.search) === 'train') {
   // One training circuit per run (P4-04): chosen from the address, training circuits only; the default is the stadium oval.
   const trainingCircuits = tracksIn('training');
@@ -266,8 +269,6 @@ function customTrackStore() {
     },
   });
 }
-
-let trackLibrary: TrackLibrary | undefined;
 
 /** The track editor (P4-02): the manual-driving panels are hidden while editing. */
 function startEditing(history?: EditorHistory): void {

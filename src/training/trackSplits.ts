@@ -21,7 +21,7 @@ import roundedRectangle from '../data/tracks/rounded-rectangle.json';
 import sSweepers from '../data/tracks/s-sweepers.json';
 import stadiumOval from '../data/tracks/stadium-oval.json';
 import technicalNarrow from '../data/tracks/technical-narrow.json';
-import { loadTrack, type Track } from '../sim/track';
+import { loadTrack, type Track, type Vec2 } from '../sim/track';
 import { describeTrackErrors, validateTrack } from '../sim/trackValidation';
 import { sha256Hex } from '../utils/sha256';
 
@@ -269,6 +269,47 @@ export const RESERVED_LAYOUT_MESSAGE = 'This track uses the ID or the layout of 
 export type CustomTrackCheck = { readonly ok: true } | { readonly ok: false; readonly message: string };
 
 /**
+ * A fingerprint of the ROAD a track describes, for the custom-track boundary (P4-03). `trackGeometryHash` hashes the boundary arrays in
+ * order, so the same road written with the other winding direction, or starting at another point of the loop, hashes differently while
+ * the validator accepts it as the same circuit. This normalises both before hashing: each boundary loop is turned to one orientation
+ * (positive signed area), rotated to start at its lowest point, and rounded to a micrometre, and the outer and inner loops are hashed
+ * together. It is a separate classification representation: no built-in content hash or manifest changes. It is an exact-copy guard
+ * (after those normalisations), not a similarity detector: a road nudged by more than a micrometre is a different road for this check.
+ */
+function canonicalLoop(points: readonly Vec2[]): string {
+  const round = (v: number): number => Math.round(v * 1e6) / 1e6;
+  let loop = points.map((p) => ({ x: round(p.x), y: round(p.y) }));
+  let area = 0;
+  for (let i = 0; i < loop.length; i += 1) {
+    const a = loop[i]!;
+    const b = loop[(i + 1) % loop.length]!;
+    area += a.x * b.y - b.x * a.y;
+  }
+  if (area < 0) loop = loop.reverse();
+  let best = 0;
+  for (let i = 1; i < loop.length; i += 1) {
+    const p = loop[i]!;
+    const q = loop[best]!;
+    if (p.x < q.x || (p.x === q.x && p.y < q.y)) best = i;
+  }
+  return JSON.stringify([...loop.slice(best), ...loop.slice(0, best)].map((p) => [p.x, p.y]));
+}
+
+export function roadFingerprint(track: Track): string {
+  return `sha256:${sha256Hex(`${canonicalLoop(track.outer)}|${canonicalLoop(track.inner)}`)}`;
+}
+
+const fingerprintCache = new WeakMap<TrackSplits, ReadonlySet<string>>();
+function roadFingerprints(splits: TrackSplits): ReadonlySet<string> {
+  let found = fingerprintCache.get(splits);
+  if (found === undefined) {
+    found = new Set(splits.tracks.map((t) => roadFingerprint(t.track)));
+    fingerprintCache.set(splits, found);
+  }
+  return found;
+}
+
+/**
  * Whether a person's own track (made in the editor or imported) may be saved and evaluated in the browser (P4-03). Refused, with
  * one generic message, whichever split the circuit is in: any ID a built-in circuit uses and any geometry identical to a built-in
  * circuit (whatever its ID, name, version or labels). Training, validation and held-out matches are refused identically, so a
@@ -277,7 +318,8 @@ export type CustomTrackCheck = { readonly ok: true } | { readonly ok: false; rea
  */
 export function classifyCustomTrack(track: Track, splits: TrackSplits = BUILT_IN_TRACK_SPLITS): CustomTrackCheck {
   try {
-    return findRegistered(track, splits).length > 0 ? { ok: false, message: RESERVED_LAYOUT_MESSAGE } : { ok: true };
+    if (findRegistered(track, splits).length > 0) return { ok: false, message: RESERVED_LAYOUT_MESSAGE };
+    return roadFingerprints(splits).has(roadFingerprint(track)) ? { ok: false, message: RESERVED_LAYOUT_MESSAGE } : { ok: true };
   } catch {
     return { ok: false, message: RESERVED_LAYOUT_MESSAGE };
   }

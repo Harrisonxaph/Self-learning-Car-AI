@@ -12,7 +12,7 @@ import {
   parseTrackText,
 } from '../../src/persistence/trackStore';
 import type { Track, Vec2 } from '../../src/sim/track';
-import { BUILT_IN_TRACK_SPLITS, RESERVED_LAYOUT_MESSAGE, classifyCustomTrack } from '../../src/training/trackSplits';
+import { BUILT_IN_TRACK_SPLITS, RESERVED_LAYOUT_MESSAGE, classifyCustomTrack, roadFingerprint, trackContentHash } from '../../src/training/trackSplits';
 import { MemoryStorage } from '../helpers/evaluationFixtures';
 
 const ring = (rx: number, ry: number, n = 10, turn = 0): Vec2[] =>
@@ -342,6 +342,48 @@ describe('the held-out boundary: an ID or layout of a built-in circuit is refuse
       for (const word of ['held-out', 'validation', 'training']) expect(message.toLowerCase()).not.toContain(word);
     });
   }
+
+  it('the same road written with the other winding direction, another starting point, or both is refused for EVERY built-in circuit (no model is evaluated)', () => {
+    const rotate = <T,>(list: readonly T[], k: number): T[] => [...list.slice(k % list.length), ...list.slice(0, k % list.length)];
+    for (const t of circuits) {
+      const { outer, inner } = t.track;
+      const variants: [string, { outer: unknown; inner: unknown }][] = [
+        ['both boundaries reversed', { outer: [...outer].reverse(), inner: [...inner].reverse() }],
+        ['outer shifted by 1', { outer: rotate(outer, 1), inner }],
+        ['outer shifted by a third', { outer: rotate(outer, Math.floor(outer.length / 3)), inner }],
+        ['inner shifted by 7', { outer, inner: rotate(inner, 7) }],
+        ['both shifted', { outer: rotate(outer, 5), inner: rotate(inner, 11) }],
+        ['reversed and shifted', { outer: rotate([...outer].reverse(), 3), inner: rotate([...inner].reverse(), 9) }],
+        ['reversed, shifted to the last point', { outer: rotate([...outer].reverse(), outer.length - 1), inner: [...inner].reverse() }],
+      ];
+      for (const [name, v] of variants) {
+        const doc = { ...asDocument(t, { id: 'my-copy' }), outer: v.outer, inner: v.inner };
+        const { store, storage } = make();
+        expect(store.importText(JSON.stringify(doc)), `${t.id}: ${name}`).toEqual({ ok: false, reason: 'invalid', message: RESERVED_LAYOUT_MESSAGE });
+        expect(storage.writes).toBe(0);
+        expect(classifyCustomTrack(JSON.parse(JSON.stringify(doc)) as Track)).toEqual({ ok: false, message: RESERVED_LAYOUT_MESSAGE });
+      }
+    }
+  });
+
+  it('the road fingerprint ignores winding and starting point but tells different roads apart; no built-in hash changes', () => {
+    const a = circuits[0]!.track;
+    const rev = { ...a, outer: [...a.outer].reverse(), inner: [...a.inner].reverse() } as Track;
+    expect(roadFingerprint(rev)).toBe(roadFingerprint(a));
+    expect(roadFingerprint({ ...a, outer: [...a.outer.slice(2), ...a.outer.slice(0, 2)] } as Track)).toBe(roadFingerprint(a));
+    expect(new Set(circuits.map((t) => roadFingerprint(t.track))).size).toBe(circuits.length);
+    // the content and geometry hashes of the built-in circuits are untouched (manifest-compatible)
+    for (const t of circuits) expect(t.contentHash).toBe(trackContentHash(t.track));
+  });
+
+  it('a road that is genuinely different, drawn in either winding, is accepted', () => {
+    const doc = drawn();
+    const { store } = make();
+    const reversed = { ...doc, outer: [...(doc.outer as Vec2[])].reverse(), inner: [...(doc.inner as Vec2[])].reverse(), editor: undefined };
+    // reversed boundaries with the original gates fail the validator's gate-order rule: that is the existing rule, not the boundary
+    expect(store.importText(JSON.stringify(doc)).ok).toBe(true);
+    expect(store.importText(JSON.stringify(reversed)).ok).toBe(false);
+  });
 
   it('the refusal is identical whichever split matched, so trying a layout reveals nothing about which are held out', () => {
     const { store } = make();

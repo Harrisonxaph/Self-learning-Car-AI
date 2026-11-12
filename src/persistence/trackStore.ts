@@ -110,13 +110,30 @@ function readEditor(value: unknown, track: Track): EditorSeed | null {
     if (!isObject(value) || !Array.isArray(value.points)) return null;
     const count = value.points.length;
     if (count < EDITOR_LIMITS.minPoints || count > EDITOR_LIMITS.maxPoints) return null;
+    // The editor source is UNTRUSTED and is not covered by the track validator, so it is bounded BEFORE anything is built from it: every
+    // value must be inside the limits the editor itself enforces, and the rebuild's work (it samples the centre line about every
+    // `sampleStep` metres) is bounded by those limits, not by what a file claims. A source that fails is dropped (the track stays valid
+    // and drivable, just not editable) and `buildTrack` is never entered for it.
+    const area = EDITOR_LIMITS.workArea;
     const points: { x: number; y: number }[] = [];
     for (const p of value.points as unknown[]) {
-      if (!isObject(p) || !finite(p.x) || !finite(p.y)) return null;
+      if (!isObject(p) || !finite(p.x) || !finite(p.y) || Math.abs(p.x) > area || Math.abs(p.y) > area) return null;
       points.push({ x: p.x, y: p.y });
     }
     const { width, gateSpacing, startOffset, name } = value;
-    if (!finite(width) || !finite(gateSpacing) || !finite(startOffset) || typeof name !== 'string' || name.length > EDITOR_LIMITS.maxNameLength) return null;
+    if (!finite(width) || width < EDITOR_LIMITS.minWidth || width > EDITOR_LIMITS.maxWidth) return null;
+    if (!finite(gateSpacing) || gateSpacing < EDITOR_LIMITS.minGateSpacing || gateSpacing > EDITOR_LIMITS.maxGateSpacing) return null;
+    if (typeof name !== 'string' || name.length > EDITOR_LIMITS.maxNameLength) return null;
+    // The centre line's length is at most the control polygon's (a spline through points inside the work area stays near it); bounding the
+    // polygon bounds the number of samples. With every coordinate inside the work area this cannot exceed points x the area's diagonal.
+    let polygon = 0;
+    for (let i = 0; i < points.length; i += 1) {
+      const a = points[i]!;
+      const b = points[(i + 1) % points.length]!;
+      polygon += Math.hypot(b.x - a.x, b.y - a.y);
+    }
+    if (polygon > EDITOR_LIMITS.maxPoints * 2 * area * Math.SQRT2) return null;
+    if (!finite(startOffset) || startOffset < 0 || startOffset > polygon * 2) return null;
     const state: EditorState = createEditorState({ points, closed: true, width, gateSpacing, startOffset, name, snap: 1 });
     const built = buildTrack(state);
     if ('message' in built) return null;
