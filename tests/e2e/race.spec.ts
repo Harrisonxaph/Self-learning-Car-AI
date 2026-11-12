@@ -91,6 +91,12 @@ test('the other pages show no race UI, and the race page offers training and val
   expect(values).toEqual(['stadium-oval', 'kidney-loop', 'rounded-rectangle', 's-sweepers']);
   expect(await page.locator('#rc-laps option').evaluateAll((options) => options.map((o) => (o as HTMLOptionElement).value))).toEqual(['1', '3']);
   await expect(page.locator('#rc-laps')).toHaveValue('3');
+  // While choosing, the driving keys are not attached: the arrow keys change a focused select and nothing is prevented.
+  await page.locator('#rc-laps').focus();
+  await page.keyboard.press('ArrowUp');
+  await expect(page.locator('#rc-laps')).toHaveValue('1');
+  await page.keyboard.press('ArrowDown');
+  await expect(page.locator('#rc-laps')).toHaveValue('3');
 });
 
 test('start and finish a race with the touch controls, read the results, and restart so the AI repeats', async ({ page }) => {
@@ -184,4 +190,20 @@ test('the touch controls are at least 44 px and the page does not scroll sideway
   expect(restart!.height).toBeGreaterThanOrEqual(44);
   // The page does not scroll under the canvas while racing.
   expect(await page.evaluate(() => document.documentElement.scrollHeight - document.documentElement.clientHeight)).toBeLessThanOrEqual(0);
+});
+
+test('the driving keys work while racing and are released when the race ends', async ({ page }, testInfo) => {
+  test.skip(!!testInfo.project.use.hasTouch, 'Keyboard test: desktop projects.');
+  await open(page);
+  await startOneLap(page);
+  await expect.poll(() => phase(page), { timeout: 15_000 }).toBe('racing');
+  const startX = Number(await canvas(page).getAttribute('data-human-x'));
+  await page.keyboard.down('ArrowUp');
+  await expect.poll(async () => Math.abs(Number(await canvas(page).getAttribute('data-human-x')) - startX), { timeout: 10_000 }).toBeGreaterThan(1);
+  await page.keyboard.up('ArrowUp');
+  await expect.poll(() => phase(page), { timeout: 60_000 }).toBe('finished');
+  // On the results screen the page keeps the browser's own key behaviour: Space on a focused button activates it (it does not brake).
+  await expect(page.locator('#rr-restart')).toBeFocused();
+  await page.keyboard.press('Space');
+  await expect(canvas(page)).toHaveAttribute('data-race-phase', 'countdown');
 });

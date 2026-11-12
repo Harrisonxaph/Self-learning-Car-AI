@@ -11,13 +11,12 @@ import { paintTrack } from '../render/cameraScene';
 import type { TrackLayer } from '../render/trackLayer';
 import { browserViewportEnvironment, createViewport, type Viewport, type ViewportSize } from '../render/viewport';
 import { createFixedStepClock } from '../sim/fixedStep';
-import { DEFAULT_SIM_CONFIG } from '../sim/config';
 import { trackBounds } from '../sim/track';
 import type { RacerResult } from '../training/race';
 import { createCameraController, type CameraController } from './cameraController';
 import { startCameraPage, type CameraPage } from './cameraPage';
 import { browserFrameEnvironment, startFrameLoop, type FrameLoop } from './frameLoop';
-import type { RaceController } from './raceController';
+import { raceClockConfig, type RaceController } from './raceController';
 
 const must = <T extends Element>(selector: string): T => {
   const found = document.querySelector<T>(selector);
@@ -72,7 +71,6 @@ export function startRacePage(deps: RacePageDeps): RacePage {
   const keysHelp = must<HTMLElement>('.keys-help');
   const driving = [must<HTMLElement>('.hud')];
   const holdButtons = [...document.querySelectorAll<HTMLButtonElement>('button[data-action]')];
-  const config = DEFAULT_SIM_CONFIG;
 
   const cleanups: (() => void)[] = [];
   const on = <K extends keyof HTMLElementEventMap>(target: HTMLElement, type: K, handler: (event: HTMLElementEventMap[K]) => void): void => {
@@ -86,7 +84,18 @@ export function startRacePage(deps: RacePageDeps): RacePage {
   const isNativeButton = (target: unknown): boolean =>
     target === restartButton ||
     (target instanceof HTMLElement && target.tagName === 'BUTTON' && target.closest('#camera-controls, #race-panel, #race-results') !== null);
-  cleanups.push(attachKeyboard(window, held, () => (restartRequested = true), isNativeButton));
+  // The driving keys (arrows, WASD, Space, R) are attached only while the cars are on the track (countdown and racing), so the choosing and
+  // results screens keep the browser's own keyboard behaviour (arrow keys on a select, Space on a button, scrolling).
+  let detachKeys: (() => void) | null = null;
+  const setKeys = (on: boolean): void => {
+    if (on && detachKeys === null) detachKeys = attachKeyboard(window, held, () => (restartRequested = true), isNativeButton);
+    if (!on && detachKeys !== null) {
+      detachKeys();
+      detachKeys = null;
+      held.releaseAll();
+    }
+  };
+  cleanups.push(() => setKeys(false));
   cleanups.push(attachSafetyRelease(window, document, held));
   for (const button of holdButtons) cleanups.push(attachHoldButton(button, button.dataset.action as HoldAction, held));
   on(restartButton, 'click', (event) => {
@@ -211,7 +220,7 @@ export function startRacePage(deps: RacePageDeps): RacePage {
       },
     });
     viewport = createViewport(canvas, browserViewportEnvironment(canvas), draw);
-    const loop = startFrameLoop(browserFrameEnvironment(), createFixedStepClock(config), {
+    const loop = startFrameLoop(browserFrameEnvironment(), createFixedStepClock(raceClockConfig(view.setup)), {
       step: () => {
         if (restartRequested) {
           restartRequested = false;
@@ -351,6 +360,7 @@ export function startRacePage(deps: RacePageDeps): RacePage {
     hudPanel.hidden = setup;
     controlsBar.hidden = setup || finished;
     keysHelp.hidden = setup || finished;
+    setKeys(phase === 'countdown' || phase === 'racing');
     if (setup) {
       leaveRace();
       setText(status, '');

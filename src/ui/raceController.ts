@@ -7,6 +7,7 @@
 // contribution is capped, so a tab that was in the background cannot skip the countdown or start the race with a time jump.
 import { modelParameters } from '../persistence/modelFormat';
 import type { ModelStore, StoreEntry } from '../persistence/modelStore';
+import { DEFAULT_SIM_CONFIG, type SimConfig } from '../sim/config';
 import type { Controls } from '../sim/vehicle';
 import {
   createRaceRunner,
@@ -100,6 +101,14 @@ export interface RaceController {
   elapsedSeconds(): number;
   refresh(): void;
   subscribe(listener: () => void): () => void;
+}
+
+/**
+ * The fixed-step clock's settings for a race: the champion's OWN recorded timestep (each `step()` advances the physics and the race timers by it,
+ * so the clock must schedule ticks at that length), with the default catch-up limit kept.
+ */
+export function raceClockConfig(setup: RaceSetup): SimConfig {
+  return { ...DEFAULT_SIM_CONFIG, timestepSeconds: setup.context.environment.timestepSeconds };
 }
 
 /** True when `id` resolves to a built-in circuit of exactly `split`: a held-out or unknown ID throws and is refused. */

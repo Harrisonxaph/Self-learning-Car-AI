@@ -4,7 +4,13 @@
 // Seeded and tiny; nothing here is a result about learning or about who drives better.
 import { describe, expect, it } from 'vitest';
 import { createModelStore } from '../../src/persistence/modelStore';
-import { createRaceController, COUNTDOWN_SECONDS, MAX_FRAME_SECONDS } from '../../src/ui/raceController';
+import { createRaceController, raceClockConfig, COUNTDOWN_SECONDS, MAX_FRAME_SECONDS } from '../../src/ui/raceController';
+import { createFixedStepClock } from '../../src/sim/fixedStep';
+import { createRaceSetup } from '../../src/training/race';
+import { DEFAULT_SIM_CONFIG, DEFAULT_VEHICLE_PHYSICS } from '../../src/sim/config';
+import { loadTrack } from '../../src/sim/track';
+import stadiumOval from '../../src/data/tracks/stadium-oval.json';
+import { PARAMETER_COUNT } from '../../src/ai/network';
 import { entryBelongsTo } from '../../src/ui/modelEvaluation';
 import { tracksIn } from '../../src/training/trackSplits';
 import type { Controls } from '../../src/sim/vehicle';
@@ -256,5 +262,23 @@ describe('storage trouble', () => {
     expect(controller.models()).toEqual([]);
     expect(controller.message().length).toBeGreaterThan(0);
     expect(controller.start()).toBe(false);
+  });
+});
+
+describe("the frame clock follows the champion's own timestep", () => {
+  const setupFor = (timestepSeconds: number) =>
+    createRaceSetup({ track: loadTrack(stadiumOval), physics: DEFAULT_VEHICLE_PHYSICS, timestepSeconds, stallSeconds: 5, laps: 1, genome: new Float64Array(PARAMETER_COUNT), brakeEnabled: true });
+  it('a 0.1 s champion gets 10 ticks per real second, not 60 (which would run the race six times too fast)', () => {
+    const slow = createFixedStepClock(raceClockConfig(setupFor(0.1)));
+    expect(slow.advance(0.5)).toBe(5);
+    expect(slow.advance(0.05)).toBe(0);
+    expect(slow.advance(0.05)).toBe(1);
+    const standard = createFixedStepClock(raceClockConfig(setupFor(DEFAULT_SIM_CONFIG.timestepSeconds)));
+    expect(standard.advance(2 / 60)).toBe(2);
+  });
+  it('keeps the default catch-up limit', () => {
+    expect(raceClockConfig(setupFor(0.1)).maxStepsPerFrame).toBe(DEFAULT_SIM_CONFIG.maxStepsPerFrame);
+    const fast = createFixedStepClock(raceClockConfig(setupFor(0.1)));
+    expect(fast.advance(10)).toBeLessThanOrEqual(DEFAULT_SIM_CONFIG.maxStepsPerFrame);
   });
 });
