@@ -40,6 +40,8 @@ export interface EntrySummary {
   readonly generation: number;
   readonly fitness: number;
   readonly createdAt: string;
+  /** The training circuit's ID (P4-04), so a list can say which circuit a champion was trained on. */
+  readonly circuit: string;
   /** False when the run's seed is unavailable (legacy unseeded data), so the run cannot be reproduced. */
   readonly reproducible: boolean;
 }
@@ -216,7 +218,7 @@ export function createModelStore(options: ModelStoreOptions): ModelStore {
     return {
       id,
       status: 'ok',
-      summary: { name: model.name ?? null, generation: model.training.generation, fitness: model.fitness, createdAt: model.createdAt, reproducible: model.training.seed !== null },
+      summary: { name: model.name ?? null, generation: model.training.generation, fitness: model.fitness, createdAt: model.createdAt, circuit: model.training.trackIds[0] ?? 'unknown', reproducible: model.training.seed !== null },
       warnings: c.drivable ? c.warnings : [...c.reasons],
       drivable: c.drivable,
     };

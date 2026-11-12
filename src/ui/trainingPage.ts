@@ -18,6 +18,7 @@ import { createPairReplay, type PairReplay } from '../training/pairReplay';
 import { compareModels, type CompareResult } from '../persistence/modelCompare';
 import { renderComparison } from './compareView';
 import { RACE_COLOURS } from '../render/raceView';
+import { circuitControlState } from './trainingCircuit';
 import { createTrainer, DEFAULT_TRAINING_CONFIG, type Generation, type TrainerState } from '../training/trainer';
 import { MAX_CHECKPOINT_BYTES, type CheckpointDocument } from '../persistence/checkpointFormat';
 import { checkpointFile, CHECKPOINT_MESSAGES, createCheckpointStore, describeCheckpointRefusal, parseCheckpointText } from '../persistence/checkpointStore';
@@ -78,6 +79,16 @@ export interface TrainingPage {
   readonly dashboard: { readonly panel: HTMLElement; readonly outputs: DashboardOutputs };
   readonly trackLayer: TrackLayer<HTMLCanvasElement>;
   readonly track: Track;
+  /**
+   * The training-circuit choice (P4-04). The page trains on `track`; choosing another circuit starts a new run, through
+   * `navigate` (the browser loads the address for the new circuit), and is only possible before the first generation
+   * completes or while training is paused.
+   */
+  readonly circuit: {
+    readonly select: { value: string; disabled: boolean; title?: string; addEventListener(type: 'change', listener: () => void): void };
+    readonly hint: { textContent: string | null };
+    readonly navigate: (circuitId: string) => void;
+  };
   readonly physics: VehiclePhysics;
   readonly config: SimConfig;
   /** The speed, pause and cars-drawn controls (P3-03), shown in training mode. */
@@ -197,7 +208,7 @@ const MAX_REPLAY_TICKS_PER_STEP = 64;
 export function startTrainingPage(page: TrainingPage): void {
   const { canvas, context, status, trackLayer, track, physics, config } = page;
   for (const element of page.hide) element.hidden = true;
-  canvas.setAttribute('aria-label', 'Racetrack with a population of training cars');
+  canvas.setAttribute('aria-label', `Racetrack ${track.name} with a population of training cars`);
 
   page.dashboard.panel.hidden = false;
   const environment = { track, physics, timestepSeconds: config.timestepSeconds };
@@ -221,7 +232,22 @@ export function startTrainingPage(page: TrainingPage): void {
     controls.pause.textContent = speed.paused ? 'Play' : 'Pause';
     // The accessible name contains the visible label ("Pause" or "Play"), so voice control by what is shown works.
     controls.pause.setAttribute('aria-label', speed.paused ? 'Play / resume training' : 'Pause training');
+    syncCircuit();
   };
+  // The training circuit (P4-04): one per run, changed only before the first generation completes or while paused.
+  const circuit = page.circuit;
+  circuit.select.value = track.id;
+  function syncCircuit(): void {
+    const state = circuitControlState({ paused: speed.paused, completedGenerations: trainer.record().generations.length });
+    if (circuit.select.disabled !== state.disabled) circuit.select.disabled = state.disabled;
+    if (circuit.hint.textContent !== state.hint) circuit.hint.textContent = state.hint;
+    if (circuit.select.title !== state.hint) circuit.select.title = state.hint;
+  }
+  circuit.select.addEventListener('change', () => {
+    if (circuit.select.disabled) return;
+    if (circuit.select.value === track.id) return;
+    circuit.navigate(circuit.select.value);
+  });
   for (const mode of SPEED_MODES) {
     controls.speeds[mode].addEventListener('click', () => {
       speed.setMode(mode);
@@ -560,7 +586,7 @@ export function startTrainingPage(page: TrainingPage): void {
     }
     const { model } = loaded;
     if (!model.training.trackIds.includes(track.id)) {
-      say(`This champion was trained on ${model.training.trackIds.join(', ')}; this view shows ${track.id}, so it cannot be replayed here.`);
+      say(`This champion was trained on ${model.training.trackIds.join(', ')}; this view shows ${track.id}, so it cannot be replayed here. Pause training and choose that circuit under Champion replay, Training circuit.`);
       return;
     }
     let prepared: ReturnType<typeof replayForModel>;
@@ -865,6 +891,7 @@ export function startTrainingPage(page: TrainingPage): void {
     const drawn = effectiveDrawCap(speed.mode, drawCap, population);
     const text = trainingStatus(generation, speedStatus(speed.mode, speed.paused) + (active ? ` · replaying ${active.label}` : '') + (canvas.dataset.checkpointOffer ? ' · checkpoint found' : ''));
     if (status.textContent !== text) status.textContent = text;
+    syncCircuit();
     const { live, completed } = session.frame();
     Object.assign(canvas.dataset, {
       mode: 'train',
@@ -876,6 +903,7 @@ export function startTrainingPage(page: TrainingPage): void {
       stalled: String(live.stalled),
       finished: String(live.finished),
       completedGenerations: String(trainer.record().generations.length),
+      trackId: track.id,
       speed: speed.mode,
       paused: String(speed.paused),
       drawn: String(drawn),

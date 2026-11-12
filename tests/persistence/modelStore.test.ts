@@ -87,7 +87,7 @@ describe('save, list and load', () => {
     expect(JSON.parse(storage.data.get(INDEX_KEY)!)).toEqual(['abc']);
     expect(storage.data.has(`${MODEL_KEY_PREFIX}abc`)).toBe(true);
     const listing = store.list();
-    expect(listing).toMatchObject({ available: true, entries: [{ id: 'abc', status: 'ok', summary: { name: 'My best', generation: stats.generation, fitness: stats.bestFitness }, warnings: [], drivable: true }] });
+    expect(listing).toMatchObject({ available: true, entries: [{ id: 'abc', status: 'ok', summary: { name: 'My best', circuit: 'stadium-oval', generation: stats.generation, fitness: stats.bestFitness }, warnings: [], drivable: true }] });
     const loaded = store.load('abc');
     if (!loaded.ok) throw new Error(loaded.message);
     expect(loaded.model).toEqual(original);

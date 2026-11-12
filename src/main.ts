@@ -15,6 +15,8 @@ import { createFixedStepClock } from './sim/fixedStep';
 import { loadTrack, type Track } from './sim/track';
 import type { EditorHistory } from './editor/trackEditor';
 import { startEditorPage } from './ui/editorPage';
+import { tracksIn, trainingTrack } from './training/trackSplits';
+import { circuitFromSearch, searchForCircuit } from './ui/trainingCircuit';
 import { createWorld, elapsedSeconds, restartWorld, stepWorld, type World } from './sim/world';
 import {
   attachHoldButton,
@@ -68,6 +70,16 @@ const trackLayer = createTrackLayer(() => {
 });
 
 if (pageMode(window.location.search) === 'train') {
+  // One training circuit per run (P4-04): chosen from the address, training circuits only; the default is the stadium oval.
+  const trainingCircuits = tracksIn('training');
+  const circuitSelect = element<HTMLSelectElement>('#training-circuit');
+  for (const entry of trainingCircuits) {
+    const option = document.createElement('option');
+    option.value = entry.id;
+    option.textContent = entry.track.name;
+    circuitSelect.append(option);
+  }
+  const trainingCircuit = trainingTrack(circuitFromSearch(window.location.search, trainingCircuits.map((t) => t.id)));
   const graphCanvas = element<HTMLCanvasElement>('#graph-canvas');
   const graphContext = graphCanvas.getContext('2d');
   if (!graphContext) throw new Error('Canvas 2D drawing is not supported.');
@@ -182,7 +194,12 @@ if (pageMode(window.location.search) === 'train') {
       },
     },
     trackLayer,
-    track,
+    track: trainingCircuit,
+    circuit: {
+      select: circuitSelect,
+      hint: element<HTMLElement>('#training-circuit-hint'),
+      navigate: (id) => window.location.assign(`${window.location.pathname}${searchForCircuit(window.location.search, id)}`),
+    },
     physics: DEFAULT_VEHICLE_PHYSICS,
     config,
   });

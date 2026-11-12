@@ -156,6 +156,9 @@ export function fakePage(frames: FakeFrames, options: FakePageOptions | { ms: nu
     drawCap: new FakeControl(),
   };
   controls.group.hidden = true;
+  const circuitSelect = new FakeControl();
+  const circuitHint = { textContent: '' as string | null };
+  const navigated: string[] = [];
   const replay = {
     details: new FakeDetails(),
     generation: Object.assign(new FakeControl(), { value: '1' }),
@@ -258,6 +261,7 @@ export function fakePage(frames: FakeFrames, options: FakePageOptions | { ms: nu
     // No track layer yet: the frame draws nothing, which leaves the per-frame paths under test.
     trackLayer: { get: () => (opts.drawing ? { canvas: {}, view: { scale: 1, offsetX: 0, offsetY: 0 } } : null) },
     track: loadTrack(stadiumOval),
+    circuit: { select: circuitSelect, hint: circuitHint, navigate: (id: string) => navigated.push(id) },
     physics: DEFAULT_VEHICLE_PHYSICS,
     config: DEFAULT_SIM_CONFIG,
     graph,
@@ -271,5 +275,5 @@ export function fakePage(frames: FakeFrames, options: FakePageOptions | { ms: nu
     for (const entry of deferred.splice(0)) if (includeCancelled || !entry.cancelled) entry.run();
   };
   const hide = () => hideListeners.forEach((listener) => listener());
-  return { page, canvas, dashboard, panel, hidden, graph, controls, replay, saved, savedStorage, compare, checkpoint, checkpointStorage, runDeferred, hide, status, fps };
+  return { page, canvas, dashboard, panel, hidden, graph, controls, replay, saved, savedStorage, compare, checkpoint, checkpointStorage, runDeferred, hide, status, fps, circuitSelect, circuitHint, navigated };
 }
