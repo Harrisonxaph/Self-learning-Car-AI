@@ -8,11 +8,14 @@ import stadiumOval from './data/tracks/stadium-oval.json';
 import { drawRace } from './render/raceView';
 import { drawSensors } from './render/sensorView';
 import { createTrackLayer } from './render/trackLayer';
+import { paintTrack } from './render/cameraScene';
+import { createCameraController } from './ui/cameraController';
+import { startCameraPage } from './ui/cameraPage';
 import { browserViewportEnvironment, createViewport, type ViewportSize } from './render/viewport';
 import { castRays, DEFAULT_SENSOR_CONFIG } from './sensors/rays';
 import { DEFAULT_SIM_CONFIG, DEFAULT_VEHICLE_PHYSICS } from './sim/config';
 import { createFixedStepClock } from './sim/fixedStep';
-import { loadTrack, type Track } from './sim/track';
+import { loadTrack, trackBounds, type Track } from './sim/track';
 import type { EditorHistory } from './editor/trackEditor';
 import { startEditorPage } from './ui/editorPage';
 import { classifyCustomTrack, tracksIn, trainingTrack } from './training/trackSplits';
@@ -211,6 +214,7 @@ if (pageMode(window.location.search) === 'train') {
     },
     physics: DEFAULT_VEHICLE_PHYSICS,
     config,
+    cameraUi: (deps) => startCameraPage({ canvas, ...deps }),
   });
 } else if (pageMode(window.location.search) === 'edit') {
   startEditing();
@@ -314,7 +318,9 @@ function startDrivingPage(track: Track): () => void {
   };
   const restartButton = element<HTMLButtonElement>('#restart');
   // Space on a focused Restart or Back to editing button activates it, as on any button, instead of braking.
-  const isNativeButton = (target: unknown) => target === restartButton || target === document.getElementById('ed-back');
+  // Space on a focused Restart, Back to editing or camera button activates it, as on any button, instead of braking (P4-07).
+  const isNativeButton = (target: unknown) =>
+    target === restartButton || target === document.getElementById('ed-back') || (target instanceof HTMLElement && target.closest('#camera-controls') !== null && target.tagName === 'BUTTON');
   detach.push(attachKeyboard(window, held, requestRestart, isNativeButton));
   detach.push(attachSafetyRelease(window, document, held));
   for (const button of holdButtons) detach.push(attachHoldButton(button, button.dataset.action as HoldAction, held));
@@ -335,25 +341,25 @@ function startDrivingPage(track: Track): () => void {
 
   /** Draws the track and the car, and records the transform and car state for the browser tests. */
   const draw = (size: ViewportSize) => {
-    const layer = trackLayer.get(track, size);
-    context.setTransform(1, 0, 0, 1, 0, 0);
-    context.clearRect(0, 0, size.width, size.height);
-    if (!layer) return;
-    context.drawImage(layer.canvas, 0, 0);
-    drawRace(context, size, layer.view, world);
+    // The camera (P4-07) is render-only: at the whole-track view the cached track layer is used exactly as before; otherwise the track is
+    // drawn directly through the camera's view, and the car, rays and finish marker are drawn through that same view.
+    camera.setCanvas(size.cssWidth, size.cssHeight);
+    const view = paintTrack(context, trackLayer, track, size, camera.view(), camera.atFit());
+    if (!view) return;
+    drawRace(context, size, view, world);
     const { dataset } = canvas;
     if (showRays) {
       const readings = castRays(world.racer.car.vehicle, track, world.physics, DEFAULT_SENSOR_CONFIG);
-      drawSensors(context, size, layer.view, readings);
+      drawSensors(context, size, view, readings);
       // World coordinates of the drawn rays, for the browser tests; they map them through the published transform.
       dataset.rays = JSON.stringify({
         origin: readings.origin,
         rays: readings.rays.map(({ distance, hit, end }) => ({ distance, hit, end })),
       });
     }
-    dataset.trackScale = String(layer.view.scale);
-    dataset.trackOffsetX = String(layer.view.offsetX);
-    dataset.trackOffsetY = String(layer.view.offsetY);
+    dataset.trackScale = String(view.scale);
+    dataset.trackOffsetX = String(view.offsetX);
+    dataset.trackOffsetY = String(view.offsetY);
     dataset.trackLayerBuilds = String(trackLayer.builds());
   };
 
@@ -395,6 +401,15 @@ function startDrivingPage(track: Track): () => void {
     simTime.dataset.tick = String(world.tick);
   };
 
+  const camera = createCameraController({ bounds: trackBounds(track), cssWidth: 0, cssHeight: 0, now: () => performance.now() });
+  const cameraPage = startCameraPage({
+    canvas,
+    controller: camera,
+    targetName: () => 'your car',
+    compare: () => ({ offered: false, label: '' }),
+    onToggleCompare: () => undefined,
+    changed: () => draw(viewport.current()),
+  });
   const viewport = createViewport(canvas, browserViewportEnvironment(canvas), draw);
 
   const loop = startFrameLoop(browserFrameEnvironment(), createFixedStepClock(config), {
@@ -408,12 +423,15 @@ function startDrivingPage(track: Track): () => void {
       world = stepWorld(world, driver.decide({ car: world.racer.car }), config);
     },
     render: () => {
+      camera.frame(world.racer.car.vehicle.position);
       draw(viewport.current());
+      cameraPage.refresh();
       showState();
     },
   });
   return () => {
     loop.stop();
+    cameraPage.stop();
     viewport.stop();
     for (const remove of detach.splice(0)) remove();
     held.releaseAll();

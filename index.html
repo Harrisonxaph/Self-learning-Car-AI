@@ -43,6 +43,14 @@
       </header>
       <div class="stage">
         <canvas id="sim-canvas" role="img" aria-label="Racetrack with your car"></canvas>
+        <div id="camera-controls" class="camera-controls" role="group" aria-label="Camera" hidden>
+          <button type="button" id="cam-fit" class="tc-button" title="Show the whole track (0)">Fit</button>
+          <button type="button" id="cam-out" class="tc-button" aria-label="Zoom out" title="Zoom out (-)">−</button>
+          <button type="button" id="cam-in" class="tc-button" aria-label="Zoom in" title="Zoom in (+)">+</button>
+          <button type="button" id="cam-follow" class="tc-button" aria-pressed="false" title="Follow the car (F)">Follow</button>
+          <button type="button" id="cam-follow-ab" class="tc-button" title="Switch which champion the camera follows" hidden>Follow A</button>
+          <span id="cam-status" class="camera-status" role="status" aria-live="polite"></span>
+        </div>
         <p id="fps-readout" class="fps-readout" hidden></p>
       </div>
       <div id="training-controls" class="training-controls" role="group" aria-label="Training speed and display" hidden>

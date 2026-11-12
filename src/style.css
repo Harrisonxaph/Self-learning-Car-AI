@@ -815,3 +815,53 @@ html.evaluating .stage {
 .ev-table thead th {
   color: #9fb0c0;
 }
+
+/* Camera controls (P4-07): a compact toolbar laid over the bottom-right corner of the race canvas, so it takes no height from the page (the small-screen
+   layouts keep the track's space). The buttons are the same 44 px ones; the status text is for screen readers only. */
+.camera-controls {
+  position: absolute;
+  right: 0.75rem;
+  bottom: 0.5rem;
+  /* Never wider than the stage: at 320 px the five-button state (Follow A/B offered) wraps to a second row instead of running off the
+     left edge. The touch targets keep their 44 px size. */
+  max-width: calc(100% - 1.5rem);
+  box-sizing: border-box;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  display: flex;
+  gap: 0.25rem;
+  padding: 0.2rem;
+  border-radius: 0.5rem;
+  background: rgb(0 0 0 / 0.5);
+}
+
+.camera-controls[hidden] {
+  display: none;
+}
+
+.camera-controls .tc-button:disabled {
+  opacity: 0.55;
+}
+
+.camera-controls .tc-button[aria-pressed='true'] {
+  outline: 2px solid #ffb000;
+}
+
+.camera-status {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+#sim-canvas:focus-visible {
+  outline: 3px solid #ffb000;
+  outline-offset: -3px;
+}
+
+html.editing .camera-controls,
+html.evaluating .camera-controls {
+  display: none;
+}

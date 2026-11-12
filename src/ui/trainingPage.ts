@@ -10,9 +10,13 @@ import { INPUT_COUNT } from '../ai/inputs';
 import { drawCars } from '../render/raceView';
 import { drawSensors } from '../render/sensorView';
 import type { TrackLayer } from '../render/trackLayer';
+import { bestCarIndex, withFollowedSlot } from '../render/camera';
+import { paintTrack } from '../render/cameraScene';
+import { createCameraController } from './cameraController';
+import type { CameraUiDeps } from './cameraPage';
 import { browserViewportEnvironment, createViewport, type Viewport, type ViewportEnvironment, type ViewportSize } from '../render/viewport';
 import type { SimConfig, VehiclePhysics } from '../sim/config';
-import type { Track } from '../sim/track';
+import { trackBounds, type Track } from '../sim/track';
 import { createChampionReplay, type ChampionReplay, type ReplayFrame } from '../training/championReplay';
 import { createPairReplay, type PairReplay } from '../training/pairReplay';
 import { compareModels, type CompareResult } from '../persistence/modelCompare';
@@ -91,6 +95,11 @@ export interface TrainingPage {
   };
   readonly physics: VehiclePhysics;
   readonly config: SimConfig;
+  /**
+   * Starts the camera's controls and gestures on the page (P4-07). Absent (as in the Node tests), the page has a camera controller but no
+   * controls: it stays at the whole-track view and draws exactly as before.
+   */
+  readonly cameraUi?: ((deps: CameraUiDeps) => { refresh(): void; stop(): void }) | undefined;
   /** The speed, pause and cars-drawn controls (P3-03), shown in training mode. */
   readonly controls: {
     readonly group: HTMLElement;
@@ -838,29 +847,60 @@ export function startTrainingPage(page: TrainingPage): void {
     refreshSaved();
   }
 
+  // The camera (P4-07) is render-only. It reads positions the page already draws and writes nothing that the trainer, the replay or any
+  // saved record can see: a seeded run is bit-identical under every camera (tests/ui/trainingPageCamera.test.ts).
+  const camera = createCameraController({ bounds: trackBounds(track), cssWidth: 0, cssHeight: 0, now: page.now ?? (() => performance.now()) });
+  let compareFollow: 'a' | 'b' = 'a';
+  type Followed = { readonly position: { readonly x: number; readonly y: number } | null; readonly name: string; readonly index: number };
+  /** What the camera follows this frame: the replayed car, the chosen champion of a comparison, or the best car of the WHOLE generation. */
+  const followed = (): Followed => {
+    if (activePair) {
+      const state = (compareFollow === 'a' ? activePair.pair.a : activePair.pair.b).state();
+      return { position: state.racer.car.vehicle.position, name: `champion ${compareFollow.toUpperCase()}`, index: -1 };
+    }
+    if (active) {
+      const { replay, frame } = active;
+      const pose = replay.done() ? replay.state() : frame ? frame.before : replay.start;
+      return { position: pose.racer.car.vehicle.position, name: 'the replayed car', index: -1 };
+    }
+    const cars = trainer.generation().cars;
+    const index = bestCarIndex(cars.map((car) => ({ running: car.episode.outcome === null, progress: car.episode.gatesPassed })));
+    return { position: index < 0 ? null : cars[index]!.racer.car.vehicle.position, name: 'the best car', index };
+  };
+  const cameraUi = page.cameraUi?.({
+    controller: camera,
+    targetName: () => followed().name,
+    compare: () => ({ offered: activePair !== null, label: `Follow ${compareFollow.toUpperCase()}` }),
+    onToggleCompare: () => {
+      compareFollow = compareFollow === 'a' ? 'b' : 'a';
+    },
+    changed: () => draw(viewport.current()),
+  });
+
   const draw = (size: ViewportSize) => {
-    const layer = trackLayer.get(track, size);
-    context.setTransform(1, 0, 0, 1, 0, 0);
-    context.clearRect(0, 0, size.width, size.height);
-    if (!layer) return;
-    context.drawImage(layer.canvas, 0, 0);
+    camera.setCanvas(size.cssWidth, size.cssHeight);
+    const view = paintTrack(context, trackLayer, track, size, camera.view(), camera.atFit());
+    if (!view) return;
+    const publish = () => {
+      const { dataset } = canvas;
+      dataset.trackScale = String(view.scale);
+      dataset.trackOffsetX = String(view.offsetX);
+      dataset.trackOffsetY = String(view.offsetY);
+    };
     if (activePair) {
       // Both champions on one track: fixed identity colours and an A/B label, so colour is never the only cue.
       const [a, b] = [activePair.pair.a.state(), activePair.pair.b.state()];
       drawCars(
         context,
         size,
-        layer.view,
+        view,
         [
           { car: a.racer.car, finished: a.episode.outcome !== null, fill: RACE_COLOURS.carA, label: 'A' },
           { car: b.racer.car, finished: b.episode.outcome !== null, fill: RACE_COLOURS.carB, label: 'B' },
         ],
         activePair.physics,
       );
-      const { dataset } = canvas;
-      dataset.trackScale = String(layer.view.scale);
-      dataset.trackOffsetX = String(layer.view.offsetX);
-      dataset.trackOffsetY = String(layer.view.offsetY);
+      publish();
       return;
     }
     if (active) {
@@ -868,21 +908,23 @@ export function startTrainingPage(page: TrainingPage): void {
       // episode has ended it is drawn in its result state, without rays (there is no further decision).
       const { replay, frame } = active;
       const pose = replay.done() ? replay.state() : frame ? frame.before : replay.start;
-      drawCars(context, size, layer.view, [{ car: pose.racer.car, finished: pose.episode.outcome !== null }], active.physics);
-      if (!replay.done() && frame) drawSensors(context, size, layer.view, frame.decision.readings);
-      const { dataset } = canvas;
-      dataset.trackScale = String(layer.view.scale);
-      dataset.trackOffsetX = String(layer.view.offsetX);
-      dataset.trackOffsetY = String(layer.view.offsetY);
+      drawCars(context, size, view, [{ car: pose.racer.car, finished: pose.episode.outcome !== null }], active.physics);
+      if (!replay.done() && frame) drawSensors(context, size, view, frame.decision.readings);
+      publish();
       return;
     }
-    const shown = pickCars(trainer.generation().cars, effectiveDrawCap(speed.mode, drawCap, population));
+    const all = trainer.generation().cars;
+    const cap = effectiveDrawCap(speed.mode, drawCap, population);
+    let shown = pickCars(all, cap);
+    if (camera.following()) {
+      // The followed car is always drawn, inside the existing cap: it takes a free slot, or the last picked car's.
+      const best = followed().index;
+      const picked = shown.map((car) => all.indexOf(car));
+      shown = withFollowedSlot(picked, best, cap).map((i) => all[i]!);
+    }
     const cars = shown.map((car) => ({ car: car.racer.car, finished: car.episode.outcome !== null }));
-    drawCars(context, size, layer.view, cars, physics);
-    const { dataset } = canvas;
-    dataset.trackScale = String(layer.view.scale);
-    dataset.trackOffsetX = String(layer.view.offsetX);
-    dataset.trackOffsetY = String(layer.view.offsetY);
+    drawCars(context, size, view, cars, physics);
+    publish();
   };
 
   /** Writes the status line, plus data attributes for the browser tests. */
@@ -1235,7 +1277,9 @@ export function startTrainingPage(page: TrainingPage): void {
     },
     render: () => {
       const drawStarted = fpsReadout ? measureClock() : 0;
+      camera.frame(followed().position);
       draw(viewport.current());
+      cameraUi?.refresh();
       show();
       chart.frame();
       if (fpsReadout) drawMsThisFrame += measureClock() - drawStarted;
