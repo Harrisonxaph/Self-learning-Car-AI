@@ -14,7 +14,7 @@ import { INPUT_CONTRACT } from '../ai/inputs';
 import { DEFAULT_SENSOR_CONFIG, type SensorConfig } from '../sensors/rays';
 import type { Racer } from '../sim/checkpoints';
 import type { VehiclePhysics } from '../sim/config';
-import type { Track } from '../sim/track';
+import type { Pose, Track } from '../sim/track';
 import { startEpisodeState, stepEpisode } from './episodeStep';
 import {
   DEFAULT_EPISODE_LIMITS,
@@ -135,14 +135,14 @@ export interface DriverEvaluation {
  * for controls once per tick with the car and its nine network inputs. Deterministic for a given driver
  * configuration and setup.
  */
-export function evaluateDriver(driver: EpisodeDriver, setup: EvaluationSetup): DriverEvaluation {
+export function evaluateDriver(driver: EpisodeDriver, setup: EvaluationSetup, options: { readonly start?: Pose } = {}): DriverEvaluation {
   driver.reset();
   let decisions = 0;
   const decide = (inputs: readonly number[], racer: Racer) => {
     decisions += 1;
     return driver.decide({ car: racer.car, inputs });
   };
-  let state = startEpisodeState(setup);
+  let state = startEpisodeState(setup, options.start);
   while (state.episode.outcome === null) state = stepEpisode(state, decide, setup);
   return Object.freeze({
     racer: state.racer,

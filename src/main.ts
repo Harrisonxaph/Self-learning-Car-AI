@@ -17,6 +17,10 @@ import type { EditorHistory } from './editor/trackEditor';
 import { startEditorPage } from './ui/editorPage';
 import { tracksIn, trainingTrack } from './training/trackSplits';
 import { circuitFromSearch, searchForCircuit } from './ui/trainingCircuit';
+import { createModelStore } from './persistence/modelStore';
+import { createEvaluateController } from './ui/evaluateController';
+import { entryBelongsTo } from './ui/modelEvaluation';
+import { startEvaluatePage } from './ui/evaluatePage';
 import { createWorld, elapsedSeconds, restartWorld, stepWorld, type World } from './sim/world';
 import {
   attachHoldButton,
@@ -205,8 +209,39 @@ if (pageMode(window.location.search) === 'train') {
   });
 } else if (pageMode(window.location.search) === 'edit') {
   startEditing();
+} else if (pageMode(window.location.search) === 'evaluate') {
+  startEvaluating();
 } else {
   startDrivingPage(track);
+}
+
+/**
+ * Evaluating a saved champion (P4-05, `?mode=evaluate`): the driving and training panels are hidden. Only training and
+ * validation circuits are offered; held-out circuits are never reached from this page.
+ */
+function startEvaluating(): void {
+  for (const panel of [element<HTMLElement>('.hud'), element<HTMLElement>('.controls'), element<HTMLElement>('.keys-help')]) panel.hidden = true;
+  const training = tracksIn('training');
+  const validation = tracksIn('validation');
+  const store = createModelStore({
+    storage: () => window.localStorage,
+    registry: training,
+    evaluationTracks: [...training, ...validation],
+    evaluationBinding: entryBelongsTo,
+  });
+  const controller = createEvaluateController({
+    store,
+    trainingCircuits: training.map((t) => ({ id: t.id, name: t.track.name })),
+    validationCircuits: validation.map((t) => ({ id: t.id, name: t.track.name })),
+    now: () => new Date().toISOString(),
+    appVersion: __APP_VERSION__,
+    codeVersion: __CODE_VERSION__,
+    defer: (callback) => {
+      const handle = window.setTimeout(callback, 0);
+      return () => window.clearTimeout(handle);
+    },
+  });
+  startEvaluatePage(controller);
 }
 
 /** The track editor (P4-02): the manual-driving panels are hidden while editing. */

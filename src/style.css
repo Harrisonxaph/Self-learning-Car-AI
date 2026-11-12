@@ -724,3 +724,94 @@ html.editing .editor-problems {
 .tc-circuit:disabled {
   opacity: 0.55;
 }
+
+/* The evaluate page (P4-05): the page scrolls and the track canvas is not used. */
+html.evaluating,
+html.evaluating body {
+  height: auto;
+  overflow: auto;
+  overscroll-behavior: auto;
+}
+
+html.evaluating .app {
+  height: auto;
+  min-height: 100dvh;
+}
+
+html.evaluating .stage {
+  display: none;
+}
+
+.evaluate-panel {
+  padding-bottom: 2rem;
+}
+
+.ev-model {
+  max-width: 100%;
+  min-width: 12rem;
+}
+
+.ev-circuits {
+  margin: 0.4rem 0;
+  padding: 0.3rem 0.6rem;
+  border: 1px solid #4a5a6a;
+  border-radius: 0.5rem;
+}
+
+.ev-circuits legend {
+  padding: 0 0.3rem;
+  font-weight: 600;
+}
+
+.ev-group-title {
+  margin: 0.3rem 0 0.1rem;
+  font-size: 0.85rem;
+  color: #9fb0c0;
+}
+
+.ev-circuit {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-height: max(44px, 2.75rem);
+}
+
+.ev-circuit input {
+  width: 1.4rem;
+  height: 1.4rem;
+}
+
+.ev-circuit input:focus-visible,
+.ev-model:focus-visible {
+  outline: 3px solid #ffd250;
+  outline-offset: 2px;
+}
+
+.ev-table-wrap {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.ev-table {
+  border-collapse: collapse;
+  min-width: 36rem;
+  font-size: 0.85rem;
+}
+
+.ev-table caption {
+  text-align: left;
+  padding: 0.3rem 0;
+  color: #9fb0c0;
+}
+
+.ev-table th,
+.ev-table td {
+  padding: 0.35rem 0.5rem;
+  border-bottom: 1px solid #34424f;
+  text-align: left;
+  font-weight: 500;
+}
+
+.ev-table thead th {
+  color: #9fb0c0;
+}

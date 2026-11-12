@@ -3,7 +3,7 @@
 import { createProgress, stepRacer, type Racer } from './checkpoints';
 import { createCar } from './collision';
 import type { SimConfig, VehiclePhysics } from './config';
-import type { Track } from './track';
+import type { Pose, Track } from './track';
 import type { Controls } from './vehicle';
 
 export interface World {
@@ -17,9 +17,12 @@ export interface World {
   readonly bestLapTicks: number | null;
 }
 
-/** A car at rest on the start pose, with no progress. */
-export function startRacer(track: Track, physics: VehiclePhysics): Racer {
-  return { car: createCar(track.start, track, physics), progress: createProgress() };
+/**
+ * A car at rest on the start pose (the track's own unless `pose` is given), with no progress. A given pose is a start
+ * override for an evaluation (P4-05): the track itself is never changed.
+ */
+export function startRacer(track: Track, physics: VehiclePhysics, pose: Pose = track.start): Racer {
+  return { car: createCar(pose, track, physics), progress: createProgress() };
 }
 
 export function createWorld(track: Track, physics: VehiclePhysics): World {

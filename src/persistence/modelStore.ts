@@ -5,6 +5,7 @@
 // Keys (docs/MODEL_FORMAT.md, "Storage behaviour"): `sdae:model:<id>` per model and `sdae:models:index`, a JSON array of ids
 // in saving order. The index is a hint: the store also scans for model keys that are not in it (a save that failed
 // between the two writes, or a damaged index), and an index entry whose model is gone is reported as damaged.
+import { MAX_EVALUATION_ENTRIES, recogniseEvaluations, validateEvaluationEntry, type EntryContext, type EvaluationEntry, type RegistryTrack } from './evaluationEntry';
 import { compatibility, MAX_MODEL_BYTES, MODEL_ID_PATTERN, utf8Bytes, validateModel, type ModelDocument, type TrackRegistryEntry } from './modelFormat';
 
 export const MODEL_KEY_PREFIX = 'sdae:model:';
@@ -26,6 +27,13 @@ export interface ModelStoreOptions {
   readonly storage: () => StorageLike | null;
   /** The registered training tracks, for validating stored models. */
   readonly registry: readonly TrackRegistryEntry[];
+  /** The built-in training and validation circuits an appended evaluation entry is checked against (P4-05); without it only the entry's own structure is checked. */
+  readonly evaluationTracks?: readonly RegistryTrack[];
+  /**
+   * Whether an evaluation entry belongs to the champion that holds it (P4-05): a message when it does not (another champion, or this
+   * one changed), otherwise null. Supplied by the page, which owns the training code the identity needs, so this layer stays free of it.
+   */
+  readonly evaluationBinding?: (model: ModelDocument, entry: EvaluationEntry) => string | null;
 }
 
 export const MESSAGES = Object.freeze({
@@ -72,6 +80,11 @@ export type ImportOutcome =
 /** A saved model read for inspection: valid, but possibly one this build cannot drive (it can be compared, not replayed). */
 export type InspectResult = { readonly ok: true; readonly model: ModelDocument; readonly drivable: boolean } | { readonly ok: false; readonly message: string };
 
+/** What appending an evaluation entry to a saved model did. A refusal writes nothing and leaves the stored document byte-identical. */
+export type AppendEvaluationResult =
+  | { readonly ok: true; readonly recognised: number }
+  | { readonly ok: false; readonly reason: 'invalid' | 'cap' | 'size' | 'missing' | 'unavailable' | 'quota' | 'full'; readonly message: string };
+
 export type RemoveResult = { readonly ok: true } | { readonly ok: false; readonly message: string };
 
 export interface ModelStore {
@@ -87,6 +100,12 @@ export interface ModelStore {
    * "already saved", different content under a taken id is saved under a fresh id from `newId`.
    */
   importModel(model: ModelDocument, newId: () => string): ImportOutcome;
+  /**
+   * Appends one validated P4-05 evaluation entry to a saved model's `evaluation` array and writes the model the way a save
+   * does (all or nothing). The cap of MAX_EVALUATION_ENTRIES counts only RECOGNISED entries (this app's kind that validate);
+   * opaque entries of any number are kept untouched and never block an append. Existing entries are never changed or removed.
+   */
+  appendEvaluation(id: string, entry: unknown): AppendEvaluationResult;
   remove(id: string): RemoveResult;
 }
 
@@ -128,6 +147,11 @@ function readModel(text: string | null, registry: readonly TrackRegistryEntry[])
 
 export function createModelStore(options: ModelStoreOptions): ModelStore {
   const { registry } = options;
+  /** How this store recognises a model's evaluation entries: the allowed circuits, and that the entry belongs to that model. */
+  const contextFor = (model: ModelDocument): EntryContext => ({
+    registry: options.evaluationTracks,
+    belongsTo: options.evaluationBinding === undefined ? undefined : (entry) => options.evaluationBinding!(model, entry),
+  });
 
   /** The storage, or null if the browser denies it. */
   const open = (): StorageLike | null => {
@@ -276,7 +300,9 @@ export function createModelStore(options: ModelStoreOptions): ModelStore {
       if (!read.ok) return { ok: false, message: `This saved champion can't be used. ${read.problem}` };
       const c = compatibility(read.model);
       if (!c.drivable) return { ok: false, message: `This saved champion can't be run by this version of the app. ${c.reasons.join(' ')}` };
-      return { ok: true, model: read.model, warnings: c.warnings };
+      const claims = recogniseEvaluations(read.model.evaluation, contextFor(read.model)).invalidClaims;
+      const warnings = claims === 0 ? c.warnings : [...c.warnings, `${claims} evaluation ${claims === 1 ? 'entry claims' : 'entries claim'} a kind this app recognises but ${claims === 1 ? 'is' : 'are'} not valid for this champion (damaged, outside the protocol, or made for another champion or another version of it); ${claims === 1 ? 'it is' : 'they are'} kept untouched, not counted and not shown as results.`];
+      return { ok: true, model: read.model, warnings };
     },
 
     inspect(id) {
@@ -325,6 +351,41 @@ export function createModelStore(options: ModelStoreOptions): ModelStore {
         if (utf8Bytes(text) > MAX_MODEL_BYTES) return { ok: false, message: "This saved champion can't be exported: it is larger than the 1 MiB limit." };
       }
       return { ok: true, filename: exportFilename(read.model), text };
+    },
+
+    appendEvaluation(id, entry) {
+      const storage = open();
+      if (!storage) return { ok: false, reason: 'unavailable', message: MESSAGES.unavailable };
+      if (!MODEL_ID_PATTERN.test(id)) return { ok: false, reason: 'missing', message: 'That is not a saved champion.' };
+      let text: string | null;
+      try {
+        text = storage.getItem(modelKey(id));
+      } catch {
+        return { ok: false, reason: 'unavailable', message: MESSAGES.unavailable };
+      }
+      const read = readModel(text, registry);
+      if (!read.ok) return { ok: false, reason: 'missing', message: `This saved champion can't be used. ${read.problem}` };
+      // The entry must be valid, allowed and THIS champion's: an evaluation made for another champion is refused without writing.
+      const checked = validateEvaluationEntry(entry, contextFor(read.model));
+      if (!checked.ok) return { ok: false, reason: 'invalid', message: `This evaluation could not be stored: ${checked.errors.join(' ')}` };
+      const current = recogniseEvaluations(read.model.evaluation, contextFor(read.model));
+      if (current.entries.length >= MAX_EVALUATION_ENTRIES) {
+        return { ok: false, reason: 'cap', message: `This champion already has ${MAX_EVALUATION_ENTRIES} evaluations, the most this app stores for one. Nothing was added.` };
+      }
+      const updated: ModelDocument = { ...read.model, evaluation: [...read.model.evaluation, checked.entry] };
+      let out: string;
+      try {
+        out = JSON.stringify(updated);
+      } catch {
+        return { ok: false, reason: 'invalid', message: 'This evaluation could not be stored: the champion\'s data is nested too deeply to write out.' };
+      }
+      if (utf8Bytes(out) > MAX_MODEL_BYTES) return { ok: false, reason: 'size', message: 'This evaluation could not be stored: the champion would be larger than the 1 MiB limit. Nothing was added.' };
+      const saved = store.save(updated);
+      if (!saved.ok) {
+        const reason = saved.reason === 'invalid' ? 'invalid' : saved.reason;
+        return { ok: false, reason, message: saved.message };
+      }
+      return { ok: true, recognised: current.entries.length + 1 };
     },
 
     importModel(model, newId) {

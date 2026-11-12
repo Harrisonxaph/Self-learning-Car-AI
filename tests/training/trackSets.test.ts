@@ -217,10 +217,13 @@ describe('source scan: which modules may reach restricted accessors (test enforc
       'src/training/feasibility.ts',
       'src/training/study.ts',
       'src/training/trackSplits.ts',
+      'src/ui/modelEvaluation.ts', // P4-05: evaluates a saved model on training and validation circuits only, by ID
     ]);
   });
-  it('no module outside trackSplits.ts asks the registry for the held-out or validation listing', () => {
-    expect(users(/tracksIn\(\s*['"](held-out|validation)['"]/).filter((p) => p !== 'src/training/trackSplits.ts')).toEqual([]);
+  it('no module outside trackSplits.ts asks the registry for the held-out listing, and only the page wiring asks for the validation one', () => {
+    expect(users(/tracksIn\(\s*['"]held-out['"]/).filter((p) => p !== 'src/training/trackSplits.ts')).toEqual([]);
+    // P4-05: src/main.ts builds the evaluate page's validation group; nothing else may.
+    expect(users(/tracksIn\(\s*['"]validation['"]/).filter((p) => p !== 'src/training/trackSplits.ts')).toEqual(['src/main.ts']);
   });
   it('the UI and the trainer never name a validation or held-out circuit', () => {
     for (const s of sources.filter((x) => x.path.startsWith('src/ui/') || x.path === 'src/training/trainer.ts' || x.path === 'src/main.ts')) {
