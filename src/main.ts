@@ -12,7 +12,9 @@ import { browserViewportEnvironment, createViewport, type ViewportSize } from '.
 import { castRays, DEFAULT_SENSOR_CONFIG } from './sensors/rays';
 import { DEFAULT_SIM_CONFIG, DEFAULT_VEHICLE_PHYSICS } from './sim/config';
 import { createFixedStepClock } from './sim/fixedStep';
-import { loadTrack } from './sim/track';
+import { loadTrack, type Track } from './sim/track';
+import type { EditorHistory } from './editor/trackEditor';
+import { startEditorPage } from './ui/editorPage';
 import { createWorld, elapsedSeconds, restartWorld, stepWorld, type World } from './sim/world';
 import {
   attachHoldButton,
@@ -184,12 +186,45 @@ if (pageMode(window.location.search) === 'train') {
     physics: DEFAULT_VEHICLE_PHYSICS,
     config,
   });
+} else if (pageMode(window.location.search) === 'edit') {
+  startEditing();
 } else {
-  startDrivingPage();
+  startDrivingPage(track);
 }
 
-/** Manual driving (P1-08): the human driver, the HUD and the optional ray debug layer. */
-function startDrivingPage(): void {
+/** The track editor (P4-02): the manual-driving panels are hidden while editing. */
+function startEditing(history?: EditorHistory): void {
+  const driving = [element<HTMLElement>('.hud'), element<HTMLElement>('.controls'), element<HTMLElement>('.keys-help')];
+  const notice = element<HTMLElement>('#drive-notice');
+  for (const panel of driving) panel.hidden = true;
+  notice.hidden = true;
+  startEditorPage({
+    canvas,
+    context,
+    history,
+    onDrive: (built, kept) => {
+      // Drive the custom track with the ordinary manual-driving page; Back to editing restores the editor as it was.
+      for (const panel of driving) panel.hidden = false;
+      notice.hidden = false;
+      const stopDriving = startDrivingPage(built);
+      const back = element<HTMLButtonElement>('#ed-back');
+      const onBack = () => {
+        back.removeEventListener('click', onBack);
+        stopDriving();
+        startEditing(kept);
+      };
+      back.addEventListener('click', onBack);
+      back.focus({ preventScroll: true });
+    },
+  });
+}
+
+/**
+ * Manual driving (P1-08): the human driver, the HUD and the optional ray debug layer, on the given track. Returns a
+ * function that stops it (listeners, frame loop, viewport), so the editor can drive a track and come back (P4-02).
+ */
+function startDrivingPage(track: Track): () => void {
+  const detach: (() => void)[] = [];
   // Input: keys and on-screen buttons record what is held; the simulation reads it once per tick.
   const held = createHeldInputs();
   let restartRequested = false;
@@ -197,16 +232,19 @@ function startDrivingPage(): void {
     restartRequested = true;
   };
   const restartButton = element<HTMLButtonElement>('#restart');
-  // Space on the focused Restart button activates it, as on any button, instead of braking.
-  attachKeyboard(window, held, requestRestart, (target) => target === restartButton);
-  attachSafetyRelease(window, document, held);
-  for (const button of holdButtons) attachHoldButton(button, button.dataset.action as HoldAction, held);
-  restartButton.addEventListener('click', (event) => {
+  // Space on a focused Restart or Back to editing button activates it, as on any button, instead of braking.
+  const isNativeButton = (target: unknown) => target === restartButton || target === document.getElementById('ed-back');
+  detach.push(attachKeyboard(window, held, requestRestart, isNativeButton));
+  detach.push(attachSafetyRelease(window, document, held));
+  for (const button of holdButtons) detach.push(attachHoldButton(button, button.dataset.action as HoldAction, held));
+  const onRestartClick = (event: MouseEvent) => {
     requestRestart();
     // A tap or click (detail > 0) leaves no focus behind, so Space brakes again straight away. Keyboard
     // activation (detail 0) keeps focus on the button, as keyboard users expect.
     if (event.detail > 0) restartButton.blur();
-  });
+  };
+  restartButton.addEventListener('click', onRestartClick);
+  detach.push(() => restartButton.removeEventListener('click', onRestartClick));
   const driver = createHumanDriver(held.read);
 
   let world: World = createWorld(track, DEFAULT_VEHICLE_PHYSICS);
@@ -278,7 +316,7 @@ function startDrivingPage(): void {
 
   const viewport = createViewport(canvas, browserViewportEnvironment(canvas), draw);
 
-  startFrameLoop(browserFrameEnvironment(), createFixedStepClock(config), {
+  const loop = startFrameLoop(browserFrameEnvironment(), createFixedStepClock(config), {
     // One simulation path: every tick applies a pending restart, asks the driver, then steps the world.
     step: () => {
       if (restartRequested) {
@@ -293,4 +331,11 @@ function startDrivingPage(): void {
       showState();
     },
   });
+  return () => {
+    loop.stop();
+    viewport.stop();
+    for (const remove of detach.splice(0)) remove();
+    held.releaseAll();
+    for (const button of holdButtons) button.classList.remove('held');
+  };
 }

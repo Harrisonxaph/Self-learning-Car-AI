@@ -1,10 +1,11 @@
 // Which page to run, chosen from the page address: manual driving by default, or the population training view
-// (P2-05) with `?mode=train`. Anything else keeps the default, so the normal page is unchanged.
+// (P2-05) with `?mode=train`, or the track editor (P4-02) with `?mode=edit`. Anything else keeps the default, so the normal page is unchanged.
 
-export type PageMode = 'drive' | 'train';
+export type PageMode = 'drive' | 'train' | 'edit';
 
-/** 'train' if the query string's last `mode` parameter is exactly `train`; otherwise 'drive'. */
+/** 'train' or 'edit' if the query string's last `mode` parameter is exactly that; otherwise 'drive'. */
 export function pageMode(search: string): PageMode {
   const modes = new URLSearchParams(search).getAll('mode');
-  return modes[modes.length - 1]?.trim() === 'train' ? 'train' : 'drive';
+  const last = modes[modes.length - 1]?.trim();
+  return last === 'train' || last === 'edit' ? last : 'drive';
 }

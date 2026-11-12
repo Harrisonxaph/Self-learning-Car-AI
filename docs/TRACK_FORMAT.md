@@ -1,6 +1,6 @@
 # Track format and validation
 
-> Status: **P4-01 implements the validator** (`src/sim/trackValidation.ts`). The track editor (P4-02) and saving or loading custom tracks (P4-03) are not built. A track that passes is **well-formed and drivable by the rules below**; it says nothing about whether a model learns on it.
+> Status: **P4-01 implements the validator** (`src/sim/trackValidation.ts`). The track editor (P4-02, `?mode=edit`, in review) builds tracks in this format and runs this validator on every change; saving or loading custom tracks (P4-03) are not built. A track that passes is **well-formed and drivable by the rules below**; it says nothing about whether a model learns on it.
 
 A track is one JSON document. Units are metres; x grows to the right and y downwards (the canvas), headings are radians from +x turning towards +y.
 
