@@ -27,7 +27,9 @@ import {
   stableStringify,
   summariseRows,
   validateEvaluationEntry,
+  type EntryContext,
   type EvaluationEntry,
+  type RegistryTrack,
   type EvaluationRow,
   type EvaluationSplit,
   type EvaluationStart,
@@ -38,7 +40,7 @@ import { DEFAULT_VEHICLE_PHYSICS } from '../sim/config';
 import type { Pose, Track } from '../sim/track';
 import { createEvaluationSetup, type EvaluationSetup } from '../training/evaluation';
 import { startEpisodeState, stepEpisode, type EpisodeState } from '../training/episodeStep';
-import { BUILT_IN_TRACK_SPLITS, TrackLeakageError, freezeModel, trackContentHash, trainingTrack, validationTrack, type FrozenModel } from '../training/trackSplits';
+import { BUILT_IN_TRACK_SPLITS, RESERVED_LAYOUT_MESSAGE, TrackLeakageError, classifyCustomTrack, freezeModel, trackContentHash, trackGeometryHash, trainingTrack, validationTrack, type FrozenModel } from '../training/trackSplits';
 
 export { EVALUATION_SEEDS, START_BOUNDS };
 
@@ -56,11 +58,16 @@ export interface CircuitRef {
 /** The built-in circuits an entry may name: training and validation only, with their tracks for the start and gate checks. */
 export const EVALUATION_REGISTRY = BUILT_IN_TRACK_SPLITS.tracks.filter((t) => t.split === 'training' || t.split === 'validation');
 
+/** The saved custom track an ID names, validated again by the caller's store on every call (P4-03), or null when none is saved. */
+export type CustomSource = (id: string) => Track | null;
+
 /**
- * The circuit an ID names, if it is a built-in training or validation circuit. Throws TrackLeakageError for a held-out
- * circuit, a renamed copy or any other ID, before anything is evaluated.
+ * The circuit an ID names: a built-in training or validation circuit, or, when `custom` is given, a saved custom track.
+ * Throws TrackLeakageError for a held-out circuit, a renamed copy of one or any other ID, before anything is evaluated. A saved
+ * track is classified again here (an ID or layout of a built-in study circuit is refused with the one generic message), and its
+ * geometry hash is its content hash.
  */
-export function resolveCircuit(id: string): CircuitRef {
+export function resolveCircuit(id: string, custom?: CustomSource): CircuitRef {
   let split: EvaluationSplit;
   let track: Track;
   try {
@@ -73,10 +80,28 @@ export function resolveCircuit(id: string): CircuitRef {
       split = 'validation';
     } catch (second) {
       if (!(second instanceof TrackLeakageError)) throw second;
-      throw new TrackLeakageError(`"${String(id)}" is not a training or validation circuit; saved models are evaluated on those only.`);
+      const saved = custom === undefined ? null : custom(id);
+      if (saved === null || saved.id !== id) throw new TrackLeakageError(`"${String(id)}" is not a training or validation circuit${custom === undefined ? '' : ' or a saved custom track'}; saved models are evaluated on those only.`);
+      if (!classifyCustomTrack(saved).ok) throw new TrackLeakageError(RESERVED_LAYOUT_MESSAGE);
+      return { id: saved.id, version: saved.version, split: 'custom', contentHash: trackGeometryHash(saved), track: saved };
     }
   }
   return { id: track.id, version: track.version, split, contentHash: trackContentHash(track), track };
+}
+
+/** How an entry is checked for a model: the built-in circuits, the saved custom tracks, and that it belongs to the model. */
+export function entryContext(model: ModelDocument, custom?: CustomSource): EntryContext {
+  return {
+    registry: EVALUATION_REGISTRY,
+    belongsTo: (e) => entryBelongsTo(model, e),
+    custom:
+      custom === undefined
+        ? undefined
+        : (id): RegistryTrack | null => {
+            const track = custom(id);
+            return track === null ? null : { id: track.id, version: track.version, split: 'custom', contentHash: trackGeometryHash(track), track };
+          },
+  };
 }
 
 /** The start of seed `seed` on a track (see evaluationStartFor). */
@@ -115,6 +140,8 @@ export interface EvaluateOptions {
   readonly runtime?: string;
   /** For tests: called each time an episode starts, so a refusal can be shown to run none. */
   readonly onEpisode?: () => void;
+  /** The saved custom track an ID names (P4-03); without it only built-in training and validation circuits can be evaluated. */
+  readonly customTracks?: CustomSource | undefined;
 }
 
 export const DEFAULT_RUNTIME_NOTE =
@@ -170,7 +197,7 @@ const rowOf = (state: EpisodeState, seed: number, gates: number, timestepSeconds
 export function startEvaluationJob(model: ModelDocument, circuitId: string, options: EvaluateOptions): StartJobResult {
   let circuit: CircuitRef;
   try {
-    circuit = resolveCircuit(circuitId);
+    circuit = resolveCircuit(circuitId, options.customTracks);
   } catch (error) {
     return { ok: false, message: error instanceof Error ? error.message : 'That circuit cannot be evaluated.' };
   }
@@ -247,7 +274,7 @@ export function startEvaluationJob(model: ModelDocument, circuitId: string, opti
           codeVersion: options.codeVersion,
           runtime: options.runtime ?? DEFAULT_RUNTIME_NOTE,
         };
-        const checked = validateEvaluationEntry(entry, { registry: EVALUATION_REGISTRY, belongsTo: (e) => entryBelongsTo(model, e) });
+        const checked = validateEvaluationEntry(entry, entryContext(model, options.customTracks));
         if (!checked.ok) return { ok: false, message: `The evaluation produced an invalid entry: ${checked.errors.join(' ')}` };
         return { ok: true, entry };
       },
@@ -287,7 +314,7 @@ const COMPARED = ['kind', 'protocol', 'configHash', 'config', 'fitnessVersion', 
  * digits, which is reported, not hidden.
  */
 export function replayEntry(entry: EvaluationEntry, model: ModelDocument, options: EvaluateOptions): { identical: boolean; differences: string[] } {
-  const checked = validateEvaluationEntry(entry, { registry: EVALUATION_REGISTRY, belongsTo: (e) => entryBelongsTo(model, e) });
+  const checked = validateEvaluationEntry(entry, entryContext(model, options.customTracks));
   if (!checked.ok) return { identical: false, differences: [`The record is not valid: ${checked.errors.join(' ')}`] };
   const again = evaluateModelOnCircuit(model, entry.track.id, options);
   if (!again.ok) return { identical: false, differences: [again.message] };
