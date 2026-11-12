@@ -15,7 +15,7 @@ import { createEvaluationSetup } from '../../src/training/evaluation';
 import { manifestEpochOf, manifestRecord, parseExperimentRecord } from '../../src/training/experiment';
 import { parseE4Manifest } from '../../src/training/e4Study';
 import { parseE3Manifest } from '../../src/training/e3Study';
-import { parseStudyManifest, trackReferences } from '../../src/training/study';
+import { parseStudyManifest, StudyManifestError, trackReferences } from '../../src/training/study';
 import { createTrainer, DEFAULT_TRAINING_CONFIG } from '../../src/training/trainer';
 import {
   assertTrainingTrack,
@@ -276,6 +276,32 @@ describe('split-manifest epochs', () => {
     const latest = clone(e3);
     latest.tracks.splitManifestHash = manifestRecord().hash;
     expect(parseE3Manifest(latest).tracks.splitManifestHash).toBe(manifestRecord().hash);
+  });
+  it.each<[string, unknown]>([
+    ['null', null],
+    ['a number', 7],
+    ['a string', 'long-sweepers'],
+    ['an array', []],
+    ['an object', {}],
+    ['an id that is not a string', { id: 1, contentHash: 'x' }],
+    ['a missing hash', { id: 'hairpin-chicane' }],
+    ['an unknown field', { id: 'hairpin-chicane', contentHash: 'x', extra: 1 }],
+  ])('a malformed held-out reference (%s) is a manifest error, not a raw TypeError, on every epoch', (_name, entry) => {
+    for (const hash of [manifestRecord(BUILT_IN_TRACK_SPLITS, 1).hash, manifestRecord().hash]) {
+      const m = clone(fixture('e3-manifest.json'));
+      m.tracks.splitManifestHash = hash;
+      m.tracks.heldOut = [entry];
+      m.authorisation = 'issue-33#test';
+      m.label = 'confirmatory';
+      expect(() => parseE3Manifest(m)).toThrow(StudyManifestError);
+      m.label = 'mechanics';
+      expect(() => parseE3Manifest(m)).toThrow(StudyManifestError);
+    }
+    for (const bad of [null, 7, 'x', {}, undefined]) {
+      const m = clone(fixture('e3-manifest.json'));
+      m.tracks.heldOut = bad;
+      expect(() => parseE3Manifest(m)).toThrow(StudyManifestError);
+    }
   });
   it('a tampered epoch-1 experiment record, a record with another manifest and a leaked training track are refused', () => {
     const record = fixture('experiment-record.json');

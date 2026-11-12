@@ -161,11 +161,6 @@ export function parseE3Manifest(input: unknown, splits: TrackSplits = BUILT_IN_T
   // The built-in registry: the manifest names a split epoch by its hash, and every circuit it lists must belong to that epoch.
   const epoch = splits === BUILT_IN_TRACK_SPLITS ? manifestEpochOf(t.splitManifestHash) ?? LATEST_SPLIT_EPOCH : undefined;
   same(t.splitManifestHash, manifestRecord(splits, epoch).hash, 'manifest.tracks.splitManifestHash', fail);
-  if (epoch !== undefined) {
-    for (const id of [trainingRef.id as string, validationRef.id as string, ...dense(t.heldOut, 'manifest.tracks.heldOut', fail).map((h) => (h as { id?: unknown }).id as string)]) {
-      if (!epochIds(epoch).includes(id)) fail(`manifest.tracks lists "${id}", which is not part of the track set (split epoch ${epoch}) the manifest names.`);
-    }
-  }
   const heldList = dense(t.heldOut, 'manifest.tracks.heldOut', fail).map((h, i) => {
     const ref = exact(h, `manifest.tracks.heldOut[${i}]`, ['id', 'contentHash'], fail);
     const entry = splits.tracks.find((x) => x.id === ref.id);
@@ -174,6 +169,12 @@ export function parseE3Manifest(input: unknown, splits: TrackSplits = BUILT_IN_T
     return { id: ref.id as string, contentHash: ref.contentHash as string };
   });
   if (new Set(heldList.map((h) => h.id)).size !== heldList.length) fail('manifest.tracks.heldOut must be distinct.');
+  // Every listed circuit must belong to the split epoch the manifest names (checked after the held-out entries are validated).
+  if (epoch !== undefined) {
+    for (const id of [trainingRef.id as string, validationRef.id as string, ...heldList.map((h) => h.id)]) {
+      if (!epochIds(epoch).includes(id)) fail(`manifest.tracks lists "${id}", which is not part of the track set (split epoch ${epoch}) the manifest names.`);
+    }
+  }
 
   // The training block must already be complete and resolved: the trainer's resolvers give it back unchanged.
   try {
