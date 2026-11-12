@@ -535,6 +535,11 @@ function checkSeedRecords(manifest: E3Manifest, seedRecords: readonly unknown[],
   return parsed;
 }
 
+/** Checks every seed record against the manifest (complete, in order, valid) and returns them. The command line builds the gate from these. */
+export function parseE3SeedRecords(manifestInput: unknown, seedRecords: readonly unknown[], engine: ExperimentEngine, splits: TrackSplits = BUILT_IN_TRACK_SPLITS): E3SeedRecord[] {
+  return checkSeedRecords(parseE3Manifest(manifestInput, splits), seedRecords, engine, splits);
+}
+
 /**
  * The ONE held-out look: every frozen agent (all seeds' A5 champions, then the rule agents) is evaluated once on each
  * listed held-out circuit through the gate. The gate must be made for exactly this study's protocol (`e3HeldOutProtocol`)
