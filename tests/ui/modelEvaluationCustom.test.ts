@@ -110,6 +110,24 @@ describe('entries for custom tracks while the track is saved, and after', () => 
     expect(errors(tamper((e) => { e.rows[0].laps = 0; e.rows[0].outcome = 'completed'; }), ctx())).not.toBe('');
   });
 
+  it('replay of an entry whose track is no longer saved is reported unavailable, never confirmed; with the track present it re-runs', () => {
+    const entry = run();
+    const missing = replayEntry(entry, model, { ...OPTIONS, customTracks: source() });
+    expect(missing).toEqual({ identical: false, differences: ['This track is no longer saved, so this result cannot be re-run or confirmed.'] });
+    expect(replayEntry(entry, model, OPTIONS).identical).toBe(false);
+    expect(replayEntry(entry, model, { ...OPTIONS, customTracks: source(TRACK) })).toEqual({ identical: true, differences: [] });
+  });
+
+  it('the three lookup cases are distinct: present and matching is fully checked, present but mismatched is refused, genuinely missing is unverified but valid', () => {
+    const entry = run();
+    expect(validateEvaluationEntry(entry, ctx(TRACK)).ok).toBe(true);
+    const mismatched = validateEvaluationEntry(tamper((e) => { e.track.contentHash = `sha256:${'3'.repeat(64)}`; }), ctx(TRACK));
+    expect(mismatched.ok).toBe(false);
+    expect(mismatched.ok ? '' : mismatched.errors.join(' ')).toMatch(/does not match the saved custom track/);
+    expect(validateEvaluationEntry(tamper((e) => { e.track.contentHash = `sha256:${'3'.repeat(64)}`; }), ctx()).ok).toBe(true); // missing: structural only
+    expect(validateEvaluationEntry(entry, ctx()).ok).toBe(true);
+  });
+
   it('a different track saved later under the same id refuses the old entry (it is for another layout)', () => {
     const entry = run();
     const other = { ...custom(120, 60), id: TRACK.id };

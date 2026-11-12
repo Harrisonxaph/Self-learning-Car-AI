@@ -314,6 +314,10 @@ const COMPARED = ['kind', 'protocol', 'configHash', 'config', 'fitnessVersion', 
 export function replayEntry(entry: EvaluationEntry, model: ModelDocument, options: EvaluateOptions): { identical: boolean; differences: string[] } {
   const checked = validateEvaluationEntry(entry, entryContext(model, options.customTracks));
   if (!checked.ok) return { identical: false, differences: [`The record is not valid: ${checked.errors.join(' ')}`] };
+  // A custom entry whose track is no longer saved is a historical result with nothing to re-run: unavailable, never "confirmed".
+  if (checked.entry.track.split === 'custom' && (options.customTracks?.(entry.track.id) ?? null) === null) {
+    return { identical: false, differences: ['This track is no longer saved, so this result cannot be re-run or confirmed.'] };
+  }
   const again = evaluateModelOnCircuit(model, entry.track.id, options);
   if (!again.ok) return { identical: false, differences: [again.message] };
   const differences: string[] = [];
