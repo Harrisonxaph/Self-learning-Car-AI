@@ -205,10 +205,10 @@ export function createRaceController(deps: RaceDeps): RaceController {
     }
     if (selectedId !== null && !modelList.some((m) => m.id === selectedId)) {
       selectedId = null;
-      circuitId = null;
       if (phaseNow === 'setup') dropRace();
     }
-    if (circuitId !== null && !offered().some((c) => c.id === circuitId)) circuitId = defaultCircuit(modelList.find((m) => m.id === selectedId));
+    // A circuit is always chosen (the first offered one until a champion or the person picks another), so the selector is never blank.
+    if (circuitId === null || !offered().some((c) => c.id === circuitId)) circuitId = defaultCircuit(modelList.find((m) => m.id === selectedId));
     notify();
   };
   refresh();
@@ -231,7 +231,8 @@ export function createRaceController(deps: RaceDeps): RaceController {
       messageText = '';
       const found = id === null ? undefined : modelList.find((m) => m.id === id);
       selectedId = found ? found.id : null;
-      circuitId = found ? defaultCircuit(found) : null;
+      // Choosing a champion selects the circuit it was trained on; clearing the choice keeps the circuit already picked.
+      circuitId = found ? defaultCircuit(found) : (circuitId ?? defaultCircuit(undefined));
       notify();
     },
     circuits: offered,

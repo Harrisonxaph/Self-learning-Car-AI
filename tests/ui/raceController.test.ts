@@ -53,6 +53,22 @@ describe('choosing a race', () => {
     expect(controller.canStart()).toBe(true);
   });
 
+  it('always has a circuit chosen, even with no champion saved or chosen, and the person can pick another (the selector is never blank)', () => {
+    const empty = createRaceController({ store: createModelStore({ storage: () => new MemoryStorage(), registry: TRAINING_REGISTRY }), trainingCircuits: names('training'), validationCircuits: names('validation') });
+    expect(empty.models()).toEqual([]);
+    expect(empty.circuit()).toBe('stadium-oval');
+    empty.selectCircuit('s-sweepers');
+    expect(empty.circuit()).toBe('s-sweepers');
+    expect(empty.canStart()).toBe(false);
+    const { controller } = setup();
+    expect(controller.circuit()).toBe('stadium-oval');
+    controller.selectCircuit('kidney-loop');
+    controller.select(null);
+    expect(controller.circuit()).toBe('kidney-loop');
+    controller.select('rc-1');
+    expect(controller.circuit()).toBe(controller.models()[0]!.trainedOn);
+  });
+
   it('offers training and validation circuits only, never a held-out one, whatever is passed in', () => {
     const { store } = setup();
     const controller = createRaceController({
@@ -250,7 +266,7 @@ describe('racing, restarting and the results', () => {
     store.remove('rc-1');
     controller.refresh();
     expect(controller.selected()).toBeNull();
-    expect(controller.circuit()).toBeNull();
+    expect(controller.circuit()).not.toBeNull();
     expect(controller.canStart()).toBe(false);
   });
 });

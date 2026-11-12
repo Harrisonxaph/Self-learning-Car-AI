@@ -85,6 +85,11 @@ test('the other pages show no race UI, and the race page offers training and val
   await open(page);
   await expect(page.locator('#rc-start')).toBeDisabled();
   await expect(page.locator('#sim-canvas')).toBeHidden();
+  // The circuit selector is usable before a champion is chosen (it showed blank and disabled on a real iPhone), with a circuit already shown.
+  await expect(page.locator('#rc-circuit')).toBeEnabled();
+  await expect(page.locator('#rc-circuit')).toHaveValue('stadium-oval');
+  await page.locator('#rc-circuit').selectOption('kidney-loop');
+  await expect(page.locator('#rc-circuit')).toHaveValue('kidney-loop');
   await page.locator('#rc-model').selectOption(FIXTURE.id);
   await expect(page.locator('#rc-note')).toContainText('Trained on stadium-oval');
   const values = await page.locator('#rc-circuit option').evaluateAll((options) => options.map((o) => (o as HTMLOptionElement).value));

@@ -308,7 +308,7 @@ export function startRacePage(deps: RacePageDeps): RacePage {
     setText(
       modelNote,
       models.length === 0
-        ? 'No saved champions yet. Save one in the training view (?mode=train), then come back.'
+        ? 'No saved champions on this web address yet. Saved champions are kept per browser and per address, so save one in the training view (?mode=train) on this same address, then come back.'
         : current === undefined
           ? 'Choose a saved champion to race.'
           : current.usable
@@ -342,7 +342,6 @@ export function startRacePage(deps: RacePageDeps): RacePage {
     }
     const circuit = controller.circuit() ?? '';
     if (circuitSelect.value !== circuit) circuitSelect.value = circuit;
-    circuitSelect.disabled = chosen === null;
     if (lapsSelect.value !== String(controller.laps())) lapsSelect.value = String(controller.laps());
     startButton.disabled = !controller.canStart();
     setText(messageLine, controller.message());
