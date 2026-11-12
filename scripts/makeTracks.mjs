@@ -17,7 +17,8 @@ import { fileURLToPath } from 'node:url';
 import { runnerImport } from 'vite';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const TRACKS = join(ROOT, 'src/data/tracks');
+// MAKE_TRACKS_DIR points the generator at another folder holding the track files and specs/ (the tests check against a scratch copy).
+const TRACKS = process.env.MAKE_TRACKS_DIR ? resolve(process.env.MAKE_TRACKS_DIR) : join(ROOT, 'src/data/tracks');
 const SPECS = join(TRACKS, 'specs');
 const ARC_STEP_DEGREES = 15;
 const STRAIGHT_PIECE = 10;
