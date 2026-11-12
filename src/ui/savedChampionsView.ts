@@ -30,7 +30,7 @@ export interface SavedRowHandlers {
 export function describeEntry(entry: StoreEntry): string {
   if (entry.status === 'damaged') return `Damaged saved champion (${entry.id}). ${entry.problem}`;
   const { summary } = entry;
-  return `${summary.name ?? 'Unnamed champion'} · generation ${summary.generation + 1} · fitness ${summary.fitness.toFixed(1)} · saved ${summary.createdAt.slice(0, 10)}${summary.reproducible ? '' : ' · seed unavailable, not reproducible'}`;
+  return `${summary.name ?? 'Unnamed champion'} · generation ${summary.generation + 1} · fitness ${summary.fitness.toFixed(1)} · circuit ${summary.circuit} · saved ${summary.createdAt.slice(0, 10)}${summary.reproducible ? '' : ' · seed unavailable, not reproducible'}`;
 }
 
 /** A short label for buttons and announcements: the name, or "damaged champion". */

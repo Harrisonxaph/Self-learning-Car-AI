@@ -1,0 +1,18 @@
+{
+  "id": "technical-narrow",
+  "version": "1",
+  "name": "Technical narrow",
+  "width": 8,
+  "half": [
+    { "type": "straight", "length": 20 },
+    { "type": "arc", "turn": "right", "radius": 35, "degrees": 25 },
+    { "type": "arc", "turn": "left", "radius": 35, "degrees": 25 },
+    { "type": "arc", "turn": "right", "radius": 35, "degrees": 25 },
+    { "type": "arc", "turn": "left", "radius": 35, "degrees": 25 },
+    { "type": "arc", "turn": "right", "radius": 35, "degrees": 25 },
+    { "type": "arc", "turn": "left", "radius": 22, "degrees": 135 },
+    { "type": "arc", "turn": "left", "radius": 40, "degrees": 70 },
+    { "type": "straight", "length": 0 }
+  ],
+  "solve": { "segment": 8, "field": "length", "range": [0, 400] }
+}

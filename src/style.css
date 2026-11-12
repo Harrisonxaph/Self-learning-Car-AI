@@ -711,3 +711,16 @@ html.editing .editor-problems {
   max-height: 7rem;
   overflow-y: auto;
 }
+
+/* Training circuit choice (P4-04): a section of the Champion replay panel (bounded and scrollable, so it takes no room above
+   the track). The same 44 px control height as the other training controls. */
+.tc-circuit {
+  width: auto;
+  min-width: 8rem;
+  max-width: 14rem;
+  font-size: 0.9rem;
+}
+
+.tc-circuit:disabled {
+  opacity: 0.55;
+}

@@ -16,13 +16,14 @@ import {
   canonicalJson,
   currentContracts,
   jsonDifferences,
+  manifestEpochOf,
   manifestRecord,
   type ExperimentContracts,
   type ExperimentEngine,
   type ExperimentSource,
 } from './experiment';
 import { FITNESS_VERSION, PARTIAL_PROGRESS_CAP, scoreEpisode, type Episode, type EpisodeRules, type FitnessConfig } from './fitness';
-import { freezeModel, trackContentHash, trainingTrack, validationTrack } from './trackSplits';
+import { epochIds, freezeModel, LATEST_SPLIT_EPOCH, trackContentHash, trainingTrack, TrackLeakageError, validationTrack } from './trackSplits';
 import { DEFAULT_TRAINING_CONFIG, RNG_STREAMS } from './trainer';
 
 export const STUDY_MANIFEST_FORMAT = 'self-driving-ai-evolution/p2-08-manifest';
@@ -193,13 +194,25 @@ export function currentStreams(): StudyManifest['streams'] {
   return { rngStreams: RNG_STREAMS, a8Stream: A8_STREAM, actionSeedDerivation: ACTION_SEED_DERIVATION, selectionRule: SELECTION_RULE, a5Selection: A5_SELECTION };
 }
 
-/** The tracks block for a training and a validation track ID (TrackLeakageError for anything else). */
-export function trackReferences(trainingId: string, validationId: string): StudyManifest['tracks'] {
+/**
+ * The tracks block for a training and a validation track ID (TrackLeakageError for anything else), for a split-manifest epoch
+ * (default: the latest). A circuit outside the epoch's set is refused, so an old manifest cannot name a circuit it predates.
+ */
+export function trackReferences(trainingId: string, validationId: string, epoch: number = LATEST_SPLIT_EPOCH): StudyManifest['tracks'] {
+  const members = epochIds(epoch);
+  for (const id of [trainingId, validationId]) {
+    if (!members.includes(id)) throw new TrackLeakageError(`Track "${id}" is not part of split epoch ${epoch}.`);
+  }
   return {
     training: { id: trainingId, contentHash: trackContentHash(trainingTrack(trainingId)) },
     validation: { id: validationId, contentHash: trackContentHash(validationTrack(validationId)) },
-    splitManifestHash: manifestRecord().hash,
+    splitManifestHash: manifestRecord(undefined, epoch).hash,
   };
+}
+
+/** The tracks block a recorded manifest must equal: the epoch its own split-manifest hash names (the latest when it names none this code knows). */
+export function recordedTrackReferences(tracks: Readonly<Record<string, unknown>>, trainingId: string, validationId: string): StudyManifest['tracks'] {
+  return trackReferences(trainingId, validationId, manifestEpochOf(tracks.splitManifestHash) ?? LATEST_SPLIT_EPOCH);
 }
 
 /** `sha256:` + SHA-256 of the manifest's canonical JSON; every record carries it. */
@@ -265,7 +278,7 @@ export function parseStudyManifest(input: unknown): StudyManifest {
   const trainingRef = exact(t.training, 'manifest.tracks.training', ['id', 'contentHash'], fail);
   const validationRef = exact(t.validation, 'manifest.tracks.validation', ['id', 'contentHash'], fail);
   // trainingTrack / validationTrack throw TrackLeakageError for a track outside its split, held-out included.
-  same(t, trackReferences(str(trainingRef.id, 'manifest.tracks.training.id', fail), str(validationRef.id, 'manifest.tracks.validation.id', fail)), 'manifest.tracks', fail);
+  same(t, recordedTrackReferences(t, str(trainingRef.id, 'manifest.tracks.training.id', fail), str(validationRef.id, 'manifest.tracks.validation.id', fail)), 'manifest.tracks', fail);
 
   // The training block must already be complete and resolved: the trainer's resolvers give it back unchanged.
   let resolved: Json;

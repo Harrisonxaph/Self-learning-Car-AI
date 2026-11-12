@@ -38,7 +38,7 @@ const expected = () => {
     seeds: [1001, 1002, 1003, 1004, 1005, 1006, 1007, 1008, 1009, 1010],
     configuration: { generations: 100, episodesPerTrack: setup.config.populationSize, holdTicks: 30, training },
     streams: currentStreams(),
-    tracks: trackReferences('stadium-oval', 'rounded-rectangle'),
+    tracks: trackReferences('stadium-oval', 'rounded-rectangle', 1),
     metric: METRIC,
     analysis: { delta: 0.25, bootstrap: { ...BOOTSTRAP }, wilcoxon: WILCOXON, decisionRule: DECISION_RULE },
     code: { revision: FROZEN_REVISION },

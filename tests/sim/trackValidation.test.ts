@@ -3,6 +3,7 @@
 // mutation each; nothing here trains or evaluates anything.
 import { describe, expect, it } from 'vitest';
 import manifestData from '../../src/data/tracks/index.json';
+import { BUILT_IN_FILES } from '../helpers/builtInTrackFiles';
 import hairpinChicane from '../../src/data/tracks/hairpin-chicane.json';
 import roundedRectangle from '../../src/data/tracks/rounded-rectangle.json';
 import stadiumOval from '../../src/data/tracks/stadium-oval.json';
@@ -542,7 +543,7 @@ describe('cost', () => {
 });
 
 describe('manifest integration', () => {
-  const FILES = { 'stadium-oval.json': stadiumOval, 'rounded-rectangle.json': roundedRectangle, 'hairpin-chicane.json': hairpinChicane };
+  const FILES = BUILT_IN_FILES;
   it('a built-in file that is not a valid track fails the manifest load with the validation message', () => {
     const broken = oval();
     broken.start.heading = Math.PI;
@@ -558,6 +559,6 @@ describe('manifest integration', () => {
   });
   it('a matching split label loads', () => {
     const labelled = { ...oval(), split: 'training' };
-    expect(loadTrackSplits(manifestData, { ...FILES, 'stadium-oval.json': labelled }).tracks).toHaveLength(3);
+    expect(loadTrackSplits(manifestData, { ...FILES, 'stadium-oval.json': labelled }).tracks).toHaveLength(7);
   });
 });

@@ -27,11 +27,16 @@ import { sha256Hex } from '../utils/sha256';
 import { FITNESS_VERSION, scoreEpisode, type Episode, type EpisodeOutcome } from './fitness';
 import {
   BUILT_IN_TRACK_SPLITS,
+  epochIds,
   freezeModel,
+  LATEST_SPLIT_EPOCH,
+  SPLIT_EPOCHS,
   trackContentHash,
   trainingTrack,
   TRACK_SPLITS_FORMAT,
   TRACK_SPLITS_VERSION,
+  TrackSplitError,
+  type SplitTrack,
   type TrackSplits,
 } from './trackSplits';
 import {
@@ -319,11 +324,34 @@ export function currentContracts(): ExperimentContracts {
   };
 }
 
-/** The split manifest as a record holds it: every entry and a hash of them. */
-export function manifestRecord(splits: TrackSplits = BUILT_IN_TRACK_SPLITS): ExperimentTracks['manifest'] {
-  const entries = splits.tracks.map(({ id, version, split, contentHash }) => ({ id, version, split, contentHash }));
+/**
+ * The split manifest as a record holds it: every entry and a hash of them. For the built-in registry it is the record of an
+ * epoch (default: the latest), recomputed from today's data restricted to that epoch's circuit IDs in the epoch's order; any
+ * other registry (a test's synthetic one) is recorded whole and takes no epoch.
+ */
+export function manifestRecord(splits: TrackSplits = BUILT_IN_TRACK_SPLITS, epoch?: number): ExperimentTracks['manifest'] {
+  let chosen: readonly SplitTrack[] = splits.tracks;
+  if (splits === BUILT_IN_TRACK_SPLITS) {
+    chosen = epochIds(epoch ?? LATEST_SPLIT_EPOCH).map((id) => {
+      const entry = splits.tracks.find((t) => t.id === id);
+      if (entry === undefined) throw new TrackSplitError(`Track splits: epoch ${String(epoch ?? LATEST_SPLIT_EPOCH)} lists "${id}", which is no longer registered.`);
+      return entry;
+    });
+  } else if (epoch !== undefined) {
+    throw new TrackSplitError('Track splits: only the built-in registry has epochs.');
+  }
+  const entries = chosen.map(({ id, version, split, contentHash }) => ({ id, version, split, contentHash }));
   const body = { format: TRACK_SPLITS_FORMAT, version: TRACK_SPLITS_VERSION, entries };
   return { ...body, hash: hashOf(body) };
+}
+
+/** The epoch whose manifest record has this hash (or equals this record), or null for a manifest this code does not know. */
+export function manifestEpochOf(recordedHashOrRecord: unknown): number | null {
+  for (const { epoch } of SPLIT_EPOCHS) {
+    const record = manifestRecord(BUILT_IN_TRACK_SPLITS, epoch);
+    if (typeof recordedHashOrRecord === 'string' ? recordedHashOrRecord === record.hash : canonicalJson(recordedHashOrRecord) === canonicalJson(record)) return epoch;
+  }
+  return null;
 }
 
 const isBuiltIn = (trackId: string): boolean => BUILT_IN_TRACK_SPLITS.tracks.some((t) => t.id === trackId);
@@ -711,12 +739,16 @@ export function parseExperimentRecord(input: unknown, engine: ExperimentEngine):
       incompatible(`contracts.${key} is ${canonicalJson(contracts[key])}, but this code has ${canonicalJson(current[key])}.`);
     }
   }
-  const currentManifest = manifestRecord();
-  if (canonicalJson(manifest) !== canonicalJson(currentManifest)) {
-    incompatible(`its track split manifest (${String(manifest.hash)}) differs from this code's (${currentManifest.hash}).`);
+  // The recorded manifest must be the record of a known split epoch (the latest, or an earlier one recomputed from today's data).
+  const recordedEpoch = manifestEpochOf(manifest);
+  if (recordedEpoch === null) {
+    incompatible(`its track split manifest (${String(manifest.hash)}) is not one this code knows (the current one is ${manifestRecord().hash}).`);
   }
   // An unknown ID is incompatible; trainingTrack throws TrackLeakageError for a validation or held-out track.
   if (!isBuiltIn(training.id as string)) incompatible(`its training track "${String(training.id)}" is not a built-in track here.`);
+  if (!epochIds(recordedEpoch as number).includes(training.id as string)) {
+    incompatible(`its training track "${String(training.id)}" is not part of the track set it was recorded with (split epoch ${String(recordedEpoch)}).`);
+  }
   const track = trainingTrack(training.id as string);
   const expectedTraining = { id: track.id, version: track.version, split: 'training', contentHash: trackContentHash(track) };
   if (canonicalJson(training) !== canonicalJson(expectedTraining)) {

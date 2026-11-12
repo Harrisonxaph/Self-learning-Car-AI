@@ -1,0 +1,12 @@
+{
+  "id": "long-sweepers",
+  "version": "1",
+  "name": "Long sweepers",
+  "width": 10,
+  "half": [
+    { "type": "straight", "length": 50 },
+    { "type": "arc", "turn": "left", "radius": 60, "degrees": 90 },
+    { "type": "arc", "turn": "left", "radius": 100, "degrees": 90 }
+  ],
+  "solve": { "segment": 2, "field": "radius", "range": [60, 600] }
+}

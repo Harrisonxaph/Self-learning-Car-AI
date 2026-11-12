@@ -147,6 +147,14 @@
         <p class="graph-summary"><output aria-live="off" id="replay-decision">No decision yet</output></p>
         <p class="graph-summary"><output aria-live="off" id="replay-result"></output></p>
         <p id="replay-status" class="graph-summary" role="status"></p>
+        <section class="saved-champions circuit-panel" aria-labelledby="circuit-heading">
+          <h2 id="circuit-heading" class="saved-heading">Training circuit</h2>
+          <div class="replay-controls tc-circuit-field">
+            <label class="replay-field" for="training-circuit">Circuit</label>
+            <select id="training-circuit" class="tc-cap tc-circuit" aria-describedby="training-circuit-hint"></select>
+          </div>
+          <p id="training-circuit-hint" class="graph-summary"></p>
+        </section>
         <section class="saved-champions compare-panel" aria-labelledby="compare-heading">
           <h2 id="compare-heading" class="saved-heading">Compare two saved champions</h2>
           <p id="compare-notice" class="graph-summary">Choose two saves to see them side by side. Fitness is ranked only when the two were scored the same way, on the same task, under the same conditions; otherwise it is shown but not ranked. Two saves can be replayed together only under the same driving conditions.</p>

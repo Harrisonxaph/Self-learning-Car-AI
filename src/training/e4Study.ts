@@ -57,6 +57,7 @@ import {
   str,
   ticksOf,
   totals,
+  recordedTrackReferences,
   trackReferences,
   WILCOXON,
   REVISION,
@@ -198,7 +199,7 @@ export function parseE4Manifest(input: unknown): E4Manifest {
   const trainingRef = exact(t.training, 'manifest.tracks.training', ['id', 'contentHash'], fail);
   const validationRef = exact(t.validation, 'manifest.tracks.validation', ['id', 'contentHash'], fail);
   // trainingTrack / validationTrack throw TrackLeakageError for a track outside its split, held-out included.
-  same(t, trackReferences(str(trainingRef.id, 'manifest.tracks.training.id', fail), str(validationRef.id, 'manifest.tracks.validation.id', fail)), 'manifest.tracks', fail);
+  same(t, recordedTrackReferences(t, str(trainingRef.id, 'manifest.tracks.training.id', fail), str(validationRef.id, 'manifest.tracks.validation.id', fail)), 'manifest.tracks', fail);
 
   // The training block must already be complete and resolved: the trainer's resolvers give it back unchanged.
   let resolved: Json;

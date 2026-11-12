@@ -15,8 +15,12 @@
 // - held-out: heldOutTrack(), which hands a held-out track only to a frozen model from freezeModel().
 import manifestData from '../data/tracks/index.json';
 import hairpinChicane from '../data/tracks/hairpin-chicane.json';
+import kidneyLoop from '../data/tracks/kidney-loop.json';
+import longSweepers from '../data/tracks/long-sweepers.json';
 import roundedRectangle from '../data/tracks/rounded-rectangle.json';
+import sSweepers from '../data/tracks/s-sweepers.json';
 import stadiumOval from '../data/tracks/stadium-oval.json';
+import technicalNarrow from '../data/tracks/technical-narrow.json';
 import { loadTrack, type Track } from '../sim/track';
 import { describeTrackErrors, validateTrack } from '../sim/trackValidation';
 import { sha256Hex } from '../utils/sha256';
@@ -45,6 +49,15 @@ export interface SplitTrack {
   /** `sha256:` + SHA-256 of the canonical JSON of the geometry only: outer, inner, start and gates. */
   readonly geometryHash: string;
   readonly track: Track;
+  /** Where the circuit came from (P4-04); null when a manifest gives none (every built-in entry has one). Not part of the content hash or of a recorded manifest. */
+  readonly provenance: TrackProvenance | null;
+}
+
+/** Split provenance of one circuit: who introduced it, the criteria it was designed to, and whether it was designed before any evaluation. */
+export interface TrackProvenance {
+  readonly introducedBy: string;
+  readonly designCriteria: string;
+  readonly designedBeforeAnyEvaluation: boolean;
 }
 
 export interface TrackSplits {
@@ -113,11 +126,25 @@ export function loadTrackSplits(manifest: unknown, files: Readonly<Record<string
     if (actual !== contentHash) {
       fail(`track "${id}" content hash is ${actual}, but the manifest says ${contentHash}. Change the version and the hash together.`);
     }
+    let provenance: TrackProvenance | null = null;
+    if (e.provenance !== undefined) {
+      const prov = e.provenance as Record<string, unknown> | null;
+      if (prov === null || typeof prov !== 'object' || Array.isArray(prov)) fail(`tracks[${i}] ("${id}") provenance must be an object.`);
+      const given = prov as Record<string, unknown>;
+      for (const key of Object.keys(given)) {
+        if (!['introducedBy', 'designCriteria', 'designedBeforeAnyEvaluation'].includes(key)) fail(`tracks[${i}] ("${id}") provenance has an unknown field "${key}".`);
+      }
+      for (const key of ['introducedBy', 'designCriteria']) {
+        if (typeof given[key] !== 'string' || (given[key] as string).trim() === '') fail(`tracks[${i}] ("${id}") provenance.${key} must be a non-empty string.`);
+      }
+      if (typeof given.designedBeforeAnyEvaluation !== 'boolean') fail(`tracks[${i}] ("${id}") provenance.designedBeforeAnyEvaluation must be true or false.`);
+      provenance = Object.freeze({ introducedBy: given.introducedBy as string, designCriteria: given.designCriteria as string, designedBeforeAnyEvaluation: given.designedBeforeAnyEvaluation as boolean });
+    }
     const geometryHash = trackGeometryHash(track);
     const same = hashes.get(geometryHash);
     if (same !== undefined) fail(`tracks "${same}" and "${id}" have the same geometry.`);
     hashes.set(geometryHash, id!);
-    tracks.push(Object.freeze({ id: id!, version: version!, split: split as Split, contentHash: actual, geometryHash, track }));
+    tracks.push(Object.freeze({ id: id!, version: version!, split: split as Split, contentHash: actual, geometryHash, track, provenance }));
   }
   for (const split of SPLITS) {
     if (!tracks.some((t) => t.split === split)) fail(`the "${split}" split has no tracks.`);
@@ -130,7 +157,40 @@ export const BUILT_IN_TRACK_SPLITS: TrackSplits = loadTrackSplits(manifestData, 
   'stadium-oval.json': stadiumOval,
   'rounded-rectangle.json': roundedRectangle,
   'hairpin-chicane.json': hairpinChicane,
+  'kidney-loop.json': kidneyLoop,
+  'long-sweepers.json': longSweepers,
+  's-sweepers.json': sSweepers,
+  'technical-narrow.json': technicalNarrow,
 });
+
+/**
+ * The split-manifest epochs: an APPEND-ONLY registry of explicit circuit-ID lists (P4-04). Epoch 1 is the three circuits of P2-10.
+ * Every change that adds circuits appends exactly ONE new epoch (the previous epoch's IDs plus the added ones, in manifest
+ * order); an epoch is never redefined and an added circuit is never absorbed into an existing epoch. A recorded split manifest
+ * is accepted only if it equals the manifest record of one of these epochs, recomputed from today's data restricted to that
+ * epoch's IDs (so a changed or removed circuit makes the old record differ and it is refused). New records use the latest epoch.
+ */
+export interface SplitEpoch {
+  readonly epoch: number;
+  readonly introducedBy: string;
+  readonly ids: readonly string[];
+}
+export const SPLIT_EPOCHS: readonly SplitEpoch[] = Object.freeze([
+  Object.freeze({ epoch: 1, introducedBy: 'P2-10', ids: Object.freeze(['stadium-oval', 'rounded-rectangle', 'hairpin-chicane']) }),
+  Object.freeze({
+    epoch: 2,
+    introducedBy: 'P4-04',
+    ids: Object.freeze(['stadium-oval', 'rounded-rectangle', 'hairpin-chicane', 'kidney-loop', 's-sweepers', 'long-sweepers', 'technical-narrow']),
+  }),
+]);
+export const LATEST_SPLIT_EPOCH: number = SPLIT_EPOCHS[SPLIT_EPOCHS.length - 1]!.epoch;
+
+/** The circuit IDs of an epoch. Throws TrackSplitError for an unknown one. */
+export function epochIds(epoch: number): readonly string[] {
+  const found = SPLIT_EPOCHS.find((e) => e.epoch === epoch);
+  if (found === undefined) throw new TrackSplitError(`Track splits: there is no split-manifest epoch ${String(epoch)}.`);
+  return found.ids;
+}
 
 /** Every track in one split, in manifest order. */
 export function tracksIn(split: Split, splits: TrackSplits = BUILT_IN_TRACK_SPLITS): readonly SplitTrack[] {

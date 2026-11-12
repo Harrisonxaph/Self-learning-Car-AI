@@ -30,7 +30,7 @@
   | --- | --- | --- |
   | training | `kidney-loop` | no straights: continuously varying curvature, radius from about 25 m to about 90 m, 12 m wide |
   | validation | `s-sweepers` | two long, gentle opposing-curvature sweepers (an S section with a right-hand bend, radius at least 60 m) joined by short straights, 13 m wide |
-  | held-out | `long-sweepers` | large-radius arcs (at least 60 m) and one straight of about 200 m, 10 m wide: speed-dependent racing line |
+  | held-out | `long-sweepers` | large-radius arcs (at least 60 m) and one straight of about 100 m, 10 m wide: speed-dependent racing line. **Amended on the owner's approval (2026-11-12, #31): the plan first said about 200 m, which cannot fit the 400 to 650 m lap bound with arcs of at least 60 m (360 degrees of turning at 60 m radius is already 377 m).** |
   | held-out | `technical-narrow` | 8 m wide, alternating left and right kinks and one 135-degree corner: tight, right-hand-heavy sections |
 
   with the existing `stadium-oval` and `hairpin-chicane` kept as they are, giving **2 training, 2 validation and 3 held-out**. The criteria above are fixed by this plan; the exact geometry is generated from them and not adjusted for any model's performance.
