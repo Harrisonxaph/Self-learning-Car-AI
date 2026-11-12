@@ -110,6 +110,43 @@
         <button type="button" id="ed-back" class="tc-button">Back to editing</button>
         <p class="graph-summary">Driving your custom track. It is not saved: leaving this page loses it (saving arrives later).</p>
       </div>
+      <section id="evaluate-panel" class="editor-panel evaluate-panel" aria-labelledby="ev-heading" hidden>
+        <h2 id="ev-heading" class="saved-heading">Evaluate a saved champion</h2>
+        <p class="graph-summary">Runs a saved champion on built-in circuits and stores the results with it, in this browser only. Each circuit is five episodes: the circuit's own start and four small, recorded changes to it. A champion is deterministic, so this shows how that one champion drove on those circuits; it is not a statistic, and nothing here says a model has learned or generalised. Only training and validation circuits are offered.</p>
+        <div class="replay-controls">
+          <label class="replay-field" for="ev-model">Champion</label>
+          <select id="ev-model" class="tc-cap tc-circuit ev-model" aria-describedby="ev-model-note"></select>
+        </div>
+        <p id="ev-model-note" class="graph-summary"></p>
+        <fieldset class="ev-circuits">
+          <legend>Circuits</legend>
+          <div id="ev-circuit-list"></div>
+        </fieldset>
+        <div class="replay-controls">
+          <button type="button" id="ev-run" class="tc-button" disabled>Run</button>
+          <button type="button" id="ev-cancel" class="tc-button" disabled>Cancel</button>
+        </div>
+        <p id="ev-progress" class="graph-summary" role="status" aria-live="polite"></p>
+        <p id="ev-message" class="graph-summary ev-message" role="status" aria-live="polite"></p>
+        <div class="ev-table-wrap">
+          <table id="ev-table" class="ev-table">
+            <caption>Stored evaluations of the chosen champion, newest first</caption>
+            <thead>
+              <tr>
+                <th scope="col">Circuit</th>
+                <th scope="col">Lap completion</th>
+                <th scope="col">Collisions</th>
+                <th scope="col">Completed / crashed / stalled / timeout</th>
+                <th scope="col">First lap (simulated)</th>
+                <th scope="col">Mean progress</th>
+                <th scope="col">Evaluated (UTC)</th>
+              </tr>
+            </thead>
+            <tbody id="ev-body"></tbody>
+          </table>
+        </div>
+        <p id="ev-hidden" class="graph-summary"></p>
+      </section>
       <details id="training-graph" class="training-graph" hidden>
         <summary>Training graph</summary>
         <canvas

@@ -52,7 +52,7 @@ describe('appending', () => {
   });
   it.each<[string, unknown]>([
     ['a held-out split', { ...entry, track: { ...entry.track, split: 'held-out' } }],
-    ['a circuit that is not built in', { ...entry, track: { ...entry.track, id: 'hairpin-chicane' } }],
+    ['a circuit that is not built in', { ...entry, track: { ...entry.track, id: 'not-a-built-in-circuit' } }],
     ['a tampered summary', { ...entry, summary: { ...entry.summary, lapCompletion: 1 } }],
     ['not an object', 'text'],
   ])('refuses an entry with %s and writes nothing', (_name, bad) => {

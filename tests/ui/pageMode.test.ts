@@ -19,6 +19,12 @@ describe('pageMode', () => {
     ['?mode=edit&mode=train', 'train'],
     ['?mode=Edit', 'drive'],
     ['?mode=editor', 'drive'],
+    ['?mode=evaluate', 'evaluate'],
+    ['?mode=%20evaluate%20', 'evaluate'],
+    ['?mode=edit&mode=evaluate', 'evaluate'],
+    ['?mode=evaluate&mode=train', 'train'],
+    ['?mode=Evaluate', 'drive'],
+    ['?mode=evaluation', 'drive'],
   ])('%s → %s', (search, mode) => {
     expect(pageMode(search)).toBe(mode);
   });

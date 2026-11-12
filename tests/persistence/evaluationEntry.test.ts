@@ -73,8 +73,8 @@ describe('validateEvaluationEntry', () => {
     hash.track.contentHash = `sha256:${'1'.repeat(64)}`;
     expect(validateEvaluationEntry(hash, EVALUATION_TRACKS).ok).toBe(false);
     const unknown = clone(base) as Json;
-    unknown.track.id = 'hairpin-chicane';
-    expect(validateEvaluationEntry(unknown, EVALUATION_TRACKS).ok).toBe(false); // a held-out circuit is not in the registry given
+    unknown.track.id = 'not-a-built-in-circuit';
+    expect(validateEvaluationEntry(unknown, EVALUATION_TRACKS).ok).toBe(false); // an ID that is not in the registry given
     expect(JSON.stringify((validateEvaluationEntry(unknown, EVALUATION_TRACKS) as unknown as { errors: string[] }).errors)).toMatch(/not a built-in circuit/);
   });
   it.each([null, undefined, 5, 'x', [], {}])('never throws for hostile input %j', (value) => {
