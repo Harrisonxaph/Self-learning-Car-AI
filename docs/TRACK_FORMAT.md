@@ -1,6 +1,6 @@
 # Track format and validation
 
-> Status: **P4-01 implements the validator** (`src/sim/trackValidation.ts`). The track editor (P4-02, `?mode=edit`, in review) builds tracks in this format and runs this validator on every change; saving or loading custom tracks (P4-03) are not built. A track that passes is **well-formed and drivable by the rules below**; it says nothing about whether a model learns on it.
+> Status: **P4-01 implements the validator** (`src/sim/trackValidation.ts`). The track editor (P4-02, `?mode=edit`, in review) builds tracks in this format and runs this validator on every change; saving, exporting and importing custom tracks (P4-03, `src/persistence/trackStore.ts`) are built on this format. A track that passes is **well-formed and drivable by the rules below**; it says nothing about whether a model learns on it.
 
 A track is one JSON document. Units are metres; x grows to the right and y downwards (the canvas), headings are radians from +x turning towards +y.
 
@@ -64,3 +64,7 @@ If a wall rule (`degenerate`, `boundary-simple`, `boundaries-apart`, `inner-insi
 ## Limits
 
 Boundaries are polylines, so a "smooth" curve is only as smooth as its points. The width check measures the distance between boundary edges, a conservative stand-in for the room a car needs while turning. The 45° start angle, the 60 m gate warning and the caps are conservative defaults, not physical limits. The validator does not judge whether a track is interesting, fair or hard, and it never touches the held-out evaluation boundary (`docs/AI_EVALUATION.md`).
+
+## Saved custom tracks (P4-03)
+
+A custom track is saved and exported in this format, in one canonical key order (`format`, `schemaVersion`, `id`, `version`, `name`, `outer`, `inner`, `start`, `gates`), so export, import and export again give identical bytes. A track drawn in the editor also carries an optional `editor` object (`points`, `width`, `gateSpacing`, `startOffset`, `name`): the source state that "Edit again" reopens. It is kept only when rebuilding it gives the same layout (within 1e-6 m); otherwise it is dropped and the track is still drivable and evaluable but not editable. `editor` is not part of the track geometry and is never part of any hash. On import `format` and `schemaVersion` are required, any `split` label is ignored (a custom track belongs to no split), the file is capped at 256 KiB before parsing, and an `id` that a built-in circuit uses, or a layout identical to any built-in circuit (training, validation or held-out alike), is refused with one generic message that names no circuit or split.

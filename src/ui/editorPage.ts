@@ -7,6 +7,7 @@ import { TOUCH_RADIUS_PX, drawEditor, editorView } from '../render/editorView';
 import { browserViewportEnvironment, createViewport, type ViewportSize } from '../render/viewport';
 import type { Track, Vec2 } from '../sim/track';
 import { createEditorController, type EditorMode } from './editorController';
+import type { TrackLibrary } from './trackLibrary';
 
 const must = <T extends Element>(selector: string): T => {
   const found = document.querySelector<T>(selector);
@@ -20,6 +21,8 @@ export interface EditorPageDeps {
   readonly history?: EditorHistory | undefined;
   /** Called with the built track and the editor's history when the user presses Drive it (the editor has been stopped). */
   readonly onDrive: (track: Track, history: EditorHistory) => void;
+  /** Saved tracks (P4-03): save, import, export, open and delete. Absent, the page has no saving. */
+  readonly library?: TrackLibrary | undefined;
 }
 
 export interface EditorPage {
@@ -54,6 +57,15 @@ export function startEditorPage(deps: EditorPageDeps): EditorPage {
     [button('ed-start-fwd1'), 1],
     [button('ed-start-fwd10'), 10],
   ];
+
+  const library = deps.library;
+  const savedSection = must<HTMLElement>('#ed-saved').closest('section') as HTMLElement;
+  const nameInput = must<HTMLInputElement>('#ed-name');
+  const saveButton = button('ed-save');
+  const importInput = must<HTMLInputElement>('#ed-import');
+  const savedStatus = must<HTMLElement>('#ed-saved-status');
+  const savedList = must<HTMLElement>('#ed-saved');
+  savedSection.hidden = library === undefined;
 
   const controller = createEditorController(deps.history);
   const cleanups: (() => void)[] = [];
@@ -115,6 +127,95 @@ export function startEditorPage(deps: EditorPageDeps): EditorPage {
     if (hadFocus && controller.selected() >= 0) (pointsList.children[controller.selected()] as HTMLElement | undefined)?.focus({ preventScroll: true });
   };
 
+  /** The saved-tracks list: one row per saved track with Edit (when it has editing data), Drive, Export and a two-step Delete. */
+  const renderSaved = (focusKey?: string): void => {
+    if (!library) return;
+    const active = document.activeElement;
+    const keep = focusKey ?? (active instanceof HTMLElement && savedList.contains(active) ? active.dataset.key : undefined);
+    const listing = library.listing();
+    savedStatus.textContent = !listing.available ? listing.message : library.message();
+    if (!listing.available) {
+      savedList.replaceChildren();
+      return;
+    }
+    const pending = library.pendingDelete();
+    const makeButton = (text: string, label: string, key: string, onClick: () => void): HTMLButtonElement => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'tc-button replay-button';
+      b.textContent = text;
+      b.setAttribute('aria-label', label);
+      b.dataset.key = key;
+      b.addEventListener('click', onClick);
+      return b;
+    };
+    savedList.setAttribute('data-count', String(listing.entries.length));
+    savedList.replaceChildren(
+      ...listing.entries.map((entry) => {
+        const row = document.createElement('li');
+        row.dataset.id = entry.id;
+        row.dataset.status = entry.status;
+        const text = document.createElement('span');
+        const label = entry.status === 'ok' ? entry.summary.name : 'damaged track';
+        text.textContent = entry.status === 'ok' ? `${entry.summary.name} · ${entry.summary.gates} gates${entry.summary.editable ? '' : ' · no editing data'}` : `Damaged saved track (${entry.id}). ${entry.problem}`;
+        const actions = document.createElement('span');
+        actions.className = 'saved-actions';
+        if (entry.status === 'ok') {
+          if (entry.summary.editable) {
+            actions.append(
+              makeButton('Edit', `Edit ${label}`, `${entry.id}:edit`, () => {
+                const opened = library.open(entry.id);
+                if (opened?.state) controller.load(opened.state, `Loaded "${opened.state.name}" for editing.`);
+                refresh();
+                (document.getElementById('ed-name') as HTMLInputElement | null)?.focus({ preventScroll: true });
+              }),
+            );
+          }
+          actions.append(
+            makeButton('Drive', `Drive ${label}`, `${entry.id}:drive`, () => {
+              const opened = library.open(entry.id);
+              if (!opened) {
+                renderSaved();
+                return;
+              }
+              const kept = controller.history();
+              stop();
+              deps.onDrive(opened.track, kept);
+            }),
+            makeButton('Export', `Export ${label}`, `${entry.id}:export`, () => {
+              library.exportTrack(entry.id);
+              renderSaved(`${entry.id}:export`);
+            }),
+          );
+        }
+        if (pending === entry.id) {
+          actions.append(
+            makeButton('Yes, delete', `Confirm delete ${label}`, `${entry.id}:confirm`, () => {
+              library.confirmDelete(entry.id);
+              renderSaved('first');
+            }),
+            makeButton('Keep', `Keep ${label}`, `${entry.id}:keep`, () => {
+              library.cancelDelete();
+              renderSaved(`${entry.id}:delete`);
+            }),
+          );
+        } else {
+          actions.append(
+            makeButton('Delete', `Delete ${label}`, `${entry.id}:delete`, () => {
+              library.requestDelete(entry.id);
+              renderSaved(`${entry.id}:confirm`);
+            }),
+          );
+        }
+        row.append(text, actions);
+        return row;
+      }),
+    );
+    // Focus stays on the control just used, or moves to the next sensible one when it has gone (never lost to the page body).
+    const target = keep === 'first' ? savedList.querySelector<HTMLElement>('button') : keep ? savedList.querySelector<HTMLElement>(`[data-key="${keep}"]`) : null;
+    if (keep !== undefined) (target ?? (keep === 'first' ? nameInput : saveButton)).focus({ preventScroll: true });
+  };
+
   const draw = (): void => {
     if (!size || size.width === 0) return;
     const view = editorView(size);
@@ -153,6 +254,8 @@ export function startEditorPage(deps: EditorPageDeps): EditorPage {
     clearButton.disabled = state.points.length === 0;
     for (const [b] of startButtons) b.disabled = !state.closed;
     driveButton.disabled = result.kind !== 'valid';
+    saveButton.disabled = result.kind !== 'valid' || !library;
+    if (document.activeElement !== nameInput) nameInput.value = state.name;
     status.textContent = result.message;
     status.dataset.kind = result.kind;
     problems.replaceChildren(
@@ -235,6 +338,27 @@ export function startEditorPage(deps: EditorPageDeps): EditorPage {
     deps.onDrive(result.track, history);
   });
 
+  // ---- Saved tracks (P4-03). ----
+  if (library) {
+    on(nameInput, 'change', () => {
+      controller.setName(nameInput.value);
+      refresh();
+    });
+    on(saveButton, 'click', () => {
+      controller.setName(nameInput.value);
+      library.save(controller.state());
+      refresh();
+      renderSaved();
+    });
+    on(importInput, 'change', () => {
+      void library.importFile(importInput.files as unknown as Parameters<TrackLibrary['importFile']>[0]).then(() => {
+        importInput.value = '';
+        renderSaved();
+      });
+    });
+    renderSaved();
+  }
+
   // ---- Keyboard. ----
   const ARROWS: Record<string, [number, number]> = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
   on(canvas, 'keydown', (event) => {
@@ -283,6 +407,8 @@ export function startEditorPage(deps: EditorPageDeps): EditorPage {
   });
   onDocument('keydown', (event) => {
     const mod = event.ctrlKey || event.metaKey;
+    // Typing a name is not drawing: Ctrl or Cmd + Z there is the text field's own undo.
+    if (event.target instanceof HTMLInputElement) return;
     if (mod && !event.altKey) {
       const key = event.key.toLowerCase();
       if (key === 'z' && !event.shiftKey) controller.undo();

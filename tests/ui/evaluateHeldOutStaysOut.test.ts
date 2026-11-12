@@ -10,7 +10,16 @@ import { tracksIn } from '../../src/training/trackSplits';
 const ROOT = join(__dirname, '../..');
 const HELD_OUT = tracksIn('held-out').map((t) => t.id);
 const code = (path: string): string => readFileSync(join(ROOT, path), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
-const BOUNDARY = ['src/ui/modelEvaluation.ts', 'src/ui/evaluateController.ts', 'src/ui/evaluatePage.ts', 'src/persistence/evaluationEntry.ts'];
+const BOUNDARY = [
+  'src/ui/modelEvaluation.ts',
+  'src/ui/evaluateController.ts',
+  'src/ui/evaluatePage.ts',
+  'src/persistence/evaluationEntry.ts',
+  // P4-03: the saved-track code reaches the split boundary only through classifyCustomTrack (training/trackSplits.ts)
+  'src/persistence/trackStore.ts',
+  'src/ui/trackLibrary.ts',
+  'src/ui/editorPage.ts',
+];
 /** The evaluate wiring in main.ts only: from startEvaluating to the next top-level function. */
 const evaluateWiring = (): string => {
   const text = code('src/main.ts');

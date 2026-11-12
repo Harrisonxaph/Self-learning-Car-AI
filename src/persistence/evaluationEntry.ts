@@ -15,7 +15,8 @@ export const EVALUATION_PROTOCOL = 'p4-05-evaluation-v1';
 export const MAX_EVALUATION_ENTRIES = 50;
 export const EVALUATION_OUTCOMES = Object.freeze(['completed', 'crashed', 'stalled', 'timeout'] as const);
 export type EvaluationOutcome = (typeof EVALUATION_OUTCOMES)[number];
-export const EVALUATION_SPLITS = Object.freeze(['training', 'validation'] as const);
+/** `custom` is a layout a person drew or imported (P4-03): it is in no built-in split, and it is never held-out. */
+export const EVALUATION_SPLITS = Object.freeze(['training', 'validation', 'custom'] as const);
 export type EvaluationSplit = (typeof EVALUATION_SPLITS)[number];
 
 /** The protocol's fixed limits (p4-05-evaluation-v1): the trainer's own episode defaults, and the fitness version it scores under. */
@@ -154,6 +155,17 @@ export interface EntryContext {
   readonly registry?: readonly RegistryTrack[] | undefined;
   /** Whether the entry belongs to the model that holds it (id, frozen identity, driving configuration): a message when it does not, otherwise null. */
   readonly belongsTo?: ((entry: EvaluationEntry) => string | null) | undefined;
+  /**
+   * The saved custom track an ID names (P4-03), if one is saved. A `custom` entry whose track is saved with the same version and
+   * content hash gets the same start and gate checks as a built-in circuit; an entry that names a saved track but disagrees with it is
+   * refused; one whose track is no longer saved is checked structurally only (its recorded starts are still bounds-checked).
+   */
+  readonly custom?: ((id: string) => RegistryTrack | null | 'unreadable') | undefined;
+  /**
+   * Every ID a built-in circuit uses, whichever split it is in (IDs only: no geometry, and it makes no circuit evaluable). A `custom`
+   * entry may not use one. Separate from `registry`, which lists only the circuits eligible for evaluation (never held-out).
+   */
+  readonly reservedIds?: readonly string[] | undefined;
 }
 
 /** JSON text with object keys in sorted order, so two equal structures compare equal whatever their key order. */
@@ -220,7 +232,21 @@ export function validateEvaluationEntry(value: unknown, context: EntryContext = 
     if (track === null || !isStr(track.id, 64) || !isStr(track.version, 64) || typeof track.contentHash !== 'string' || !HASH.test(track.contentHash)) {
       fail('"track" must give an id, a version and a content hash.');
     } else if (!(EVALUATION_SPLITS as readonly unknown[]).includes(track.split)) {
-      fail('"track.split" must be "training" or "validation": a held-out circuit is never evaluated here.');
+      fail('"track.split" must be "training", "validation" or "custom": a held-out circuit is never evaluated here.');
+    } else if (track.split === 'custom') {
+      // A custom layout never uses a built-in circuit's ID; when its track is still saved unchanged it is checked like a built-in one.
+      if (context.registry?.some((t) => t.id === track.id) || context.reservedIds?.includes(track.id as string)) fail('"track.id" is the ID of a built-in circuit, which a custom layout may not use.');
+      else {
+        const saved = context.custom?.(track.id as string) ?? null;
+        // Something is stored under this ID but cannot be read (damaged, hand-edited, reserved, or storage failed): that is NOT a missing track.
+        // The claim is refused, never downgraded to the structural check meant for a deleted track.
+        if (saved === 'unreadable') fail('"track" names a saved custom track that cannot be read, so this result cannot be verified.');
+        else if (saved !== null) {
+          // While a track is saved under this ID the entry must be for exactly that track; once it is deleted the entry is checked structurally.
+          if (saved.version !== track.version || saved.contentHash !== track.contentHash) fail('"track" does not match the saved custom track it names.');
+          else known = saved;
+        }
+      }
     } else if (context.registry !== undefined) {
       known = context.registry.find((t) => t.id === track.id);
       if (!known) fail(`"track.id" ${String(track.id)} is not a built-in training or validation circuit.`);

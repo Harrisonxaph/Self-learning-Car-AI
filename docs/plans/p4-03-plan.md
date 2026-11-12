@@ -52,7 +52,7 @@ A saved custom track is well-formed and drivable by the validator's rules. It is
 2. **Export and import one track at a time as a JSON file**, in the existing track format; the file's `split` label is ignored.
 3. **Imported tracks without editor source state are drivable and evaluable but not editable** (recommended, rather than reverse-engineering control points from boundaries).
 4. **An ID that is already saved is never silently overwritten:** the same geometry is "already saved"; different geometry under the same ID is refused with a message.
-5. **One new allowed `track.split` value, `custom`, in evaluation entries**; the protocol and model schema versions stay as they are. Entries for a deleted or edited custom track are validated structurally and labelled "no longer saved".
+5. **One new allowed `track.split` value, `custom`, in evaluation entries**; the protocol and model schema versions stay as they are. Entries are looked up by their recorded identity, version and hash (section 3): matching is fully checked, a present but mismatched track is quarantined as an unrecognised claim, and only a genuinely missing track (for example deleted) gives a structurally checked result labelled "no longer saved" with replay unavailable.
 6. **Custom tracks are never training targets, never used by a study, and never ranked**; training and the studies use built-in circuits only.
 7. **A layout identical to any built-in circuit, in any split, is refused with one generic message** that names neither the circuit nor its split (the held-out boundary), so a person cannot tell a held-out layout from a training one by trying; the same refusal applies to an ID a built-in circuit uses.
 
