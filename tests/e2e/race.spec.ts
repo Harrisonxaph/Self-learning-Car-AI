@@ -50,9 +50,16 @@ async function startOneLap(page: Page): Promise<void> {
   await page.locator('#rc-start').click();
 }
 
-/** Holds Gas (a touch pointer on the on-screen button) until the car hits a wall, then lets go. */
-async function driveIntoWall(page: Page): Promise<void> {
-  await expect.poll(() => phase(page), { timeout: 15_000 }).toBe('racing');
+/**
+ * Starts the crash scenario on a FRESH race clock: restarts the race (the in-race Restart button, or Race again on the results screen), waits for
+ * the new countdown, then holds Gas (a touch pointer on the on-screen button) during it, so the held input applies from tick 0. Nothing slow
+ * (drawing checks, polling) can use up the five-second no-new-gate allowance before the car moves. Then waits for the wall contact and lets go.
+ */
+async function restartAndDriveIntoWall(page: Page): Promise<void> {
+  if (await page.locator('#rr-restart').isVisible()) await page.locator('#rr-restart').click();
+  else await page.locator('#restart').click();
+  await expect(canvas(page)).toHaveAttribute('data-race-phase', 'countdown');
+  await expect(canvas(page)).toHaveAttribute('data-race-tick', '0');
   await touch(page, 'accelerate', 'pointerdown', 7);
   await expect(button(page, 'accelerate')).toHaveClass(/held/);
   await expect.poll(async () => await canvas(page).getAttribute('data-human-outcome'), { timeout: 30_000 }).not.toBe('');
@@ -132,7 +139,8 @@ test('start and finish a race with the touch controls, read the results, and res
   await expect.poll(async () => (await carPixels(page)).you).toBeGreaterThan(1);
   await expect.poll(async () => (await carPixels(page)).ai).toBeGreaterThan(1);
 
-  await driveIntoWall(page);
+  // The crash scenario runs on its own, fresh race (see restartAndDriveIntoWall), so the checks above cannot decide its outcome.
+  await restartAndDriveIntoWall(page);
   await expect.poll(() => phase(page), { timeout: 60_000 }).toBe('finished');
 
   const results = page.locator('#race-results');
