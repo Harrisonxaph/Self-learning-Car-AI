@@ -263,6 +263,29 @@ export function assertEvaluationTrack(track: Track, splits: TrackSplits = BUILT_
   return same ? (same.split as 'training' | 'validation') : 'unregistered';
 }
 
+/** The one message a refused custom layout gets (P4-03): it never names the circuit it matched or the split it is in, so it cannot be used to find out which layouts are reserved. */
+export const RESERVED_LAYOUT_MESSAGE = 'This track uses the ID or the layout of a built-in study circuit, so it cannot be saved or evaluated here. Change the layout or give it another ID.';
+
+export type CustomTrackCheck =
+  | { readonly ok: true; /** What the layout is: new geometry, or identical to a built-in training or validation circuit. */ readonly layout: 'unregistered' | 'training' | 'validation' }
+  | { readonly ok: false; readonly message: string };
+
+/**
+ * Whether a person's own track (made in the editor or imported) may be saved and evaluated in the browser (P4-03). Refused, with
+ * one generic message: any ID a built-in circuit uses, and any geometry identical to a held-out circuit (whatever its ID, name or
+ * labels). Never throws, and never says which circuit or split matched. A layout identical to a training or validation circuit is
+ * allowed and reported as such; it is not a different circuit.
+ */
+export function classifyCustomTrack(track: Track, splits: TrackSplits = BUILT_IN_TRACK_SPLITS): CustomTrackCheck {
+  const refused: CustomTrackCheck = { ok: false, message: RESERVED_LAYOUT_MESSAGE };
+  try {
+    if (splits.tracks.some((t) => t.id === track.id)) return refused;
+    return { ok: true, layout: assertEvaluationTrack(track, splits) };
+  } catch {
+    return refused;
+  }
+}
+
 /** A score for one model on one track, as produced by an evaluation. */
 export interface TrackScore {
   readonly modelId: string;
