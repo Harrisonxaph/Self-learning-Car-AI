@@ -270,6 +270,23 @@ describe('caps, damaged entries and failing storage', () => {
     expect((store.list() as unknown as { entries: unknown[] }).entries).toHaveLength(1);
   });
 
+  it('a failed load says why: nothing stored is "missing"; damaged, hand-edited, reserved or unreadable storage is "unreadable"', () => {
+    const { store, storage } = make();
+    const id = (store.save(drawn()) as { id: string }).id;
+    expect(store.load(id).ok).toBe(true);
+    expect(store.load('never-saved')).toMatchObject({ ok: false, kind: 'missing' });
+    expect(store.load('A')).toMatchObject({ ok: false, kind: 'missing' });
+    storage.setItem(`${TRACK_KEY_PREFIX}${id}`, '{not json');
+    expect(store.load(id)).toMatchObject({ ok: false, kind: 'unreadable' });
+    storage.setItem(`${TRACK_KEY_PREFIX}${id}`, JSON.stringify({ ...drawn(), id: 'some-other-id' }));
+    expect(store.load(id)).toMatchObject({ ok: false, kind: 'unreadable' });
+    const held = BUILT_IN_TRACK_SPLITS.tracks.find((t) => t.split === 'held-out')!;
+    storage.setItem(`${TRACK_KEY_PREFIX}${id}`, JSON.stringify({ format: 'self-driving-ai-evolution/track', schemaVersion: 1, id, version: '1', name: 'x', outer: held.track.outer, inner: held.track.inner, start: held.track.start, gates: held.track.gates }));
+    expect(store.load(id)).toMatchObject({ ok: false, kind: 'unreadable' });
+    const throwing = createTrackStore({ storage: () => ({ ...storage, length: 0, key: () => null, getItem: () => { throw new Error('denied'); }, setItem: () => undefined, removeItem: () => undefined }), screen });
+    expect(throwing.load(id)).toMatchObject({ ok: false, kind: 'unreadable' });
+  });
+
   it('ids that are not valid keys are refused by load, export and remove', () => {
     const { store } = make();
     for (const id of ['', 'A', 'a/b', '../model', 'x'.repeat(65), 5 as unknown as string]) {

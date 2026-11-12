@@ -59,7 +59,21 @@ export interface CircuitRef {
 export const EVALUATION_REGISTRY = BUILT_IN_TRACK_SPLITS.tracks.filter((t) => t.split === 'training' || t.split === 'validation');
 
 /** The saved custom track an ID names, validated again by the caller's store on every call (P4-03), or null when none is saved. */
-export type CustomSource = (id: string) => Track | null;
+export type CustomSource = (id: string) => Track | null | 'unreadable';
+
+/**
+ * The saved-track source over a track store: a saved track, `null` when nothing is stored under the ID (a deleted track), and `'unreadable'`
+ * when something is stored but cannot be used (damaged, hand-edited, reserved, or the storage failed), so the two are never mixed up.
+ */
+export function customSourceFromStore(store: { load(id: string): { readonly ok: true; readonly track: Track } | { readonly ok: false; readonly kind: 'missing' | 'unreadable' } }): CustomSource {
+  return (id) => {
+    const loaded = store.load(id);
+    return loaded.ok ? loaded.track : loaded.kind === 'missing' ? null : 'unreadable';
+  };
+}
+
+/** Every built-in circuit's ID, in every split (IDs only: no geometry, and no circuit becomes evaluable): the IDs a custom layout may not use. */
+export const RESERVED_CIRCUIT_IDS: readonly string[] = BUILT_IN_TRACK_SPLITS.tracks.map((t) => t.id);
 
 /**
  * The circuit an ID names: a built-in training or validation circuit, or, when `custom` is given, a saved custom track.
@@ -81,6 +95,7 @@ export function resolveCircuit(id: string, custom?: CustomSource): CircuitRef {
     } catch (second) {
       if (!(second instanceof TrackLeakageError)) throw second;
       const saved = custom === undefined ? null : custom(id);
+      if (saved === 'unreadable') throw new TrackLeakageError('That saved track cannot be read, so it cannot be evaluated.');
       if (saved === null || saved.id !== id) throw new TrackLeakageError(`"${String(id)}" is not a training or validation circuit${custom === undefined ? '' : ' or a saved custom track'}; saved models are evaluated on those only.`);
       if (!classifyCustomTrack(saved).ok) throw new TrackLeakageError(RESERVED_LAYOUT_MESSAGE);
       return { id: saved.id, version: saved.version, split: 'custom', contentHash: trackGeometryHash(saved), track: saved };
@@ -90,16 +105,17 @@ export function resolveCircuit(id: string, custom?: CustomSource): CircuitRef {
 }
 
 /** The saved-track lookup an entry is checked against (the form the entry validator and the model store take). */
-export function customRegistryLookup(custom: CustomSource): (id: string) => RegistryTrack | null {
+export function customRegistryLookup(custom: CustomSource): (id: string) => RegistryTrack | null | 'unreadable' {
   return (id) => {
     const track = custom(id);
+    if (track === 'unreadable') return 'unreadable';
     return track === null ? null : { id: track.id, version: track.version, split: 'custom', contentHash: trackGeometryHash(track), track };
   };
 }
 
 /** How an entry is checked for a model: the built-in circuits, the saved custom tracks, and that it belongs to the model. */
 export function entryContext(model: ModelDocument, custom?: CustomSource): EntryContext {
-  return { registry: EVALUATION_REGISTRY, belongsTo: (e) => entryBelongsTo(model, e), custom: custom === undefined ? undefined : customRegistryLookup(custom) };
+  return { registry: EVALUATION_REGISTRY, reservedIds: RESERVED_CIRCUIT_IDS, belongsTo: (e) => entryBelongsTo(model, e), custom: custom === undefined ? undefined : customRegistryLookup(custom) };
 }
 
 /** The start of seed `seed` on a track (see evaluationStartFor). */

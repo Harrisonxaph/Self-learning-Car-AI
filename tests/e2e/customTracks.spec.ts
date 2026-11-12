@@ -200,3 +200,22 @@ test('the keyboard alone saves, and focus stays on the control used; controls ar
   const scroll = await page.evaluate(() => ({ x: document.documentElement.scrollWidth, w: document.documentElement.clientWidth }));
   expect(scroll.x).toBeLessThanOrEqual(scroll.w);
 });
+
+test('a saved track that becomes unreadable is not shown as "no longer saved": its results are hidden, not downgraded', async ({ page }) => {
+  await saveOne(page, 'Damage loop');
+  await page.goto('/?mode=evaluate');
+  await expect(page.locator('#evaluate-panel')).toHaveAttribute('data-eval-models', '1');
+  await page.locator('#ev-model').selectOption(FIXTURE.id);
+  await page.locator('#ev-circuit-list input[data-circuit^="custom-"]').check();
+  await page.locator('#ev-run').click();
+  await expect(page.locator('#evaluate-panel')).toHaveAttribute('data-eval-state', 'idle', { timeout: 60_000 });
+  await expect(page.locator('#ev-body tr')).toHaveCount(1);
+  // damage the saved track's stored text (a hand edit): it is present but unreadable
+  await page.evaluate(() => {
+    for (const key of Object.keys(window.localStorage)) if (key.startsWith('sdae:track:')) window.localStorage.setItem(key, '{not json');
+  });
+  await page.reload();
+  await page.locator('#ev-model').selectOption(FIXTURE.id);
+  await expect(page.locator('#ev-body tr')).toHaveCount(0);
+  await expect(page.locator('#ev-hidden')).not.toBeEmpty();
+});

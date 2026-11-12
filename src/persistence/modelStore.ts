@@ -35,7 +35,9 @@ export interface ModelStoreOptions {
    */
   readonly evaluationBinding?: (model: ModelDocument, entry: EvaluationEntry) => string | null;
   /** The saved custom track an ID names (P4-03), so a `custom` evaluation entry is checked against its track while that track is saved. */
-  readonly evaluationCustom?: (id: string) => RegistryTrack | null;
+  readonly evaluationCustom?: (id: string) => RegistryTrack | null | 'unreadable';
+  /** Every built-in circuit ID, whichever split it is in (IDs only), so a `custom` evaluation entry cannot use one. */
+  readonly evaluationReservedIds?: readonly string[];
 }
 
 export const MESSAGES = Object.freeze({
@@ -153,6 +155,7 @@ export function createModelStore(options: ModelStoreOptions): ModelStore {
   const contextFor = (model: ModelDocument): EntryContext => ({
     registry: options.evaluationTracks,
     custom: options.evaluationCustom,
+    reservedIds: options.evaluationReservedIds,
     belongsTo: options.evaluationBinding === undefined ? undefined : (entry) => options.evaluationBinding!(model, entry),
   });
 

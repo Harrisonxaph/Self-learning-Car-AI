@@ -5,9 +5,9 @@ import { describe, expect, it } from 'vitest';
 import { addPoint, buildTrack, closeLoop, createEditorState } from '../../src/editor/trackEditor';
 import { createModelStore } from '../../src/persistence/modelStore';
 import { loadTrack, type Track, type Vec2 } from '../../src/sim/track';
-import { trackGeometryHash } from '../../src/training/trackSplits';
+import { BUILT_IN_TRACK_SPLITS, trackGeometryHash } from '../../src/training/trackSplits';
 import { MODEL_KEY_PREFIX } from '../../src/persistence/modelStore';
-import { evaluateModelOnCircuit, entryBelongsTo } from '../../src/ui/modelEvaluation';
+import { RESERVED_CIRCUIT_IDS, evaluateModelOnCircuit, entryBelongsTo } from '../../src/ui/modelEvaluation';
 import { EVALUATION_TRACKS, MemoryStorage, OPTIONS, TRAINING_REGISTRY, makeModel } from '../helpers/evaluationFixtures';
 
 const ring = (rx: number, ry: number, n = 10): Vec2[] => Array.from({ length: n }, (_, i) => ({ x: Math.round(rx * Math.cos((2 * Math.PI * i) / n)), y: Math.round(ry * Math.sin((2 * Math.PI * i) / n)) }));
@@ -72,6 +72,37 @@ describe('appending an entry for a saved custom track', () => {
     const forged = { ...entry, track: { ...entry.track, contentHash: `sha256:${'2'.repeat(64)}` } };
     expect(store.appendEvaluation(model.id, forged)).toMatchObject({ ok: false, reason: 'invalid' });
     expect(s.data.get(`${MODEL_KEY_PREFIX}${model.id}`)).toBe(before);
+  });
+
+  it('a saved track whose contents are damaged is not "missing": an entry made for it is not shown as a historical result', () => {
+    saved.tracks = [custom(90, 45)];
+    const entry = entryFor(saved.tracks[0]!);
+    const s = storage();
+    let state: 'present' | 'missing' | 'unreadable' = 'present';
+    const lookupNow = (id: string) => (state === 'unreadable' ? 'unreadable' as const : state === 'missing' ? null : lookup(id));
+    const store = createModelStore({ storage: () => s, registry: TRAINING_REGISTRY, evaluationTracks: EVALUATION_TRACKS, evaluationBinding: entryBelongsTo, evaluationCustom: lookupNow });
+    store.save(model);
+    expect(store.appendEvaluation(model.id, entry)).toEqual({ ok: true, recognised: 1 });
+    state = 'unreadable';
+    const loaded = store.load(model.id);
+    expect(loaded.ok && loaded.warnings.some((w) => /claim/.test(w))).toBe(true);
+    const claims = (store.inspect(model.id) as unknown as { model: { evaluation: unknown[] } }).model.evaluation;
+    expect(claims).toHaveLength(1); // kept untouched
+    expect(store.appendEvaluation(model.id, { ...entry, recordedAt: '2026-11-12T12:05:00.000Z' })).toMatchObject({ ok: false, reason: 'invalid' });
+    state = 'missing';
+    expect(store.appendEvaluation(model.id, { ...entry, recordedAt: '2026-11-12T12:06:00.000Z' })).toEqual({ ok: true, recognised: 2 });
+  });
+
+  it('a held-out circuit ID in a custom entry is refused through the model store when the complete reserved-ID set is supplied', () => {
+    saved.tracks = [custom(90, 45)];
+    const entry = entryFor(saved.tracks[0]!);
+    const held = BUILT_IN_TRACK_SPLITS.tracks.find((t) => t.split === 'held-out')!;
+    const forged = { ...entry, track: { ...entry.track, id: held.id } };
+    const s = storage();
+    const store = createModelStore({ storage: () => s, registry: TRAINING_REGISTRY, evaluationTracks: EVALUATION_TRACKS, evaluationBinding: entryBelongsTo, evaluationCustom: lookup, evaluationReservedIds: RESERVED_CIRCUIT_IDS });
+    store.save(model);
+    expect(store.appendEvaluation(model.id, forged)).toMatchObject({ ok: false, reason: 'invalid' });
+    expect(store.appendEvaluation(model.id, entry)).toEqual({ ok: true, recognised: 1 });
   });
 
   it('a store with no custom lookup (an older wiring) treats custom entries structurally and built-in ones as before', () => {

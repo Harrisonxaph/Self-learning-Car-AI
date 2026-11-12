@@ -5,7 +5,7 @@ import { addPoint, buildTrack, closeLoop, createEditorState } from '../../src/ed
 import { validateEvaluationEntry, type EvaluationEntry } from '../../src/persistence/evaluationEntry';
 import { loadTrack, type Track, type Vec2 } from '../../src/sim/track';
 import { BUILT_IN_TRACK_SPLITS, RESERVED_LAYOUT_MESSAGE, TrackLeakageError, trackGeometryHash } from '../../src/training/trackSplits';
-import { entryContext, evaluateModelOnCircuit, replayEntry, resolveCircuit, startEvaluationJob, type CustomSource } from '../../src/ui/modelEvaluation';
+import { RESERVED_CIRCUIT_IDS, customSourceFromStore, entryContext, evaluateModelOnCircuit, replayEntry, resolveCircuit, startEvaluationJob, type CustomSource } from '../../src/ui/modelEvaluation';
 import { OPTIONS, makeModel } from '../helpers/evaluationFixtures';
 
 const ring = (rx: number, ry: number, n = 10): Vec2[] => Array.from({ length: n }, (_, i) => ({ x: Math.round(rx * Math.cos((2 * Math.PI * i) / n)), y: Math.round(ry * Math.sin((2 * Math.PI * i) / n)) }));
@@ -128,6 +128,40 @@ describe('entries for custom tracks while the track is saved, and after', () => 
     expect(validateEvaluationEntry(entry, ctx()).ok).toBe(true);
   });
 
+  it('a saved track that cannot be read is NOT a missing track: the claim is refused, never shown as "no longer saved", and it cannot be evaluated', () => {
+    const entry = run();
+    const unreadable = (): 'unreadable' => 'unreadable';
+    const refused = validateEvaluationEntry(entry, entryContext(model, unreadable));
+    expect(refused.ok).toBe(false);
+    expect(refused.ok ? '' : refused.errors.join(' ')).toMatch(/cannot be read/);
+    // the case that mattered: an entry with an ALTERED hash must not become visible when the saved track is damaged
+    const tampered = tamper((e) => { e.track.contentHash = `sha256:${'4'.repeat(64)}`; });
+    expect(validateEvaluationEntry(tampered, entryContext(model, unreadable)).ok).toBe(false);
+    expect(validateEvaluationEntry(tampered, ctx()).ok).toBe(true); // genuinely missing: the documented weaker check
+    expect(replayEntry(entry, model, { ...OPTIONS, customTracks: unreadable })).toMatchObject({ identical: false });
+    const r = evaluateModelOnCircuit(model, TRACK.id, { ...OPTIONS, customTracks: unreadable });
+    expect(r).toMatchObject({ ok: false });
+    expect((r as { message: string }).message).toMatch(/cannot be read/);
+  });
+
+  it('the saved-track source over a store tells a deleted track (null) from a damaged one (unreadable)', () => {
+    const present = customSourceFromStore({ load: () => ({ ok: true as const, track: TRACK }) });
+    expect(present('x')).toBe(TRACK);
+    expect(customSourceFromStore({ load: () => ({ ok: false as const, kind: 'missing' as const }) })('x')).toBeNull();
+    expect(customSourceFromStore({ load: () => ({ ok: false as const, kind: 'unreadable' as const }) })('x')).toBe('unreadable');
+  });
+
+  it('a custom entry may not use ANY built-in circuit ID, held-out ones included, although held-out circuits are not in the evaluation registry', () => {
+    for (const t of BUILT_IN_TRACK_SPLITS.tracks) {
+      const claim = tamper((e) => { e.track.id = t.id; });
+      const result = validateEvaluationEntry(claim, ctx());
+      expect(result.ok, t.split).toBe(false);
+      expect(result.ok ? '' : result.errors.join(' ')).toMatch(/ID of a built-in circuit/);
+    }
+    // the registry is unchanged: held-out circuits are still not eligible for evaluation
+    expect(RESERVED_CIRCUIT_IDS.length).toBe(BUILT_IN_TRACK_SPLITS.tracks.length);
+  });
+
   it('a different track saved later under the same id refuses the old entry (it is for another layout)', () => {
     const entry = run();
     const other = { ...custom(120, 60), id: TRACK.id };
@@ -135,7 +169,7 @@ describe('entries for custom tracks while the track is saved, and after', () => 
   });
 
   it('a custom entry may not use a built-in circuit ID, and an unknown split is still refused', () => {
-    expect(errors(tamper((e) => { e.track.id = 'kidney-loop'; }))).toMatch(/built-in circuit's ID/);
+    expect(errors(tamper((e) => { e.track.id = 'kidney-loop'; }))).toMatch(/ID of a built-in circuit/);
     expect(errors(tamper((e) => { e.track.split = 'held-out'; }))).toMatch(/never evaluated here/);
     expect(errors(tamper((e) => { e.track.split = 'unregistered'; }))).toMatch(/never evaluated here/);
   });

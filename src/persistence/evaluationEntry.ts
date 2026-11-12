@@ -160,7 +160,12 @@ export interface EntryContext {
    * content hash gets the same start and gate checks as a built-in circuit; an entry that names a saved track but disagrees with it is
    * refused; one whose track is no longer saved is checked structurally only (its recorded starts are still bounds-checked).
    */
-  readonly custom?: ((id: string) => RegistryTrack | null) | undefined;
+  readonly custom?: ((id: string) => RegistryTrack | null | 'unreadable') | undefined;
+  /**
+   * Every ID a built-in circuit uses, whichever split it is in (IDs only: no geometry, and it makes no circuit evaluable). A `custom`
+   * entry may not use one. Separate from `registry`, which lists only the circuits eligible for evaluation (never held-out).
+   */
+  readonly reservedIds?: readonly string[] | undefined;
 }
 
 /** JSON text with object keys in sorted order, so two equal structures compare equal whatever their key order. */
@@ -230,10 +235,13 @@ export function validateEvaluationEntry(value: unknown, context: EntryContext = 
       fail('"track.split" must be "training", "validation" or "custom": a held-out circuit is never evaluated here.');
     } else if (track.split === 'custom') {
       // A custom layout never uses a built-in circuit's ID; when its track is still saved unchanged it is checked like a built-in one.
-      if (context.registry?.some((t) => t.id === track.id)) fail(`"track.id" ${String(track.id)} is a built-in circuit's ID, which a custom layout may not use.`);
+      if (context.registry?.some((t) => t.id === track.id) || context.reservedIds?.includes(track.id as string)) fail('"track.id" is the ID of a built-in circuit, which a custom layout may not use.');
       else {
         const saved = context.custom?.(track.id as string) ?? null;
-        if (saved !== null) {
+        // Something is stored under this ID but cannot be read (damaged, hand-edited, reserved, or storage failed): that is NOT a missing track.
+        // The claim is refused, never downgraded to the structural check meant for a deleted track.
+        if (saved === 'unreadable') fail('"track" names a saved custom track that cannot be read, so this result cannot be verified.');
+        else if (saved !== null) {
           // While a track is saved under this ID the entry must be for exactly that track; once it is deleted the entry is checked structurally.
           if (saved.version !== track.version || saved.contentHash !== track.contentHash) fail('"track" does not match the saved custom track it names.');
           else known = saved;

@@ -21,7 +21,7 @@ import { createTrackLibrary, type TrackLibrary } from './ui/trackLibrary';
 import { circuitFromSearch, searchForCircuit } from './ui/trainingCircuit';
 import { createModelStore } from './persistence/modelStore';
 import { createEvaluateController } from './ui/evaluateController';
-import { customRegistryLookup, entryBelongsTo, type CustomSource } from './ui/modelEvaluation';
+import { RESERVED_CIRCUIT_IDS, customRegistryLookup, customSourceFromStore, entryBelongsTo, type CustomSource } from './ui/modelEvaluation';
 import { startEvaluatePage } from './ui/evaluatePage';
 import { createWorld, elapsedSeconds, restartWorld, stepWorld, type World } from './sim/world';
 import {
@@ -227,16 +227,14 @@ function startEvaluating(): void {
   const validation = tracksIn('validation');
   const tracks = customTrackStore();
   /** The saved custom track an ID names, read and checked again on every call (a hand-edited or reserved entry is never returned). */
-  const customTracks: CustomSource = (id) => {
-    const loaded = tracks.load(id);
-    return loaded.ok ? loaded.track : null;
-  };
+  const customTracks: CustomSource = customSourceFromStore(tracks);
   const store = createModelStore({
     storage: () => window.localStorage,
     registry: training,
     evaluationTracks: [...training, ...validation],
     evaluationBinding: entryBelongsTo,
     evaluationCustom: customRegistryLookup(customTracks),
+    evaluationReservedIds: RESERVED_CIRCUIT_IDS,
   });
   const controller = createEvaluateController({
     store,

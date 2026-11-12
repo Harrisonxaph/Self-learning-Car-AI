@@ -69,7 +69,8 @@ export type TrackSaveResult =
   | { readonly ok: true; readonly id: string; readonly status: 'saved' | 'updated' | 'unchanged'; readonly indexed: boolean; readonly editable: boolean }
   | { readonly ok: false; readonly reason: 'invalid' | 'conflict' | 'full' | 'quota' | 'unavailable'; readonly message: string };
 
-export type TrackLoadResult = { readonly ok: true; readonly track: Track; readonly editor: EditorSeed | null } | { readonly ok: false; readonly message: string };
+/** A failed load says WHY: `missing` (nothing is stored under the id) or `unreadable` (something is stored but it is damaged, reserved, hand-edited or could not be read), so a caller never mistakes a damaged save for a deleted one. */
+export type TrackLoadResult = { readonly ok: true; readonly track: Track; readonly editor: EditorSeed | null } | { readonly ok: false; readonly message: string; readonly kind: 'missing' | 'unreadable' };
 export type TrackExportResult = { readonly ok: true; readonly filename: string; readonly text: string } | { readonly ok: false; readonly message: string };
 export type TrackRemoveResult = { readonly ok: true } | { readonly ok: false; readonly message: string };
 
@@ -246,17 +247,17 @@ export function createTrackStore(options: TrackStoreOptions): TrackStore {
   };
 
   /** Reads one stored track and checks it again from scratch (size, JSON, validator, screen): hand-edited storage is caught here. */
-  const readStored = (storage: StorageLike, id: string): { ok: true; parsed: Extract<ParsedTrack, { ok: true }>; stored: string } | { ok: false; problem: string } => {
+  const readStored = (storage: StorageLike, id: string): { ok: true; parsed: Extract<ParsedTrack, { ok: true }>; stored: string } | { ok: false; problem: string; kind: 'missing' | 'unreadable' } => {
     let text: string | null;
     try {
       text = storage.getItem(trackKey(id));
     } catch {
-      return { ok: false, problem: 'It could not be read from browser storage.' };
+      return { ok: false, problem: 'It could not be read from browser storage.', kind: 'unreadable' };
     }
-    if (text === null) return { ok: false, problem: 'It is listed but its data is missing.' };
+    if (text === null) return { ok: false, problem: 'It is listed but its data is missing.', kind: 'missing' };
     const parsed = parseTrackText(text, screen);
-    if (!parsed.ok) return { ok: false, problem: parsed.message };
-    if (parsed.track.id !== id) return { ok: false, problem: 'Its stored data is for a different track.' };
+    if (!parsed.ok) return { ok: false, problem: parsed.message, kind: 'unreadable' };
+    if (parsed.track.id !== id) return { ok: false, problem: 'Its stored data is for a different track.', kind: 'unreadable' };
     return { ok: true, parsed, stored: text };
   };
 
@@ -312,11 +313,11 @@ export function createTrackStore(options: TrackStoreOptions): TrackStore {
     },
 
     load(id) {
-      if (typeof id !== 'string' || !ID_PATTERN.test(id)) return { ok: false, message: TRACK_MESSAGES.notFound };
+      if (typeof id !== 'string' || !ID_PATTERN.test(id)) return { ok: false, message: TRACK_MESSAGES.notFound, kind: 'missing' };
       const storage = open();
-      if (!storage) return { ok: false, message: TRACK_MESSAGES.unavailable };
+      if (!storage) return { ok: false, message: TRACK_MESSAGES.unavailable, kind: 'unreadable' };
       const read = readStored(storage, id);
-      if (!read.ok) return { ok: false, message: `This saved track can't be used. ${read.problem}` };
+      if (!read.ok) return { ok: false, message: `This saved track can't be used. ${read.problem}`, kind: read.kind };
       return { ok: true, track: read.parsed.track, editor: read.parsed.editor };
     },
 
