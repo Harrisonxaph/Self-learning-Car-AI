@@ -217,6 +217,7 @@ describe('source scan: which modules may reach restricted accessors (test enforc
       'src/training/feasibility.ts',
       'src/training/study.ts',
       'src/training/trackSplits.ts',
+      'src/ui/modelEvaluation.ts', // P4-05: evaluates a saved model on training and validation circuits only, by ID
     ]);
   });
   it('no module outside trackSplits.ts asks the registry for the held-out or validation listing', () => {

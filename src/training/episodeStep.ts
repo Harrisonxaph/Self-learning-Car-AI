@@ -10,7 +10,7 @@ import { buildInputs } from '../ai/inputs';
 import type { SensorConfig } from '../sensors/rays';
 import { stepRacer, type Racer } from '../sim/checkpoints';
 import type { VehiclePhysics } from '../sim/config';
-import type { Track } from '../sim/track';
+import type { Pose, Track } from '../sim/track';
 import type { Controls } from '../sim/vehicle';
 import { startRacer } from '../sim/world';
 import { recordTick, startEpisode, type Episode, type EpisodeRules } from './fitness';
@@ -31,10 +31,13 @@ export interface EpisodeState {
 /** Chooses one tick's controls from the network inputs and the racer they were built from. */
 export type DecideControls = (inputs: readonly number[], racer: Racer) => Controls;
 
-/** A fresh episode: the track's start pose at rest, uncrashed, with fresh lap progress and episode. */
-export function startEpisodeState(context: EpisodeContext): EpisodeState {
+/**
+ * A fresh episode: the track's start pose at rest (or the `pose` override an evaluation gives, P4-05; the track is not
+ * changed), uncrashed, with fresh lap progress and episode.
+ */
+export function startEpisodeState(context: EpisodeContext, pose?: Pose): EpisodeState {
   const { track, physics } = context.environment;
-  const racer = startRacer(track, physics);
+  const racer = startRacer(track, physics, pose);
   return { racer, episode: startEpisode(racer, track) };
 }
 
