@@ -1,0 +1,75 @@
+{
+  "format": "self-driving-ai-evolution/p5-01-e3-manifest",
+  "version": 1,
+  "id": "pre-p4-04-e3",
+  "label": "mechanics",
+  "description": "Mechanics fixture recorded before the P4-04 split expansion.",
+  "seeds": [
+    7831,
+    7832
+  ],
+  "configuration": {
+    "generations": 2,
+    "training": {
+      "populationSize": 3,
+      "eliteCount": 1,
+      "selection": {
+        "type": "tournament",
+        "size": 3
+      },
+      "crossover": {
+        "type": "uniform",
+        "rate": 0.7
+      },
+      "mutation": {
+        "rate": 0.1,
+        "scale": 0.2
+      },
+      "maxEpisodeSeconds": 2,
+      "stallSeconds": 1,
+      "maxLaps": 3,
+      "fitness": {
+        "version": 1,
+        "checkpointWeight": 1000,
+        "partialProgressWeight": 1000,
+        "lapWeight": 5000,
+        "collisionPenalty": 500,
+        "lapTimeBonusScale": 2000,
+        "referenceLapSeconds": 30,
+        "maxLapTimeRatio": 2
+      }
+    }
+  },
+  "tracks": {
+    "training": {
+      "id": "stadium-oval",
+      "contentHash": "sha256:f1c3e1a7f9ef938d7a1ffd4bcb79e4260fd870b4c637fdf43389ee7f4aefe8c2"
+    },
+    "validation": {
+      "id": "rounded-rectangle",
+      "contentHash": "sha256:9d9908c388bc685829d92d5e1f846421c008cf9302303ec6d572578bb0cb9dc9"
+    },
+    "heldOut": [],
+    "splitManifestHash": "sha256:3cb594e2cdf4ed07728a8a50a54d558fc20f3d8e01628acd376eb9ff940772c3"
+  },
+  "rules": {
+    "A3": "sha256:76b52c87521ee557240bf2a9d817e43764a4bdee84e46c888fde937cf9f2617e",
+    "A3-nb": "sha256:4fea22ca3532c2d195b7dede7186ad632f3541ca4a1d19169b99395336939d9f",
+    "A3-nb-same": "sha256:94de7feded56d6399d6b9cf956594978d7add687d211602594902da7eabf25cc"
+  },
+  "analysis": {
+    "metric": "ordered-progress-gates-per-lap-v1",
+    "delta": 0.25,
+    "bootstrap": {
+      "resamples": 10000,
+      "seed": 20261112,
+      "level": 0.95,
+      "method": "percentile-nearest-rank-v1"
+    },
+    "decisionRule": "p5-01-e3-decision-v1"
+  },
+  "authorisation": null,
+  "code": {
+    "revision": null
+  }
+}
