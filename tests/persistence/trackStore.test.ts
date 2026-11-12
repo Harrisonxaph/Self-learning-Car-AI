@@ -83,7 +83,7 @@ describe('saving, listing, loading and removing', () => {
   });
 
   it('unusable editor state is ignored, not an error', () => {
-    for (const editor of [null, 5, 'x', {}, { points: [] }, { points: [{ x: 1 }], width: 12, gateSpacing: 25, startOffset: 0, name: 'x' }, { points: new Array(300).fill({ x: 1, y: 1 }), width: 12, gateSpacing: 25, startOffset: 0, name: 'x' }]) {
+    for (const editor of [null, 5, 'x', {}, { points: [] }, { points: null, width: 12, gateSpacing: 25, startOffset: 0, name: 'x' }, { points: ring(90, 45), width: 'wide', gateSpacing: 25, startOffset: 0, name: 'x' }, { points: ring(90, 45).map((p) => ({ x: Number.NaN, y: p.y })), width: 12, gateSpacing: 25, startOffset: 0, name: 'x' }, { points: ring(90, 45), width: 12, gateSpacing: 25, startOffset: 0, name: 'x'.repeat(200) }, { points: ring(40, 20), width: 12, gateSpacing: 25, startOffset: 0, name: 'unrelated' }, { points: [{ x: 1 }], width: 12, gateSpacing: 25, startOffset: 0, name: 'x' }, { points: new Array(300).fill({ x: 1, y: 1 }), width: 12, gateSpacing: 25, startOffset: 0, name: 'x' }]) {
       const { store } = make();
       const doc = drawn();
       doc.editor = editor;
@@ -301,29 +301,21 @@ describe('the held-out boundary: an ID or layout of a built-in circuit is refuse
   });
 
   for (const t of circuits) {
-    it(`${t.split} circuit ${t.id}: its own file, a copy under a new id, a relabelled copy and a copy with reversed keys are all refused or labelled`, () => {
+    it(`${t.split} circuit ${t.id}: its own file, a copy under a new id, a relabelled copy and a copy with reversed keys are ALL refused with the one generic message`, () => {
       const { store, storage } = make();
       const variants: Record<string, unknown>[] = [
         asDocument(t),
         asDocument(t, { id: 'my-copy', name: 'My copy' }),
         asDocument(t, { id: 'my-copy', split: 'training' }),
         asDocument(t, { id: 'my-copy', split: 'validation', version: '99' }),
+        asDocument(t, { id: 'my-copy', split: 'held-out' }),
         Object.fromEntries(Object.entries(asDocument(t, { id: 'my-copy' })).reverse()),
       ];
       for (const v of variants) {
-        const result = store.importText(JSON.stringify(v));
-        const viaSave = store.save(v);
-        if (t.split === 'held-out' || v.id === t.id) {
-          expect(result).toEqual({ ok: false, reason: 'invalid', message: RESERVED_LAYOUT_MESSAGE });
-          expect(viaSave).toMatchObject({ ok: false, message: `This track could not be saved: ${RESERVED_LAYOUT_MESSAGE}` });
-        } else {
-          // an identical layout of a training or validation circuit under another id is allowed and labelled by classifyCustomTrack
-          expect(result.ok, `${t.id} copy`).toBe(true);
-          const found = classifyCustomTrack(JSON.parse(JSON.stringify(t.track)) as Track, BUILT_IN_TRACK_SPLITS);
-          expect(found).toMatchObject({ ok: false });
-        }
+        expect(store.importText(JSON.stringify(v))).toEqual({ ok: false, reason: 'invalid', message: RESERVED_LAYOUT_MESSAGE });
+        expect(store.save(v)).toMatchObject({ ok: false, message: `This track could not be saved: ${RESERVED_LAYOUT_MESSAGE}` });
       }
-      if (t.split === 'held-out') expect(storage.data.size).toBe(0);
+      expect(storage.data.size).toBe(0);
     });
 
     it(`${t.split} circuit ${t.id}: the message never names a circuit or a split`, () => {
@@ -334,11 +326,11 @@ describe('the held-out boundary: an ID or layout of a built-in circuit is refuse
     });
   }
 
-  it('a layout identical to a training or validation circuit under another id is allowed by the classification and labelled', () => {
-    for (const t of circuits.filter((c) => c.split !== 'held-out')) {
-      const copy = { ...JSON.parse(JSON.stringify(t.track)) as Track, id: 'my-copy' } as Track;
-      expect(classifyCustomTrack(copy)).toEqual({ ok: true, layout: t.split });
-    }
+  it('the refusal is identical whichever split matched, so trying a layout reveals nothing about which are held out', () => {
+    const { store } = make();
+    const outcomes = new Set(circuits.map((t) => JSON.stringify(store.importText(JSON.stringify(asDocument(t, { id: 'probe' }))))));
+    expect(outcomes.size).toBe(1);
+    expect(new Set(circuits.map((t) => t.split)).size).toBe(3);
   });
 
   it('a hand-edited stored track that has become a held-out layout is listed as damaged and never loaded', () => {
@@ -358,6 +350,6 @@ describe('the held-out boundary: an ID or layout of a built-in circuit is refuse
   });
 
   it('a new layout is accepted', () => {
-    expect(classifyCustomTrack(JSON.parse(JSON.stringify((buildTrack(editorState(ring(90, 45))) as unknown as { document: Track }).document)) as Track)).toEqual({ ok: true, layout: 'unregistered' });
+    expect(classifyCustomTrack(JSON.parse(JSON.stringify((buildTrack(editorState(ring(90, 45))) as unknown as { document: Track }).document)) as Track)).toEqual({ ok: true });
   });
 });
