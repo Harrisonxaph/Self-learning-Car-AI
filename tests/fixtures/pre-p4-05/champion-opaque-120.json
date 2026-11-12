@@ -1,0 +1,1741 @@
+{
+  "format": "self-driving-ai-evolution/model",
+  "schemaVersion": 1,
+  "id": "legacy-opaque-120",
+  "name": "Synthetic test fixture (not a result)",
+  "createdAt": "2026-11-09T12:00:00.000Z",
+  "codeVersion": "fixture",
+  "simulationVersion": 1,
+  "architecture": {
+    "type": "feedforward",
+    "layers": [
+      9,
+      12,
+      3
+    ],
+    "hiddenActivation": "tanh",
+    "outputActivations": [
+      "tanh",
+      "sigmoid",
+      "sigmoid"
+    ],
+    "inputs": [
+      "ray-90",
+      "ray-60",
+      "ray-30",
+      "ray0",
+      "ray30",
+      "ray60",
+      "ray90",
+      "speed",
+      "headingError"
+    ],
+    "outputs": [
+      "steering",
+      "throttle",
+      "brake"
+    ],
+    "brakeEnabled": true
+  },
+  "parameters": {
+    "order": "layer-major; per layer: weights[out][in] row-major, then biases[out]",
+    "count": 159,
+    "values": [
+      0.5385259143076837,
+      0.4138588774949312,
+      0.02784993825480342,
+      0.022226679138839245,
+      0.010482548736035824,
+      -0.11821910785511136,
+      -0.8993256995454431,
+      0.04872235655784607,
+      -0.742510468699038,
+      0.3375855949707329,
+      0.0635787108913064,
+      -0.8190900632180274,
+      0.2476621950045228,
+      -0.315710864495486,
+      -0.20890698861330748,
+      -0.6560570080764592,
+      -0.29117988515645266,
+      -0.9364838795736432,
+      -0.006809568032622337,
+      -0.912074304651469,
+      -0.8739506900310516,
+      -0.5875170901417732,
+      0.21116572758182883,
+      0.4716649670153856,
+      -0.8878333512693644,
+      -0.24377071112394333,
+      -0.6501050456427038,
+      0.605481515172869,
+      -0.5827952995896339,
+      -0.07321141194552183,
+      -0.8880116404034197,
+      0.03379283379763365,
+      -0.18685417296364903,
+      -0.0043462589383125305,
+      -0.5932970084249973,
+      -0.8309064139612019,
+      -0.797789447940886,
+      -0.6832177322357893,
+      -0.959742380771786,
+      0.2563396501354873,
+      -0.21690470818430185,
+      0.9434344870969653,
+      0.46927419397979975,
+      -0.03205728018656373,
+      0.5252821114845574,
+      0.8857364961877465,
+      -0.6344761638902128,
+      0.8177010091021657,
+      -0.7780352840200067,
+      0.7561698770150542,
+      -0.9632398509420455,
+      -0.9964852491393685,
+      -0.16318452451378107,
+      -0.01930709695443511,
+      -0.5069221216253936,
+      -0.11207228852435946,
+      -0.7832152121700346,
+      0.9062548009678721,
+      -0.6307068490423262,
+      -0.19753846852108836,
+      -0.05576314777135849,
+      -0.8915055897086859,
+      -0.3497844054363668,
+      0.9155329396016896,
+      -0.2875904771499336,
+      0.2207016167230904,
+      -0.09775408543646336,
+      0.8146469974890351,
+      -0.13398539321497083,
+      -0.6009293659590185,
+      -0.2480301558971405,
+      -0.6916203401051462,
+      0.927406644448638,
+      -0.48488688189536333,
+      0.019630691967904568,
+      -0.3910077675245702,
+      -0.07357541751116514,
+      -0.10707712778821588,
+      0.7383946520276368,
+      -0.775605611037463,
+      0.9063787353225052,
+      -0.07963589765131474,
+      -0.82379982015118,
+      0.5316697689704597,
+      0.08739595394581556,
+      0.5120443678461015,
+      -0.8204136029817164,
+      -0.0663910317234695,
+      0.5232971529476345,
+      0.1371041382662952,
+      0.6326692565344274,
+      0.18617767514660954,
+      -0.6638799486681819,
+      -0.23098773695528507,
+      -0.14517812570556998,
+      0.10985290165990591,
+      0.49107577186077833,
+      -0.914537631906569,
+      0.932790151797235,
+      0.2976882760412991,
+      -0.6153964432887733,
+      0.1929248720407486,
+      -0.33783590653911233,
+      -0.3854620843194425,
+      -0.6065019788220525,
+      -0.8617339371703565,
+      0.4216747237369418,
+      0.29357725800946355,
+      0.182947582565248,
+      -0.6523642013780773,
+      0.460792891215533,
+      0.32260807137936354,
+      -0.905348630156368,
+      0.23069692635908723,
+      -0.042843224946409464,
+      -0.9549756562337279,
+      0.23670872021466494,
+      -0.20649625221267343,
+      0.05390089005231857,
+      -0.47341354563832283,
+      0.7120735221542418,
+      -0.8322775182314217,
+      -0.1428165384568274,
+      0.769665393512696,
+      0.34220935590565205,
+      0.20440357644110918,
+      0.39003207720816135,
+      0.8176467171870172,
+      -0.36742792977020144,
+      0.42737084068357944,
+      -0.7324137184768915,
+      -0.10180117888376117,
+      -0.24540470354259014,
+      0.5364177594892681,
+      0.0926632871851325,
+      0.2828661212697625,
+      -0.897115970030427,
+      -0.918246281798929,
+      0.9687385805882514,
+      -0.10241692326962948,
+      0.37487044418230653,
+      -0.3679547277279198,
+      -0.9897494907490909,
+      0.7973376559093595,
+      -0.18800986371934414,
+      -0.04458345891907811,
+      0.003412297461181879,
+      -0.9808989013545215,
+      -0.30378503259271383,
+      -0.5299312858842313,
+      -0.8570175068452954,
+      -0.001493849791586399,
+      0.5077884024940431,
+      -0.09405067097395658,
+      0.6632559490390122,
+      -0.859086686745286,
+      -0.21946175303310156,
+      -0.04812135687097907,
+      0.7486210349015892
+    ]
+  },
+  "fitness": 0,
+  "training": {
+    "generation": 0,
+    "seed": 11,
+    "populationSize": 8,
+    "eliteCount": 2,
+    "selection": {
+      "type": "tournament",
+      "size": 3
+    },
+    "crossover": {
+      "type": "uniform",
+      "rate": 0.7
+    },
+    "mutation": {
+      "rate": 0.1,
+      "scale": 0.2
+    },
+    "maxEpisodeSeconds": 15,
+    "fitnessVersion": 1,
+    "trackIds": [
+      "stadium-oval"
+    ],
+    "trackVersions": {
+      "stadium-oval": "1"
+    },
+    "trackHashes": {
+      "stadium-oval": "sha256:f1c3e1a7f9ef938d7a1ffd4bcb79e4260fd870b4c637fdf43389ee7f4aefe8c2"
+    },
+    "configuration": {
+      "timestepSeconds": 0.016666666666666666,
+      "prng": {
+        "algorithm": "sfc32-splitmix32-v1",
+        "version": 1
+      },
+      "populationSize": 8,
+      "eliteCount": 2,
+      "selection": {
+        "type": "tournament",
+        "size": 3
+      },
+      "crossover": {
+        "type": "uniform",
+        "rate": 0.7
+      },
+      "mutation": {
+        "rate": 0.1,
+        "scale": 0.2
+      },
+      "generations": null,
+      "maxEpisodeSeconds": 15,
+      "stallSeconds": 5,
+      "maxLaps": 3,
+      "brakeEnabled": true,
+      "physics": {
+        "wheelbase": 2.5,
+        "engineAcceleration": 8,
+        "brakeDeceleration": 12,
+        "quadraticDrag": 0.01,
+        "rollingResistance": 0.1,
+        "maxSteerRadians": 0.5,
+        "maxLateralAcceleration": 8,
+        "stopSpeed": 0.05,
+        "vehicleLength": 4,
+        "vehicleWidth": 2,
+        "maxSpeed": 23.722813232690147
+      },
+      "sensors": {
+        "origin": "body-centre",
+        "anglesDegrees": [
+          -90,
+          -60,
+          -30,
+          0,
+          30,
+          60,
+          90
+        ],
+        "maxDistance": 50
+      },
+      "fitness": {
+        "version": 1,
+        "checkpointWeight": 1000,
+        "partialProgressWeight": 1000,
+        "lapWeight": 5000,
+        "collisionPenalty": 500,
+        "lapTimeBonusScale": 2000,
+        "referenceLapSeconds": 30,
+        "maxLapTimeRatio": 2
+      },
+      "inputContract": "seven-rays-speed-heading-v1",
+      "outputContract": "steering-throttle-brake-v1"
+    }
+  },
+  "evaluation": [
+    {
+      "kind": "legacy-note",
+      "index": 0,
+      "note": "opaque entry 0",
+      "nested": {
+        "values": [
+          0,
+          0,
+          0
+        ]
+      }
+    },
+    {
+      "kind": "legacy-note",
+      "index": 1,
+      "note": "opaque entry 1",
+      "nested": {
+        "values": [
+          1,
+          2,
+          3
+        ]
+      }
+    },
+    {
+      "kind": "legacy-note",
+      "index": 2,
+      "note": "opaque entry 2",
+      "nested": {
+        "values": [
+          2,
+          4,
+          6
+        ]
+      }
+    },
+    {
+      "kind": "legacy-note",
+      "index": 3,
+      "note": "opaque entry 3",
+      "nested": {
+        "values": [
+          3,
+          6,
+          9
+        ]
+      }
+    },
+    {
+      "kind": "legacy-note",
+      "index": 4,
+      "note": "opaque entry 4",
+      "nested": {
+        "values": [
+          4,
+          8,
+          12
+        ]
+      }
+    },
+    {
+      "kind": "legacy-note",
+      "index": 5,
+      "note": "opaque entry 5",
+      "nested": {
+        "values": [
+          5,
+          10,
+          15
+        ]
+      }
+    },
+    {
+      "kind": "legacy-note",
+      "index": 6,
+      "note": "opaque entry 6",
+      "nested": {
+        "values": [
+          6,
+          12,
+          18
+        ]
+      }
+    },
+    {
+      "kind": "legacy-note",
+      "index": 7,
+      "note": "opaque entry 7",
+      "nested": {
+        "values": [
+          7,
+          14,
+          21
+        ]
+      }
+    },
+    {
+      "kind": "legacy-note",
+      "index": 8,
+      "note": "opaque entry 8",
+      "nested": {
+        "values": [
+          8,
+          16,
+          24
+        ]
+      }
+    },
+    {
+      "kind": "legacy-note",
+      "index": 9,
+      "note": "opaque entry 9",
+      "nested": {
+        "values": [
+          9,
+          18,
+          27
+        ]
+      }
+    },
+    {
+      "kind": "legacy-note",
+      "index": 10,
+      "note": "opaque entry 10",
+      "nested": {
+        "values": [
+          10,
+          20,
+          30
+        ]
+      }
+    },
+    {
+      "kind": "legacy-note",
+      "index": 11,
+      "note": "opaque entry 11",
+      "nested": {
+        "values": [
+          11,
+          22,
+          33
+        ]
+      }
+    },
+    {
+      "kind": "legacy-note",
+      "index": 12,
+      "note": "opaque entry 12",
+      "nested": {
+        "values": [
+          12,
+          24,
+          36
+        ]
+      }
+    },
+    {
+      "kind": "legacy-note",
+      "index": 13,
+      "note": "opaque entry 13",
+      "nested": {
+        "values": [
+          13,
+          26,
+          39
+        ]
+      }
+    },
+    {
+      "kind": "legacy-note",
+      "index": 14,
+      "note": "opaque entry 14",
+      "nested": {
+        "values": [
+          14,
+          28,
+          42
+        ]
+      }
+    },
+    {
+      "kind": "legacy-note",
+      "index": 15,
+      "note": "opaque entry 15",
+      "nested": {
+        "values": [
+          15,
+          30,
+          45
+        ]
+      }
+    },
+    {
+      "kind": "legacy-note",
+      "index": 16,
+      "note": "opaque entry 16",
+      "nested": {
+        "values": [
+          16,
+          32,
+          48
+        ]
+      }
+    },
+    {
+      "kind": "legacy-note",
+      "index": 17,
+      "note": "opaque entry 17",
+      "nested": {
+        "values": [
+          17,
+          34,
+          51
+        ]
+      }
+    },
+    {
+      "kind": "legacy-note",
+      "index": 18,
+      "note": "opaque entry 18",
+      "nested": {
+        "values": [
+          18,
+          36,
+          54
+        ]
+      }
+    },
+    {
+      "kind": "legacy-note",
+      "index": 19,
+      "note": "opaque entry 19",
+      "nested": {
+        "values": [
+          19,
+          38,
+          57
+        ]
+      }
+    },
+    {
+      "kind": "legacy-note",
+      "index": 20,
+      "note": "opaque entry 20",
+      "nested": {
+        "values": [
+          20,
+          40,
+          60
+        ]
+      }
+    },
+    {
+      "kind": "legacy-note",
+      "index": 21,
+      "note": "opaque entry 21",
+      "nested": {
+        "values": [
+          21,
+          42,
+          63
+        ]
+      }
+    },
+    {
+      "kind": "legacy-note",
+      "index": 22,
+      "note": "opaque entry 22",
+      "nested": {
+        "values": [
+          22,
+          44,
+          66
+        ]
+      }
+    },
+    {
+      "kind": "legacy-note",
+      "index": 23,
+      "note": "opaque entry 23",
+      "nested": {
+        "values": [
+          23,
+          46,
+          69
+        ]
+      }
+    },
+    {
+      "kind": "legacy-note",
+      "index": 24,
+      "note": "opaque entry 24",
+      "nested": {
+        "values": [
+          24,
+          48,
+          72
+        ]
+      }
+    },
+    {
+      "kind": "legacy-note",
+      "index": 25,
+      "note": "opaque entry 25",
+      "nested": {
+        "values": [
+          25,
+          50,
+          75
+        ]
+      }
+    },
+    {
+      "kind": "legacy-note",
+      "index": 26,
+      "note": "opaque entry 26",
+      "nested": {
+        "values": [
+          26,
+          52,
+          78
+        ]
+      }
+    },
+    {
+      "kind": "legacy-note",
+      "index": 27,
+      "note": "opaque entry 27",
+      "nested": {
+        "values": [
+          27,
+          54,
+          81
+        ]
+      }
+    },
+    {
+      "kind": "legacy-note",
+      "index": 28,
+      "note": "opaque entry 28",
+      "nested": {
+        "values": [
+          28,
+          56,
+          84
+        ]
+      }
+    },
+    {
+      "kind": "legacy-note",
+      "index": 29,
+      "note": "opaque entry 29",
+      "nested": {
+        "values": [
+          29,
+          58,
+          87
+        ]
+      }
+    },
+    {
+      "kind": "legacy-note",
+      "index": 30,
+      "note": "opaque entry 30",
+      "nested": {
+        "values": [
+          30,
+          60,
+          90
+        ]
+      }
+    },
+    {
+      "kind": "legacy-note",
+      "index": 31,
+      "note": "opaque entry 31",
+      "nested": {
+        "values": [
+          31,
+          62,
+          93
+        ]
+      }
+    },
+    {
+      "kind": "legacy-note",
+      "index": 32,
+      "note": "opaque entry 32",
+      "nested": {
+        "values": [
+          32,
+          64,
+          96
+        ]
+      }
+    },
+    {
+      "kind": "legacy-note",
+      "index": 33,
+      "note": "opaque entry 33",
+      "nested": {
+        "values": [
+          33,
+          66,
+          99
+        ]
+      }
+    },
+    {
+      "kind": "legacy-note",
+      "index": 34,
+      "note": "opaque entry 34",
+      "nested": {
+        "values": [
+          34,
+          68,
+          102
+        ]
+      }
+    },
+    {
+      "kind": "legacy-note",
+      "index": 35,
+      "note": "opaque entry 35",
+      "nested": {
+        "values": [
+          35,
+          70,
+          105
+        ]
+      }
+    },
+    {
+      "kind": "legacy-note",
+      "index": 36,
+      "note": "opaque entry 36",
+      "nested": {
+        "values": [
+          36,
+          72,
+          108
+        ]
+      }
+    },
+    {
+      "kind": "legacy-note",
+      "index": 37,
+      "note": "opaque entry 37",
+      "nested": {
+        "values": [
+          37,
+          74,
+          111
+        ]
+      }
+    },
+    {
+      "kind": "legacy-note",
+      "index": 38,
+      "note": "opaque entry 38",
+      "nested": {
+        "values": [
+          38,
+          76,
+          114
+        ]
+      }
+    },
+    {
+      "kind": "legacy-note",
+      "index": 39,
+      "note": "opaque entry 39",
+      "nested": {
+        "values": [
+          39,
+          78,
+          117
+        ]
+      }
+    },
+    {
+      "kind": "legacy-note",
+      "index": 40,
+      "note": "opaque entry 40",
+      "nested": {
+        "values": [
+          40,
+          80,
+          120
+        ]
+      }
+    },
+    {
+      "kind": "legacy-note",
+      "index": 41,
+      "note": "opaque entry 41",
+      "nested": {
+        "values": [
+          41,
+          82,
+          123
+        ]
+      }
+    },
+    {
+      "kind": "legacy-note",
+      "index": 42,
+      "note": "opaque entry 42",
+      "nested": {
+        "values": [
+          42,
+          84,
+          126
+        ]
+      }
+    },
+    {
+      "kind": "legacy-note",
+      "index": 43,
+      "note": "opaque entry 43",
+      "nested": {
+        "values": [
+          43,
+          86,
+          129
+        ]
+      }
+    },
+    {
+      "kind": "legacy-note",
+      "index": 44,
+      "note": "opaque entry 44",
+      "nested": {
+        "values": [
+          44,
+          88,
+          132
+        ]
+      }
+    },
+    {
+      "kind": "legacy-note",
+      "index": 45,
+      "note": "opaque entry 45",
+      "nested": {
+        "values": [
+          45,
+          90,
+          135
+        ]
+      }
+    },
+    {
+      "kind": "legacy-note",
+      "index": 46,
+      "note": "opaque entry 46",
+      "nested": {
+        "values": [
+          46,
+          92,
+          138
+        ]
+      }
+    },
+    {
+      "kind": "legacy-note",
+      "index": 47,
+      "note": "opaque entry 47",
+      "nested": {
+        "values": [
+          47,
+          94,
+          141
+        ]
+      }
+    },
+    {
+      "kind": "legacy-note",
+      "index": 48,
+      "note": "opaque entry 48",
+      "nested": {
+        "values": [
+          48,
+          96,
+          144
+        ]
+      }
+    },
+    {
+      "kind": "legacy-note",
+      "index": 49,
+      "note": "opaque entry 49",
+      "nested": {
+        "values": [
+          49,
+          98,
+          147
+        ]
+      }
+    },
+    {
+      "kind": "legacy-note",
+      "index": 50,
+      "note": "opaque entry 50",
+      "nested": {
+        "values": [
+          50,
+          100,
+          150
+        ]
+      }
+    },
+    {
+      "kind": "legacy-note",
+      "index": 51,
+      "note": "opaque entry 51",
+      "nested": {
+        "values": [
+          51,
+          102,
+          153
+        ]
+      }
+    },
+    {
+      "kind": "legacy-note",
+      "index": 52,
+      "note": "opaque entry 52",
+      "nested": {
+        "values": [
+          52,
+          104,
+          156
+        ]
+      }
+    },
+    {
+      "kind": "legacy-note",
+      "index": 53,
+      "note": "opaque entry 53",
+      "nested": {
+        "values": [
+          53,
+          106,
+          159
+        ]
+      }
+    },
+    {
+      "kind": "legacy-note",
+      "index": 54,
+      "note": "opaque entry 54",
+      "nested": {
+        "values": [
+          54,
+          108,
+          162
+        ]
+      }
+    },
+    {
+      "kind": "legacy-note",
+      "index": 55,
+      "note": "opaque entry 55",
+      "nested": {
+        "values": [
+          55,
+          110,
+          165
+        ]
+      }
+    },
+    {
+      "kind": "legacy-note",
+      "index": 56,
+      "note": "opaque entry 56",
+      "nested": {
+        "values": [
+          56,
+          112,
+          168
+        ]
+      }
+    },
+    {
+      "kind": "legacy-note",
+      "index": 57,
+      "note": "opaque entry 57",
+      "nested": {
+        "values": [
+          57,
+          114,
+          171
+        ]
+      }
+    },
+    {
+      "kind": "legacy-note",
+      "index": 58,
+      "note": "opaque entry 58",
+      "nested": {
+        "values": [
+          58,
+          116,
+          174
+        ]
+      }
+    },
+    {
+      "kind": "legacy-note",
+      "index": 59,
+      "note": "opaque entry 59",
+      "nested": {
+        "values": [
+          59,
+          118,
+          177
+        ]
+      }
+    },
+    {
+      "kind": "legacy-note",
+      "index": 60,
+      "note": "opaque entry 60",
+      "nested": {
+        "values": [
+          60,
+          120,
+          180
+        ]
+      }
+    },
+    {
+      "kind": "legacy-note",
+      "index": 61,
+      "note": "opaque entry 61",
+      "nested": {
+        "values": [
+          61,
+          122,
+          183
+        ]
+      }
+    },
+    {
+      "kind": "legacy-note",
+      "index": 62,
+      "note": "opaque entry 62",
+      "nested": {
+        "values": [
+          62,
+          124,
+          186
+        ]
+      }
+    },
+    {
+      "kind": "legacy-note",
+      "index": 63,
+      "note": "opaque entry 63",
+      "nested": {
+        "values": [
+          63,
+          126,
+          189
+        ]
+      }
+    },
+    {
+      "kind": "legacy-note",
+      "index": 64,
+      "note": "opaque entry 64",
+      "nested": {
+        "values": [
+          64,
+          128,
+          192
+        ]
+      }
+    },
+    {
+      "kind": "legacy-note",
+      "index": 65,
+      "note": "opaque entry 65",
+      "nested": {
+        "values": [
+          65,
+          130,
+          195
+        ]
+      }
+    },
+    {
+      "kind": "legacy-note",
+      "index": 66,
+      "note": "opaque entry 66",
+      "nested": {
+        "values": [
+          66,
+          132,
+          198
+        ]
+      }
+    },
+    {
+      "kind": "legacy-note",
+      "index": 67,
+      "note": "opaque entry 67",
+      "nested": {
+        "values": [
+          67,
+          134,
+          201
+        ]
+      }
+    },
+    {
+      "kind": "legacy-note",
+      "index": 68,
+      "note": "opaque entry 68",
+      "nested": {
+        "values": [
+          68,
+          136,
+          204
+        ]
+      }
+    },
+    {
+      "kind": "legacy-note",
+      "index": 69,
+      "note": "opaque entry 69",
+      "nested": {
+        "values": [
+          69,
+          138,
+          207
+        ]
+      }
+    },
+    {
+      "kind": "legacy-note",
+      "index": 70,
+      "note": "opaque entry 70",
+      "nested": {
+        "values": [
+          70,
+          140,
+          210
+        ]
+      }
+    },
+    {
+      "kind": "legacy-note",
+      "index": 71,
+      "note": "opaque entry 71",
+      "nested": {
+        "values": [
+          71,
+          142,
+          213
+        ]
+      }
+    },
+    {
+      "kind": "legacy-note",
+      "index": 72,
+      "note": "opaque entry 72",
+      "nested": {
+        "values": [
+          72,
+          144,
+          216
+        ]
+      }
+    },
+    {
+      "kind": "legacy-note",
+      "index": 73,
+      "note": "opaque entry 73",
+      "nested": {
+        "values": [
+          73,
+          146,
+          219
+        ]
+      }
+    },
+    {
+      "kind": "legacy-note",
+      "index": 74,
+      "note": "opaque entry 74",
+      "nested": {
+        "values": [
+          74,
+          148,
+          222
+        ]
+      }
+    },
+    {
+      "kind": "legacy-note",
+      "index": 75,
+      "note": "opaque entry 75",
+      "nested": {
+        "values": [
+          75,
+          150,
+          225
+        ]
+      }
+    },
+    {
+      "kind": "legacy-note",
+      "index": 76,
+      "note": "opaque entry 76",
+      "nested": {
+        "values": [
+          76,
+          152,
+          228
+        ]
+      }
+    },
+    {
+      "kind": "legacy-note",
+      "index": 77,
+      "note": "opaque entry 77",
+      "nested": {
+        "values": [
+          77,
+          154,
+          231
+        ]
+      }
+    },
+    {
+      "kind": "legacy-note",
+      "index": 78,
+      "note": "opaque entry 78",
+      "nested": {
+        "values": [
+          78,
+          156,
+          234
+        ]
+      }
+    },
+    {
+      "kind": "legacy-note",
+      "index": 79,
+      "note": "opaque entry 79",
+      "nested": {
+        "values": [
+          79,
+          158,
+          237
+        ]
+      }
+    },
+    {
+      "kind": "legacy-note",
+      "index": 80,
+      "note": "opaque entry 80",
+      "nested": {
+        "values": [
+          80,
+          160,
+          240
+        ]
+      }
+    },
+    {
+      "kind": "legacy-note",
+      "index": 81,
+      "note": "opaque entry 81",
+      "nested": {
+        "values": [
+          81,
+          162,
+          243
+        ]
+      }
+    },
+    {
+      "kind": "legacy-note",
+      "index": 82,
+      "note": "opaque entry 82",
+      "nested": {
+        "values": [
+          82,
+          164,
+          246
+        ]
+      }
+    },
+    {
+      "kind": "legacy-note",
+      "index": 83,
+      "note": "opaque entry 83",
+      "nested": {
+        "values": [
+          83,
+          166,
+          249
+        ]
+      }
+    },
+    {
+      "kind": "legacy-note",
+      "index": 84,
+      "note": "opaque entry 84",
+      "nested": {
+        "values": [
+          84,
+          168,
+          252
+        ]
+      }
+    },
+    {
+      "kind": "legacy-note",
+      "index": 85,
+      "note": "opaque entry 85",
+      "nested": {
+        "values": [
+          85,
+          170,
+          255
+        ]
+      }
+    },
+    {
+      "kind": "legacy-note",
+      "index": 86,
+      "note": "opaque entry 86",
+      "nested": {
+        "values": [
+          86,
+          172,
+          258
+        ]
+      }
+    },
+    {
+      "kind": "legacy-note",
+      "index": 87,
+      "note": "opaque entry 87",
+      "nested": {
+        "values": [
+          87,
+          174,
+          261
+        ]
+      }
+    },
+    {
+      "kind": "legacy-note",
+      "index": 88,
+      "note": "opaque entry 88",
+      "nested": {
+        "values": [
+          88,
+          176,
+          264
+        ]
+      }
+    },
+    {
+      "kind": "legacy-note",
+      "index": 89,
+      "note": "opaque entry 89",
+      "nested": {
+        "values": [
+          89,
+          178,
+          267
+        ]
+      }
+    },
+    {
+      "kind": "legacy-note",
+      "index": 90,
+      "note": "opaque entry 90",
+      "nested": {
+        "values": [
+          90,
+          180,
+          270
+        ]
+      }
+    },
+    {
+      "kind": "legacy-note",
+      "index": 91,
+      "note": "opaque entry 91",
+      "nested": {
+        "values": [
+          91,
+          182,
+          273
+        ]
+      }
+    },
+    {
+      "kind": "legacy-note",
+      "index": 92,
+      "note": "opaque entry 92",
+      "nested": {
+        "values": [
+          92,
+          184,
+          276
+        ]
+      }
+    },
+    {
+      "kind": "legacy-note",
+      "index": 93,
+      "note": "opaque entry 93",
+      "nested": {
+        "values": [
+          93,
+          186,
+          279
+        ]
+      }
+    },
+    {
+      "kind": "legacy-note",
+      "index": 94,
+      "note": "opaque entry 94",
+      "nested": {
+        "values": [
+          94,
+          188,
+          282
+        ]
+      }
+    },
+    {
+      "kind": "legacy-note",
+      "index": 95,
+      "note": "opaque entry 95",
+      "nested": {
+        "values": [
+          95,
+          190,
+          285
+        ]
+      }
+    },
+    {
+      "kind": "legacy-note",
+      "index": 96,
+      "note": "opaque entry 96",
+      "nested": {
+        "values": [
+          96,
+          192,
+          288
+        ]
+      }
+    },
+    {
+      "kind": "legacy-note",
+      "index": 97,
+      "note": "opaque entry 97",
+      "nested": {
+        "values": [
+          97,
+          194,
+          291
+        ]
+      }
+    },
+    {
+      "kind": "legacy-note",
+      "index": 98,
+      "note": "opaque entry 98",
+      "nested": {
+        "values": [
+          98,
+          196,
+          294
+        ]
+      }
+    },
+    {
+      "kind": "legacy-note",
+      "index": 99,
+      "note": "opaque entry 99",
+      "nested": {
+        "values": [
+          99,
+          198,
+          297
+        ]
+      }
+    },
+    {
+      "kind": "legacy-note",
+      "index": 100,
+      "note": "opaque entry 100",
+      "nested": {
+        "values": [
+          100,
+          200,
+          300
+        ]
+      }
+    },
+    {
+      "kind": "legacy-note",
+      "index": 101,
+      "note": "opaque entry 101",
+      "nested": {
+        "values": [
+          101,
+          202,
+          303
+        ]
+      }
+    },
+    {
+      "kind": "legacy-note",
+      "index": 102,
+      "note": "opaque entry 102",
+      "nested": {
+        "values": [
+          102,
+          204,
+          306
+        ]
+      }
+    },
+    {
+      "kind": "legacy-note",
+      "index": 103,
+      "note": "opaque entry 103",
+      "nested": {
+        "values": [
+          103,
+          206,
+          309
+        ]
+      }
+    },
+    {
+      "kind": "legacy-note",
+      "index": 104,
+      "note": "opaque entry 104",
+      "nested": {
+        "values": [
+          104,
+          208,
+          312
+        ]
+      }
+    },
+    {
+      "kind": "legacy-note",
+      "index": 105,
+      "note": "opaque entry 105",
+      "nested": {
+        "values": [
+          105,
+          210,
+          315
+        ]
+      }
+    },
+    {
+      "kind": "legacy-note",
+      "index": 106,
+      "note": "opaque entry 106",
+      "nested": {
+        "values": [
+          106,
+          212,
+          318
+        ]
+      }
+    },
+    {
+      "kind": "legacy-note",
+      "index": 107,
+      "note": "opaque entry 107",
+      "nested": {
+        "values": [
+          107,
+          214,
+          321
+        ]
+      }
+    },
+    {
+      "kind": "legacy-note",
+      "index": 108,
+      "note": "opaque entry 108",
+      "nested": {
+        "values": [
+          108,
+          216,
+          324
+        ]
+      }
+    },
+    {
+      "kind": "legacy-note",
+      "index": 109,
+      "note": "opaque entry 109",
+      "nested": {
+        "values": [
+          109,
+          218,
+          327
+        ]
+      }
+    },
+    {
+      "kind": "legacy-note",
+      "index": 110,
+      "note": "opaque entry 110",
+      "nested": {
+        "values": [
+          110,
+          220,
+          330
+        ]
+      }
+    },
+    {
+      "kind": "legacy-note",
+      "index": 111,
+      "note": "opaque entry 111",
+      "nested": {
+        "values": [
+          111,
+          222,
+          333
+        ]
+      }
+    },
+    {
+      "kind": "legacy-note",
+      "index": 112,
+      "note": "opaque entry 112",
+      "nested": {
+        "values": [
+          112,
+          224,
+          336
+        ]
+      }
+    },
+    {
+      "kind": "legacy-note",
+      "index": 113,
+      "note": "opaque entry 113",
+      "nested": {
+        "values": [
+          113,
+          226,
+          339
+        ]
+      }
+    },
+    {
+      "kind": "legacy-note",
+      "index": 114,
+      "note": "opaque entry 114",
+      "nested": {
+        "values": [
+          114,
+          228,
+          342
+        ]
+      }
+    },
+    {
+      "kind": "legacy-note",
+      "index": 115,
+      "note": "opaque entry 115",
+      "nested": {
+        "values": [
+          115,
+          230,
+          345
+        ]
+      }
+    },
+    {
+      "kind": "legacy-note",
+      "index": 116,
+      "note": "opaque entry 116",
+      "nested": {
+        "values": [
+          116,
+          232,
+          348
+        ]
+      }
+    },
+    {
+      "kind": "legacy-note",
+      "index": 117,
+      "note": "opaque entry 117",
+      "nested": {
+        "values": [
+          117,
+          234,
+          351
+        ]
+      }
+    },
+    {
+      "kind": "legacy-note",
+      "index": 118,
+      "note": "opaque entry 118",
+      "nested": {
+        "values": [
+          118,
+          236,
+          354
+        ]
+      }
+    },
+    {
+      "kind": "legacy-note",
+      "index": 119,
+      "note": "opaque entry 119",
+      "nested": {
+        "values": [
+          119,
+          238,
+          357
+        ]
+      }
+    }
+  ]
+}
