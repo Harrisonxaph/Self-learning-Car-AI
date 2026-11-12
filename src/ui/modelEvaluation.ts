@@ -89,19 +89,17 @@ export function resolveCircuit(id: string, custom?: CustomSource): CircuitRef {
   return { id: track.id, version: track.version, split, contentHash: trackContentHash(track), track };
 }
 
+/** The saved-track lookup an entry is checked against (the form the entry validator and the model store take). */
+export function customRegistryLookup(custom: CustomSource): (id: string) => RegistryTrack | null {
+  return (id) => {
+    const track = custom(id);
+    return track === null ? null : { id: track.id, version: track.version, split: 'custom', contentHash: trackGeometryHash(track), track };
+  };
+}
+
 /** How an entry is checked for a model: the built-in circuits, the saved custom tracks, and that it belongs to the model. */
 export function entryContext(model: ModelDocument, custom?: CustomSource): EntryContext {
-  return {
-    registry: EVALUATION_REGISTRY,
-    belongsTo: (e) => entryBelongsTo(model, e),
-    custom:
-      custom === undefined
-        ? undefined
-        : (id): RegistryTrack | null => {
-            const track = custom(id);
-            return track === null ? null : { id: track.id, version: track.version, split: 'custom', contentHash: trackGeometryHash(track), track };
-          },
-  };
+  return { registry: EVALUATION_REGISTRY, belongsTo: (e) => entryBelongsTo(model, e), custom: custom === undefined ? undefined : customRegistryLookup(custom) };
 }
 
 /** The start of seed `seed` on a track (see evaluationStartFor). */

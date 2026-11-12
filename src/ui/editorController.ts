@@ -20,6 +20,7 @@ import {
   redo as redoHistory,
   reopenLoop,
   setGateSpacing,
+  setName,
   setStart,
   setWidth,
   undo as undoHistory,
@@ -79,6 +80,10 @@ export interface EditorController {
   moveStartToBeginning(): void;
   moveStartByGates(direction: 1 | -1): void;
   clearSelection(): void;
+  /** Renames the track (one undoable step); a name that is empty after cleaning is refused. */
+  setName(name: string): void;
+  /** Replaces the whole drawing with a saved one (P4-03). The undo history starts again from it. */
+  load(state: EditorState, notice: string): void;
 }
 
 const pointText = (p: Vec2): string => `(${p.x}, ${p.y})`;
@@ -319,6 +324,16 @@ export function createEditorController(initial: EditorHistory = createHistory(cr
       }
       const index = selected;
       if (run(deletePoint(history.present, index), `Point ${index + 1} deleted.`)) selected = Math.min(index, history.present.points.length - 1);
+    },
+    setName(name) {
+      run(setName(history.present, name), 'Renamed.');
+    },
+    load(next, notice) {
+      history = createHistory(next);
+      drag = null;
+      selected = -1;
+      cache = null;
+      message = notice;
     },
     clear() {
       history = commit(history, createEditorState({ snap: history.present.snap, width: history.present.width, gateSpacing: history.present.gateSpacing }));

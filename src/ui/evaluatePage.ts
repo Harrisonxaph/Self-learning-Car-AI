@@ -77,7 +77,11 @@ export function startEvaluatePage(controller: EvaluateController): EvaluatePage 
     const circuits = controller.circuits();
     const running = controller.state() === 'running';
     if (boxes.size === 0) {
-      const groups: [string, 'training' | 'validation'][] = [['Other training circuits', 'training'], ['Validation circuits', 'validation']];
+      const groups: [string, 'training' | 'validation' | 'custom'][] = [
+        ['Other training circuits', 'training'],
+        ['Validation circuits', 'validation'],
+        ['Your saved tracks (custom layouts: not built-in circuits, not held-out)', 'custom'],
+      ];
       circuitList.replaceChildren(
         ...groups.map(([title, split]) => {
           const group = document.createElement('div');
@@ -88,7 +92,14 @@ export function startEvaluatePage(controller: EvaluateController): EvaluatePage 
           heading.className = 'ev-group-title';
           heading.textContent = title;
           group.append(heading);
-          for (const c of circuits.filter((x) => x.split === split)) {
+          const members = circuits.filter((x) => x.split === split);
+          if (split === 'custom' && members.length === 0) {
+            const none = document.createElement('p');
+            none.className = 'graph-summary';
+            none.textContent = 'No saved tracks yet. Draw one in the track editor (?mode=edit) and press Save track.';
+            group.append(none);
+          }
+          for (const c of members) {
             const label = document.createElement('label');
             label.className = 'ev-circuit';
             const box = document.createElement('input');
@@ -126,7 +137,7 @@ export function startEvaluatePage(controller: EvaluateController): EvaluatePage 
     tr.dataset.split = e.track.split;
     const name = document.createElement('th');
     name.scope = 'row';
-    name.textContent = `${e.track.id} (${e.track.split})`;
+    name.textContent = e.track.split === 'custom' ? `${e.track.id} (custom layout${controller.trackSaved(e.track.id) ? '' : ', no longer saved'})` : `${e.track.id} (${e.track.split})`;
     tr.append(
       name,
       cell(percent(s.lapCompletion, s.episodes)),

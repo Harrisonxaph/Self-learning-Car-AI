@@ -104,15 +104,30 @@
             <div id="ed-start" class="editor-start tc-button" role="slider" tabindex="0" aria-label="Start position" aria-valuemin="0" aria-valuemax="0" aria-valuenow="0" aria-valuetext="Close the loop to place the start" aria-disabled="true">Start</div>
           </section>
         </div>
-        <p class="keys-help">Keys: arrows move the crosshair (Shift: five steps), Enter adds a point or selects one in Move mode, C closes the loop, I inserts after the selected point, Delete removes it, Ctrl or Cmd + Z undoes. A custom track is not saved: leaving the page loses it.</p>
+        <section class="saved-champions" aria-labelledby="ed-saved-heading">
+          <h2 id="ed-saved-heading" class="saved-heading">Saved tracks</h2>
+          <p class="graph-summary">Saved in this browser only. Browsers can clear this storage, so this is a convenience, not a backup: Export keeps a copy as a file, and Import track loads one back. A file that is not a valid track is refused and changes nothing. A saved track can be driven here and chosen as an evaluation circuit on the evaluate page; it is never used for training.</p>
+          <div class="replay-controls">
+            <label class="replay-field" for="ed-name">Track name</label>
+            <input id="ed-name" class="replay-input saved-name" type="text" maxlength="80" autocomplete="off" />
+            <button type="button" id="ed-save" class="tc-button replay-button" disabled>Save track</button>
+          </div>
+          <div class="replay-controls">
+            <input id="ed-import" class="import-input" type="file" accept=".json,application/json" />
+            <label id="ed-import-button" class="tc-button replay-button import-label" for="ed-import">Import track</label>
+          </div>
+          <p id="ed-saved-status" class="graph-summary" role="status" aria-live="polite"></p>
+          <ul id="ed-saved" class="saved-list" aria-label="Saved tracks"></ul>
+        </section>
+        <p class="keys-help">Keys: arrows move the crosshair (Shift: five steps), Enter adds a point or selects one in Move mode, C closes the loop, I inserts after the selected point, Delete removes it, Ctrl or Cmd + Z undoes. A track you draw is lost when you leave the page unless you save it.</p>
       </div>
       <div id="drive-notice" class="editor-panel" hidden>
         <button type="button" id="ed-back" class="tc-button">Back to editing</button>
-        <p class="graph-summary">Driving your custom track. It is not saved: leaving this page loses it (saving arrives later).</p>
+        <p class="graph-summary">Driving your custom track. Unless you saved it, leaving this page loses it.</p>
       </div>
       <section id="evaluate-panel" class="editor-panel evaluate-panel" aria-labelledby="ev-heading" hidden>
         <h2 id="ev-heading" class="saved-heading">Evaluate a saved champion</h2>
-        <p class="graph-summary">Runs a saved champion on built-in circuits and stores the results with it, in this browser only. Each circuit is five episodes: the circuit's own start and four small, recorded changes to it. A champion is deterministic, so this shows how that one champion drove on those circuits; it is not a statistic, and nothing here says a model has learned or generalised. Only training and validation circuits are offered.</p>
+        <p class="graph-summary">Runs a saved champion on built-in circuits and stores the results with it, in this browser only. Each circuit is five episodes: the circuit's own start and four small, recorded changes to it. A champion is deterministic, so this shows how that one champion drove on those circuits; it is not a statistic, and nothing here says a model has learned or generalised. Only training and validation circuits, and your own saved custom tracks, are offered: no held-out circuit ever is.</p>
         <div class="replay-controls">
           <label class="replay-field" for="ev-model">Champion</label>
           <select id="ev-model" class="tc-cap tc-circuit ev-model" aria-describedby="ev-model-note"></select>

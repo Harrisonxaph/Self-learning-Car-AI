@@ -15,11 +15,13 @@ import { createFixedStepClock } from './sim/fixedStep';
 import { loadTrack, type Track } from './sim/track';
 import type { EditorHistory } from './editor/trackEditor';
 import { startEditorPage } from './ui/editorPage';
-import { tracksIn, trainingTrack } from './training/trackSplits';
+import { classifyCustomTrack, tracksIn, trainingTrack } from './training/trackSplits';
+import { createTrackStore } from './persistence/trackStore';
+import { createTrackLibrary, type TrackLibrary } from './ui/trackLibrary';
 import { circuitFromSearch, searchForCircuit } from './ui/trainingCircuit';
 import { createModelStore } from './persistence/modelStore';
 import { createEvaluateController } from './ui/evaluateController';
-import { entryBelongsTo } from './ui/modelEvaluation';
+import { customRegistryLookup, entryBelongsTo, type CustomSource } from './ui/modelEvaluation';
 import { startEvaluatePage } from './ui/evaluatePage';
 import { createWorld, elapsedSeconds, restartWorld, stepWorld, type World } from './sim/world';
 import {
@@ -223,16 +225,28 @@ function startEvaluating(): void {
   for (const panel of [element<HTMLElement>('.hud'), element<HTMLElement>('.controls'), element<HTMLElement>('.keys-help')]) panel.hidden = true;
   const training = tracksIn('training');
   const validation = tracksIn('validation');
+  const tracks = customTrackStore();
+  /** The saved custom track an ID names, read and checked again on every call (a hand-edited or reserved entry is never returned). */
+  const customTracks: CustomSource = (id) => {
+    const loaded = tracks.load(id);
+    return loaded.ok ? loaded.track : null;
+  };
   const store = createModelStore({
     storage: () => window.localStorage,
     registry: training,
     evaluationTracks: [...training, ...validation],
     evaluationBinding: entryBelongsTo,
+    evaluationCustom: customRegistryLookup(customTracks),
   });
   const controller = createEvaluateController({
     store,
     trainingCircuits: training.map((t) => ({ id: t.id, name: t.track.name })),
     validationCircuits: validation.map((t) => ({ id: t.id, name: t.track.name })),
+    customTracks,
+    savedTracks: () => {
+      const listing = tracks.list();
+      return listing.available ? listing.entries.flatMap((e) => (e.status === 'ok' ? [{ id: e.id, name: e.summary.name }] : [])) : [];
+    },
     now: () => new Date().toISOString(),
     appVersion: __APP_VERSION__,
     codeVersion: __CODE_VERSION__,
@@ -244,8 +258,23 @@ function startEvaluating(): void {
   startEvaluatePage(controller);
 }
 
+/** The saved custom tracks (P4-03): the browser's own storage, with every ID or layout of a built-in study circuit refused. */
+function customTrackStore() {
+  return createTrackStore({
+    storage: () => window.localStorage,
+    screen: (candidate) => {
+      const checked = classifyCustomTrack(candidate);
+      return checked.ok ? null : checked.message;
+    },
+  });
+}
+
+let trackLibrary: TrackLibrary | undefined;
+
 /** The track editor (P4-02): the manual-driving panels are hidden while editing. */
 function startEditing(history?: EditorHistory): void {
+  trackLibrary ??= createTrackLibrary({ store: customTrackStore(), download: downloadJson });
+  const library = trackLibrary;
   const driving = [element<HTMLElement>('.hud'), element<HTMLElement>('.controls'), element<HTMLElement>('.keys-help')];
   const notice = element<HTMLElement>('#drive-notice');
   for (const panel of driving) panel.hidden = true;
@@ -254,6 +283,7 @@ function startEditing(history?: EditorHistory): void {
     canvas,
     context,
     history,
+    library,
     onDrive: (built, kept) => {
       // Drive the custom track with the ordinary manual-driving page; Back to editing restores the editor as it was.
       for (const panel of driving) panel.hidden = false;
