@@ -1,0 +1,96 @@
+{
+  "format": "self-driving-ai-evolution/p5-01-e3-manifest",
+  "version": 1,
+  "id": "p5-01-e3",
+  "label": "confirmatory",
+  "description": "P5-01 E3 study (plan section 4, steps 5 and 6): does evolution (A5, ten independent training seeds) beat a hand-written rule (A3, A3-nb, A3-nb-same)? Configuration C1 (the trainer defaults with G = 100), seeds 3001-3010, A5 evolved on stadium-oval, validation on rounded-rectangle, and ONE held-out opening on hairpin-chicane, long-sweepers and technical-narrow. Preregistered: reviewed and approved before any E3 seed runs; nothing in it changes afterwards.",
+  "seeds": [
+    3001,
+    3002,
+    3003,
+    3004,
+    3005,
+    3006,
+    3007,
+    3008,
+    3009,
+    3010
+  ],
+  "configuration": {
+    "generations": 100,
+    "training": {
+      "populationSize": 50,
+      "eliteCount": 2,
+      "selection": {
+        "type": "tournament",
+        "size": 3
+      },
+      "crossover": {
+        "type": "uniform",
+        "rate": 0.7
+      },
+      "mutation": {
+        "rate": 0.1,
+        "scale": 0.2
+      },
+      "maxEpisodeSeconds": 60,
+      "stallSeconds": 5,
+      "maxLaps": 3,
+      "fitness": {
+        "version": 1,
+        "checkpointWeight": 1000,
+        "partialProgressWeight": 1000,
+        "lapWeight": 5000,
+        "collisionPenalty": 500,
+        "lapTimeBonusScale": 2000,
+        "referenceLapSeconds": 30,
+        "maxLapTimeRatio": 2
+      }
+    }
+  },
+  "tracks": {
+    "training": {
+      "id": "stadium-oval",
+      "contentHash": "sha256:f1c3e1a7f9ef938d7a1ffd4bcb79e4260fd870b4c637fdf43389ee7f4aefe8c2"
+    },
+    "validation": {
+      "id": "rounded-rectangle",
+      "contentHash": "sha256:9d9908c388bc685829d92d5e1f846421c008cf9302303ec6d572578bb0cb9dc9"
+    },
+    "heldOut": [
+      {
+        "id": "hairpin-chicane",
+        "contentHash": "sha256:313f00c635d3667dfdfa5c37ba1f2731d1810a91b0801fb4234699d38a5f5770"
+      },
+      {
+        "id": "long-sweepers",
+        "contentHash": "sha256:4d2c6ca2773f3c0b246de7b37716e9620a51dc31057061e0bac2bacaba32ec7c"
+      },
+      {
+        "id": "technical-narrow",
+        "contentHash": "sha256:f6fba4ba5687f850a40d66d516bf84e302ff9d133bc88ee9c451b9a3804e5e5c"
+      }
+    ],
+    "splitManifestHash": "sha256:4a56521e1e89b6cf58409181a7c6d3bcb1675dff8076a9df87aa675b9e2df91e"
+  },
+  "rules": {
+    "A3": "sha256:76b52c87521ee557240bf2a9d817e43764a4bdee84e46c888fde937cf9f2617e",
+    "A3-nb": "sha256:4fea22ca3532c2d195b7dede7186ad632f3541ca4a1d19169b99395336939d9f",
+    "A3-nb-same": "sha256:94de7feded56d6399d6b9cf956594978d7add687d211602594902da7eabf25cc"
+  },
+  "analysis": {
+    "metric": "ordered-progress-gates-per-lap-v1",
+    "delta": 0.25,
+    "bootstrap": {
+      "resamples": 10000,
+      "seed": 20261112,
+      "level": 0.95,
+      "method": "percentile-nearest-rank-v1"
+    },
+    "decisionRule": "p5-01-e3-decision-v1"
+  },
+  "authorisation": "issue-33#issuecomment-6801667981",
+  "code": {
+    "revision": "e82aa8bf9c5397a5dae4ebf31d5c6b59c1d7d0b8"
+  }
+}
