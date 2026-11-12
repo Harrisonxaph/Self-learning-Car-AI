@@ -25,6 +25,9 @@ export const RACE_COLOURS = Object.freeze({
   /** Comparison replay (P3-08): the two cars have fixed identity colours and a text label, so colour is never the only cue. */
   carA: '#ffb000',
   carB: '#b388ff',
+  /** Human vs AI race (P5-03): the two cars' fixed identity colours (also labelled "You" and "AI"). */
+  you: '#ffb000',
+  ai: '#b388ff',
 });
 
 export function drawRace(context: RaceContext, size: ViewportSize, view: WorldToScreen, world: World): void {

@@ -19,6 +19,11 @@
           <div><dt>Speed</dt><dd><output id="hud-speed">0</output> km/h</dd></div>
           <div><dt>Time</dt><dd><output id="sim-time" data-tick="0">0.0 s</output></dd></div>
         </dl>
+        <dl id="race-hud" class="race-hud" aria-label="Race" hidden>
+          <div><dt>You</dt><dd><output id="rh-you">—</output></dd></div>
+          <div><dt>AI</dt><dd><output id="rh-ai">—</output></dd></div>
+          <div><dt>Time</dt><dd><output id="rh-time">0.0 s</output></dd></div>
+        </dl>
         <p id="hud-message" class="hud-message" role="status" aria-live="polite">
           Drive over the start line to begin a lap.
         </p>
@@ -51,6 +56,7 @@
           <button type="button" id="cam-follow-ab" class="tc-button" title="Switch which champion the camera follows" hidden>Follow A</button>
           <span id="cam-status" class="camera-status" role="status" aria-live="polite"></span>
         </div>
+        <p id="race-countdown" class="race-countdown" role="status" aria-live="polite" hidden></p>
         <p id="fps-readout" class="fps-readout" hidden></p>
       </div>
       <div id="training-controls" class="training-controls" role="group" aria-label="Training speed and display" hidden>
@@ -169,6 +175,50 @@
           </table>
         </div>
         <p id="ev-hidden" class="graph-summary"></p>
+      </section>
+      <section id="race-panel" class="editor-panel evaluate-panel race-panel" aria-labelledby="rc-heading" hidden>
+        <h2 id="rc-heading" class="saved-heading">Race a saved champion</h2>
+        <p class="graph-summary">You and a saved champion start together on the same circuit, with the same car and the same fixed-step physics. The two cars do not touch or block each other. One race shows how that one race went, not who drives better in general: you vary from run to run, a saved champion does not, and a champion has already seen the circuit it was trained on. Lap times are simulated time. Only training and validation circuits, and your own saved tracks, are offered: no held-out circuit ever is.</p>
+        <div class="replay-controls">
+          <label class="replay-field" for="rc-model">Champion</label>
+          <select id="rc-model" class="tc-cap tc-circuit ev-model" aria-describedby="rc-note"></select>
+        </div>
+        <p id="rc-note" class="graph-summary"></p>
+        <div class="replay-controls">
+          <label class="replay-field" for="rc-circuit">Circuit</label>
+          <select id="rc-circuit" class="tc-cap tc-circuit ev-model"></select>
+          <label class="replay-field" for="rc-laps">Laps</label>
+          <select id="rc-laps" class="tc-cap">
+            <option value="1">1 lap</option>
+            <option value="3" selected>3 laps</option>
+          </select>
+        </div>
+        <div class="replay-controls">
+          <button type="button" id="rc-start" class="tc-button" disabled>Start race</button>
+        </div>
+        <p id="rc-message" class="graph-summary ev-message" role="status" aria-live="polite"></p>
+      </section>
+      <section id="race-results" class="editor-panel evaluate-panel race-results" aria-labelledby="rr-heading" hidden>
+        <h2 id="rr-heading" class="saved-heading">Race results</h2>
+        <p id="rr-comparison" class="rr-comparison" role="status" aria-live="polite"></p>
+        <div class="ev-table-wrap">
+          <table id="rr-table" class="ev-table">
+            <caption>Both cars in this race, in simulated time</caption>
+            <thead>
+              <tr>
+                <th scope="col">Measure</th>
+                <th scope="col">You</th>
+                <th scope="col">AI</th>
+              </tr>
+            </thead>
+            <tbody id="rr-body"></tbody>
+          </table>
+        </div>
+        <p id="rr-note" class="graph-summary"></p>
+        <div class="replay-controls">
+          <button type="button" id="rr-restart" class="tc-button">Race again</button>
+          <button type="button" id="rr-back" class="tc-button">Choose another</button>
+        </div>
       </section>
       <details id="training-graph" class="training-graph" hidden>
         <summary>Training graph</summary>
