@@ -43,6 +43,8 @@ export const CONFIRMATORY_SEED_SETS = Object.freeze([
 ]);
 /** P2-09 E4's reserved seeds (docs/experiments/p2-09-plan.md §5): disjoint from the pilot and the P2-08 confirmatory seeds. */
 export const E4_SEEDS = Object.freeze(Array.from({ length: 10 }, (_, i) => 2001 + i));
+/** P5-01 E3's confirmatory training seeds (plan §3 and §7: a block reserved apart from every earlier study). */
+export const E3_SEEDS = Object.freeze(Array.from({ length: 10 }, (_, i) => 3001 + i));
 export const MAX_MECHANICS_SEEDS = 1_000;
 
 /** A malformed or inconsistent study manifest. */
@@ -211,7 +213,7 @@ const NESTED_KEYS: Readonly<Record<string, readonly string[]>> = Object.fromEntr
 );
 const MANIFEST_KEYS = ['format', 'version', 'id', 'label', 'description', 'agents', 'seeds', 'configuration', 'streams', 'tracks', 'metric', 'analysis', 'code'];
 
-export const reserved = (seed: number): boolean => (seed >= 1001 && seed <= 1020) || PILOT_SEEDS.includes(seed) || E4_SEEDS.includes(seed);
+export const reserved = (seed: number): boolean => (seed >= 1001 && seed <= 1020) || PILOT_SEEDS.includes(seed) || E4_SEEDS.includes(seed) || E3_SEEDS.includes(seed);
 
 /**
  * Checks a study manifest completely and returns it. Throws StudyManifestError for any missing or unknown field (at
