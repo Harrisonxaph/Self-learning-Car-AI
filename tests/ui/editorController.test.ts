@@ -56,6 +56,18 @@ describe('pointer gestures', () => {
     expect(c.state().points[1]).toEqual({ x: 10, y: -50 });
     expect(c.history().past.length).toBe(before + 1);
   });
+  it('a drag that ends where it started (or only makes refused moves) records nothing', () => {
+    const c = fresh();
+    loop(c);
+    c.setMode('move');
+    const before = c.history();
+    c.pointerDown({ x: 0, y: -40 }, 3);
+    c.pointerMove({ x: 0, y: -40 });
+    c.pointerMove({ x: 60, y: -31 }); // within 2 m of the next point: refused
+    c.pointerUp();
+    expect(c.history()).toBe(before);
+    expect(c.message()).toBe('');
+  });
   it('Move mode with nothing in reach does nothing', () => {
     const c = fresh();
     loop(c);

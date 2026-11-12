@@ -58,6 +58,52 @@
           <option value="50">50 cars</option>
         </select>
       </div>
+      <div id="editor-panel" class="editor-panel" hidden>
+        <div class="editor-toolbar" role="toolbar" aria-label="Track editing tools">
+          <div class="editor-group" role="group" aria-label="Tool">
+            <button type="button" class="tc-button" data-editor-mode="add" aria-pressed="true" title="Add: tap to add a point; tap the first point to close the loop (A)">Add</button>
+            <button type="button" class="tc-button" data-editor-mode="move" aria-pressed="false" title="Move: drag a point (M)">Move</button>
+            <button type="button" class="tc-button" data-editor-mode="delete" aria-pressed="false" title="Delete: tap a point to remove it (D)">Delete</button>
+          </div>
+          <div class="editor-group" role="group" aria-label="History">
+            <button type="button" id="ed-undo" class="tc-button" title="Undo (Ctrl or Cmd + Z)">Undo</button>
+            <button type="button" id="ed-redo" class="tc-button" title="Redo (Ctrl or Cmd + Shift + Z)">Redo</button>
+          </div>
+          <div class="editor-group" role="group" aria-label="Road width">
+            <button type="button" id="ed-width-minus" class="tc-button" aria-label="Narrower road" title="Narrower road">Width −</button>
+            <button type="button" id="ed-width-plus" class="tc-button" aria-label="Wider road" title="Wider road">Width +</button>
+          </div>
+          <div class="editor-group" role="group" aria-label="Gates">
+            <button type="button" id="ed-gates-minus" class="tc-button" aria-label="Fewer gates" title="Fewer gates (further apart)">Gates −</button>
+            <button type="button" id="ed-gates-plus" class="tc-button" aria-label="More gates" title="More gates (closer together)">Gates +</button>
+          </div>
+          <div class="editor-group" role="group" aria-label="Loop and points">
+            <button type="button" id="ed-snap" class="tc-button" title="Cycle the grid snap: 0.5 m, 1 m, 5 m, off">Snap 1 m</button>
+            <button type="button" id="ed-close" class="tc-button" title="Close the loop (C)">Close loop</button>
+            <button type="button" id="ed-insert" class="tc-button" title="Insert a point after the selected one (I)">Insert point</button>
+            <button type="button" id="ed-clear" class="tc-button" title="Start again (undoable)">Clear</button>
+          </div>
+          <button type="button" id="ed-drive" class="tc-button editor-drive" disabled title="Drive the track you built">Drive it</button>
+        </div>
+        <p id="ed-status" class="editor-status" role="status" aria-live="polite"></p>
+        <p id="ed-message" class="graph-summary" aria-live="polite"></p>
+        <ul id="ed-problems" class="editor-problems" aria-label="Problems with this track"></ul>
+        <div class="editor-lists">
+          <section aria-labelledby="ed-points-heading">
+            <h2 id="ed-points-heading" class="saved-heading">Points</h2>
+            <ul id="ed-points" class="editor-points" aria-label="Control points"></ul>
+          </section>
+          <section aria-labelledby="ed-start-heading">
+            <h2 id="ed-start-heading" class="saved-heading">Start position</h2>
+            <div id="ed-start" class="editor-start tc-button" role="slider" tabindex="0" aria-label="Start position" aria-valuemin="0" aria-valuemax="0" aria-valuenow="0" aria-valuetext="Close the loop to place the start" aria-disabled="true">Start</div>
+          </section>
+        </div>
+        <p class="keys-help">Keys: arrows move the crosshair (Shift: five steps), Enter adds a point or selects one in Move mode, C closes the loop, I inserts after the selected point, Delete removes it, Ctrl or Cmd + Z undoes. A custom track is not saved: leaving the page loses it.</p>
+      </div>
+      <div id="drive-notice" class="editor-panel" hidden>
+        <button type="button" id="ed-back" class="tc-button">Back to editing</button>
+        <p class="graph-summary">Driving your custom track. It is not saved: leaving this page loses it (saving arrives later).</p>
+      </div>
       <details id="training-graph" class="training-graph" hidden>
         <summary>Training graph</summary>
         <canvas

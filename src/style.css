@@ -581,3 +581,104 @@ body {
   flex-basis: 100%;
   color: #ffb000;
 }
+
+/* Track editor (P4-02): the toolbar uses the same 44 px buttons as the training controls. */
+.editor-panel {
+  padding: 0.2rem 0.5rem;
+}
+
+.editor-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem 0.6rem;
+}
+
+.editor-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+
+.editor-toolbar .tc-button:disabled {
+  opacity: 0.5;
+}
+
+.editor-drive {
+  background: #2f6f4f;
+  border-color: #5fd0a8;
+}
+
+.editor-status {
+  margin: 0.4rem 0 0.2rem;
+  font-weight: 600;
+}
+
+.editor-status[data-kind='valid'] {
+  color: #8fe0b8;
+}
+
+.editor-status[data-kind='invalid'] {
+  color: #ff9b9b;
+}
+
+.editor-problems {
+  margin: 0;
+  padding-left: 1.2rem;
+  font-size: 0.85rem;
+  color: #ffb4b4;
+}
+
+.editor-lists {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.5rem;
+}
+
+.editor-points {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.editor-points li {
+  min-width: max(44px, 2.75rem);
+  min-height: max(44px, 2.75rem);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 0.5rem;
+  border: 2px solid #4a5a6a;
+  border-radius: 0.6rem;
+  background: #243240;
+  font-size: 0.85rem;
+}
+
+.editor-points li[aria-selected='true'] {
+  background: #3f6f9f;
+  border-color: #ffd250;
+}
+
+.editor-start {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 12rem;
+}
+
+.editor-toolbar .tc-button:focus-visible,
+.editor-points li:focus-visible,
+.editor-start:focus-visible,
+#drive-notice .tc-button:focus-visible,
+#sim-canvas.editing:focus-visible {
+  outline: 3px solid #ffd250;
+  outline-offset: 2px;
+}
+
+/* While editing, the canvas takes the touches so the page does not scroll or zoom under a finger. */
+#sim-canvas.editing {
+  touch-action: none;
+}
