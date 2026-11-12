@@ -865,3 +865,84 @@ html.editing .camera-controls,
 html.evaluating .camera-controls {
   display: none;
 }
+
+/* The race page (P5-03, ?mode=race). Choosing the race and reading its results scroll like the evaluate page; while the cars are on the
+   track the page is the fixed driving layout, so the touch controls never move under a thumb. */
+html.race-setup,
+html.race-setup body,
+html.race-finished,
+html.race-finished body {
+  height: auto;
+  overflow: auto;
+  overscroll-behavior: auto;
+}
+
+html.race-setup .app,
+html.race-finished .app {
+  height: auto;
+  min-height: 100dvh;
+}
+
+html.race-setup .stage {
+  display: none;
+}
+
+html.race-finished .stage {
+  flex: none;
+  height: 55dvh;
+  min-height: 14rem;
+}
+
+.race-hud {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  margin: 0.25rem 0 0;
+  font-size: 0.95rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.race-hud div {
+  display: flex;
+  gap: 0.3rem;
+}
+
+.race-hud dt {
+  color: #9fb0c0;
+}
+
+.race-hud dd {
+  margin: 0;
+}
+
+.race-countdown {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  margin: 0;
+  transform: translate(-50%, -50%);
+  padding: 0.2rem 1.1rem;
+  border-radius: 0.8rem;
+  background: rgb(0 0 0 / 0.55);
+  font-size: 3.5rem;
+  font-weight: 700;
+  line-height: 1.2;
+  pointer-events: none;
+}
+
+.rr-comparison {
+  margin: 0.4rem 0;
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+
+/* The race results table has three columns (measure, You, AI), so it fits a phone with no sideways scroll. */
+#rr-table {
+  width: 100%;
+  min-width: 0;
+  table-layout: fixed;
+}
+
+#rr-table th:first-child {
+  width: 34%;
+}

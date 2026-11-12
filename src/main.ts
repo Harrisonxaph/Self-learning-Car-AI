@@ -26,6 +26,8 @@ import { createModelStore } from './persistence/modelStore';
 import { createEvaluateController } from './ui/evaluateController';
 import { RESERVED_CIRCUIT_IDS, customRegistryLookup, customSourceFromStore, entryBelongsTo, type CustomSource } from './ui/modelEvaluation';
 import { startEvaluatePage } from './ui/evaluatePage';
+import { createRaceController } from './ui/raceController';
+import { startRacePage } from './ui/racePage';
 import { createWorld, elapsedSeconds, restartWorld, stepWorld, type World } from './sim/world';
 import {
   attachHoldButton,
@@ -220,6 +222,8 @@ if (pageMode(window.location.search) === 'train') {
   startEditing();
 } else if (pageMode(window.location.search) === 'evaluate') {
   startEvaluating();
+} else if (pageMode(window.location.search) === 'race') {
+  startRacing();
 } else {
   startDrivingPage(track);
 }
@@ -261,6 +265,36 @@ function startEvaluating(): void {
     },
   });
   startEvaluatePage(controller);
+}
+
+/**
+ * A human vs AI race (P5-03, `?mode=race`): the saved champions, and only training and validation circuits and the person's saved
+ * custom tracks (every circuit is resolved through resolveCircuit, so a held-out circuit is never reached from this page).
+ */
+function startRacing(): void {
+  const training = tracksIn('training');
+  const validation = tracksIn('validation');
+  const tracks = customTrackStore();
+  const customTracks: CustomSource = customSourceFromStore(tracks);
+  const store = createModelStore({
+    storage: () => window.localStorage,
+    registry: training,
+    evaluationTracks: [...training, ...validation],
+    evaluationBinding: entryBelongsTo,
+    evaluationCustom: customRegistryLookup(customTracks),
+    evaluationReservedIds: RESERVED_CIRCUIT_IDS,
+  });
+  const controller = createRaceController({
+    store,
+    trainingCircuits: training.map((t) => ({ id: t.id, name: t.track.name })),
+    validationCircuits: validation.map((t) => ({ id: t.id, name: t.track.name })),
+    customTracks,
+    savedTracks: () => {
+      const listing = tracks.list();
+      return listing.available ? listing.entries.flatMap((e) => (e.status === 'ok' ? [{ id: e.id, name: e.summary.name }] : [])) : [];
+    },
+  });
+  startRacePage({ controller, canvas, context, trackLayer });
 }
 
 /** The saved custom tracks (P4-03): the browser's own storage, with every ID or layout of a built-in study circuit refused. */

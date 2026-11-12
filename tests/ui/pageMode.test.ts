@@ -25,6 +25,12 @@ describe('pageMode', () => {
     ['?mode=evaluate&mode=train', 'train'],
     ['?mode=Evaluate', 'drive'],
     ['?mode=evaluation', 'drive'],
+    ['?mode=race', 'race'],
+    ['?mode=%20race%20', 'race'],
+    ['?mode=train&mode=race', 'race'],
+    ['?mode=race&mode=edit', 'edit'],
+    ['?mode=Race', 'drive'],
+    ['?mode=racing', 'drive'],
   ])('%s → %s', (search, mode) => {
     expect(pageMode(search)).toBe(mode);
   });
