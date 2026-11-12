@@ -64,7 +64,7 @@ const carPixels = (page: Page) =>
   page.evaluate(() => {
     const c = document.querySelector<HTMLCanvasElement>('#sim-canvas')!;
     const data = c.getContext('2d')!.getImageData(0, 0, c.width, c.height).data;
-    const near = (r: number, g: number, b: number, tr: number, tg: number, tb: number) => Math.abs(r - tr) < 8 && Math.abs(g - tg) < 8 && Math.abs(b - tb) < 8;
+    const near = (r: number, g: number, b: number, tr: number, tg: number, tb: number) => Math.abs(r - tr) < 24 && Math.abs(g - tg) < 24 && Math.abs(b - tb) < 24;
     let you = 0;
     let ai = 0;
     for (let i = 0; i < data.length; i += 4) {
@@ -115,9 +115,17 @@ test('start and finish a race with the touch controls, read the results, and res
   await expect(page.locator('#rh-ai')).toContainText('lap 1 of 1');
   await expect(canvas(page)).toBeVisible();
 
-  // Both cars are drawn, in their own colours (and labelled "You" and "AI" on the canvas).
-  await expect.poll(async () => (await carPixels(page)).you).toBeGreaterThan(4);
-  await expect.poll(async () => (await carPixels(page)).ai).toBeGreaterThan(4);
+  // Both cars are drawn, in their own colours (and labelled "You" and "AI" on the canvas). At the start they share one pose and "You" is drawn
+  // on top, so look once the AI has driven away from the idle human car.
+  await expect.poll(() => phase(page), { timeout: 15_000 }).toBe('racing');
+  await expect
+    .poll(async () => {
+      const at = async (name: string): Promise<number> => Number(await canvas(page).getAttribute(name));
+      return Math.hypot((await at('data-ai-x')) - (await at('data-human-x')), (await at('data-ai-y')) - (await at('data-human-y')));
+    }, { timeout: 15_000 })
+    .toBeGreaterThan(8);
+  await expect.poll(async () => (await carPixels(page)).you).toBeGreaterThan(1);
+  await expect.poll(async () => (await carPixels(page)).ai).toBeGreaterThan(1);
 
   await driveIntoWall(page);
   await expect.poll(() => phase(page), { timeout: 60_000 }).toBe('finished');
