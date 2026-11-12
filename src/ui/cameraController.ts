@@ -113,7 +113,8 @@ export function createCameraController(initial: { bounds: Bounds; cssWidth: numb
       const two = pair();
       if (two && pinch) {
         const now = spread(two[0], two[1]);
-        if (pinch.distance > 0 && now.distance > 0) camera = zoomBy(camera, now.distance / pinch.distance, now.mid, context);
+        if (pinch.distance > 0 && now.distance > 0) // Zoom about the PREVIOUS midpoint (the world point under the fingers stays under them), then pan by how far the midpoint moved.
+        camera = zoomBy(camera, now.distance / pinch.distance, pinch.mid, context);
         camera = panBy(camera, now.mid.x - pinch.mid.x, now.mid.y - pinch.mid.y, context);
         pinch = now;
         return true;
