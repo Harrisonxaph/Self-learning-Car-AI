@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { createCar } from '../../src/sim/collision';
 import { DEFAULT_VEHICLE_PHYSICS } from '../../src/sim/config';
 import { loadTrack } from '../../src/sim/track';
-import { validateEvaluationEntry } from '../../src/persistence/evaluationEntry';
+import { PROTOCOL_LIMITS, evaluationConfigHash, validateEvaluationEntry } from '../../src/persistence/evaluationEntry';
 import { modelParameters } from '../../src/persistence/modelFormat';
 import { createEvaluationSetup, evaluateDriver } from '../../src/training/evaluation';
 import { createNetworkDriver } from '../../src/ai/drivers';
@@ -240,6 +240,15 @@ describe('an entry belongs to the champion that made it', () => {
     const timestep = clone(model);
     (timestep.training.configuration as { timestepSeconds: number }).timestepSeconds = 0.01;
     expect(entryBelongsTo(timestep, entry)).toMatch(/different version/);
+  });
+  it('binds the recorded timestep to the champion even when the configuration hash and frozen identity are left alone', () => {
+    const forged = clone(entry) as unknown as Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
+    forged.timestepSeconds = 0.02;
+    forged.configHash = evaluationConfigHash(PROTOCOL_LIMITS, PROTOCOL_LIMITS.fitnessVersion, 0.02);
+    const context = { registry: EVALUATION_REGISTRY, belongsTo: (e: Parameters<typeof entryBelongsTo>[1]) => entryBelongsTo(model, e) };
+    expect(entryBelongsTo(model, forged as never)).toMatch(/different simulation timestep/);
+    expect(validateEvaluationEntry(forged, context).ok).toBe(false);
+    expect(validateEvaluationEntry(entry, context).ok).toBe(true);
   });
   it('is part of recognition: an entry for another champion is not shown for this one', () => {
     expect(validateEvaluationEntry(entry, bindingFor(makeModel(9, 'me-3'))).ok).toBe(false);

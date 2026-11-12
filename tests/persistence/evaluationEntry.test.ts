@@ -119,11 +119,46 @@ describe('validateEvaluationEntry: the recorded protocol (entries that still add
   it('ticks beyond the episode budget, a timeout that did not use it, and a completed episode without three laps are refused', () => {
     expect(errorsOf(withRows((r) => { r[1]!.ticks = 3601; }))).toMatch(/episode budget/);
     expect(errorsOf(withRows((r) => { r[1]!.outcome = 'timeout'; r[1]!.ticks = 100; }))).toMatch(/whole episode budget/);
-    expect(errorsOf(withRows((r) => { r[1]!.outcome = 'completed'; r[1]!.laps = 0; }))).toMatch(/exactly 3 laps/);
+    expect(errorsOf(withRows((r) => { r[1]!.outcome = 'completed'; r[1]!.laps = 0; }))).toMatch(/completed exactly when it reaches 3 laps/);
   });
   it('a lap count its gate credits cannot support, and a gate count that is not the circuit\'s, are refused', () => {
-    expect(errorsOf(withRows((r) => { r[0]!.laps = 1; r[0]!.firstLapTicks = 500; r[0]!.firstLapSeconds = 500 / 60; r[0]!.gatesPassed = 3; r[0]!.orderedProgress = 3 / r[0]!.gates; }))).toMatch(/every gate and the start line/);
+    expect(errorsOf(withRows((r) => { r[0]!.laps = 1; r[0]!.firstLapTicks = 500; r[0]!.firstLapSeconds = 500 / 60; r[0]!.gatesPassed = 3; r[0]!.orderedProgress = 3 / r[0]!.gates; }))).toMatch(/gate credits .* mean 0 completed laps/);
     expect(errorsOf(withRows((r) => { r[2]!.gates = 99; r[2]!.orderedProgress = r[2]!.gatesPassed / 99; }))).toMatch(/gate count/);
+  });
+  it('the lap count is exactly what the gate credits give (the checkpoint convention), in both directions', () => {
+    const g = base.rows[0]!.gates;
+    // gates + 1 credits is a completed lap: claiming 0 laps is refused (the converse of the lower bound)
+    expect(errorsOf(withRows((r) => { r[0]!.gatesPassed = g + 1; r[0]!.orderedProgress = (g + 1) / g; r[0]!.laps = 0; r[0]!.firstLapTicks = null; r[0]!.firstLapSeconds = null; }))).toMatch(/mean 1 completed laps, not 0/);
+    // exactly gates credits is still lap 1 in progress; one more credit completes it
+    expect(errorsOf(withRows((r) => { r[0]!.gatesPassed = g; r[0]!.orderedProgress = 1; r[0]!.laps = 0; r[0]!.firstLapTicks = null; r[0]!.firstLapSeconds = null; r[0]!.outcome = 'crashed'; }))).toBe('');
+    expect(errorsOf(withRows((r) => { r[0]!.gatesPassed = g; r[0]!.orderedProgress = 1; r[0]!.laps = 1; r[0]!.firstLapTicks = 50; r[0]!.firstLapSeconds = 50 / 60; r[0]!.outcome = 'crashed'; }))).toMatch(/mean 0 completed laps, not 1/);
+    expect(errorsOf(withRows((r) => { r[0]!.gatesPassed = g + 1; r[0]!.orderedProgress = (g + 1) / g; r[0]!.laps = 1; r[0]!.firstLapTicks = 50; r[0]!.firstLapSeconds = 50 / 60; r[0]!.outcome = 'crashed'; r[0]!.ticks = 100; }))).toBe('');
+    // 2 laps' credits claiming 1, and zero credits claiming a lap
+    expect(errorsOf(withRows((r) => { r[0]!.gatesPassed = 2 * g + 1; r[0]!.orderedProgress = (2 * g + 1) / g; r[0]!.laps = 1; r[0]!.firstLapTicks = 50; r[0]!.firstLapSeconds = 50 / 60; r[0]!.outcome = 'crashed'; }))).toMatch(/mean 2 completed laps, not 1/);
+    expect(errorsOf(withRows((r) => { r[0]!.gatesPassed = 0; r[0]!.orderedProgress = 0; r[0]!.laps = 1; r[0]!.firstLapTicks = 50; r[0]!.firstLapSeconds = 50 / 60; r[0]!.outcome = 'crashed'; }))).toMatch(/mean 0 completed laps, not 1/);
+  });
+  it('terminal precedence: the lap limit completes the episode, and only it does', () => {
+    const g = base.rows[0]!.gates;
+    const threeLaps = (r: Json[], outcome: string): void => { r[0]!.gatesPassed = 3 * g + 1; r[0]!.orderedProgress = (3 * g + 1) / g; r[0]!.laps = 3; r[0]!.firstLapTicks = 50; r[0]!.firstLapSeconds = 50 / 60; r[0]!.ticks = 600; r[0]!.outcome = outcome; };
+    expect(errorsOf(withRows((r) => threeLaps(r, 'completed')))).toBe('');
+    for (const outcome of ['crashed', 'stalled', 'timeout']) expect(errorsOf(withRows((r) => threeLaps(r, outcome))), outcome).toMatch(/completed exactly when it reaches 3 laps/);
+  });
+  it('a stall cannot happen before the 5 second (300 tick) threshold', () => {
+    expect(errorsOf(withRows((r) => { r[1]!.outcome = 'stalled'; r[1]!.ticks = 1; }))).toMatch(/stall needs at least 300 ticks/);
+    expect(errorsOf(withRows((r) => { r[1]!.outcome = 'stalled'; r[1]!.ticks = 299; }))).toMatch(/stall needs at least 300 ticks/);
+    expect(errorsOf(withRows((r) => { r[1]!.outcome = 'stalled'; r[1]!.ticks = 300; }))).toBe('');
+    expect(errorsOf(withRows((r) => { r[1]!.outcome = 'crashed'; r[1]!.ticks = 1; }))).toBe('');
+  });
+  it('a claimed-kind entry that breaks these rules is kept opaque and uncounted in its legacy array, not rejected with the model', () => {
+    const g = base.rows[0]!.gates;
+    const forged = withRows((r) => { r[0]!.gatesPassed = g + 1; r[0]!.orderedProgress = (g + 1) / g; r[0]!.laps = 0; r[0]!.firstLapTicks = null; r[0]!.firstLapSeconds = null; });
+    const stalled = withRows((r) => { r[1]!.outcome = 'stalled'; r[1]!.ticks = 1; });
+    const list = [base, forged, stalled, { other: 1 }];
+    const result = recogniseEvaluations(list, REG);
+    expect(result.entries).toHaveLength(1);
+    expect(result.invalidClaims).toBe(2);
+    expect(result.opaque).toBe(3);
+    expect(list).toHaveLength(4);
   });
   it('a track that is not one of the allowed circuits, or has another hash, is refused; with no registry only the structure is checked', () => {
     const unknown = clone(base) as Json;

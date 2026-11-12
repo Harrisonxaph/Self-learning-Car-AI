@@ -233,6 +233,7 @@ export function validateEvaluationEntry(value: unknown, context: EntryContext = 
       fail(`"starts" and "rows" must each hold exactly ${wanted} items (the nominal start and seeds ${EVALUATION_SEEDS.join(', ')}).`);
     } else {
       const maxTicks = isNum(dt) && dt > 0 ? Math.max(1, Math.ceil(PROTOCOL_LIMITS.maxEpisodeSeconds / dt - 1e-9)) : Number.MAX_SAFE_INTEGER;
+      const minStallTicks = isNum(dt) && dt > 0 ? Math.max(1, Math.ceil(PROTOCOL_LIMITS.stallSeconds / dt - 1e-9)) : Number.MAX_SAFE_INTEGER;
       starts.forEach((s, i) => {
         if (!isObject(s) || s.seed !== i || !isNum(s.lateralMetres) || !isNum(s.headingRadians) || !isNum(s.x) || !isNum(s.y) || !isNum(s.heading)) {
           fail(`starts[${i}] must have seed ${i} and finite offsets and pose.`);
@@ -258,14 +259,19 @@ export function validateEvaluationEntry(value: unknown, context: EntryContext = 
         if ((r.laps as number) > PROTOCOL_LIMITS.maxLaps) return bad(`laps cannot exceed ${PROTOCOL_LIMITS.maxLaps}`);
         if ((r.gatesPassed as number) > gates * PROTOCOL_LIMITS.maxLaps + 1) return bad('more gate credits than the lap limit allows');
         if (r.orderedProgress !== (r.gatesPassed as number) / gates) return bad('progress must be gates passed over gates per lap');
-        if ((r.laps as number) >= 1 && (r.gatesPassed as number) < (r.laps as number) * gates + 1) return bad('a completed lap needs every gate and the start line credited again');
+        // The checkpoint convention (sim/checkpoints.ts advanceProgress): the first crossing of the start line only starts lap 1; each later crossing completes a lap, so the lap count is fixed by the credits.
+        const credits = r.gatesPassed as number;
+        const expectedLaps = credits >= 1 ? Math.floor((credits - 1) / gates) : 0;
+        if (r.laps !== expectedLaps) return bad(`${credits} gate credits on a ${gates}-gate circuit mean ${expectedLaps} completed laps, not ${String(r.laps)}`);
         if ((r.laps as number) === 0) {
           if (r.firstLapTicks !== null || r.firstLapSeconds !== null) return bad('a first-lap time is only recorded when a lap completed');
         } else {
           if (!isInt(r.firstLapTicks, 1) || (r.firstLapTicks as number) > (r.ticks as number)) return bad('the first lap cannot take more ticks than the episode');
           if (!isNum(r.firstLapSeconds) || !isNum(dt) || !near(r.firstLapSeconds, (r.firstLapTicks as number) * dt, 1e-9)) return bad('the first-lap seconds must equal its ticks times the timestep');
         }
-        if (r.outcome === 'completed' && r.laps !== PROTOCOL_LIMITS.maxLaps) return bad(`a completed episode has exactly ${PROTOCOL_LIMITS.maxLaps} laps`);
+        // Terminal precedence (training/fitness.ts): the lap limit ends the episode as completed before anything else is considered.
+        if ((r.outcome === 'completed') !== (r.laps === PROTOCOL_LIMITS.maxLaps)) return bad(`an episode is completed exactly when it reaches ${PROTOCOL_LIMITS.maxLaps} laps`);
+        if (r.outcome === 'stalled' && (r.ticks as number) < minStallTicks) return bad(`a stall needs at least ${minStallTicks} ticks (${PROTOCOL_LIMITS.stallSeconds} s) without a new gate credit`);
         if (r.outcome === 'timeout' && r.ticks !== maxTicks) return bad('a timeout uses the whole episode budget');
       });
       if (errors.length === 0 && !summariesEqual(value.summary, summariseRows(rows as EvaluationRow[]))) fail('"summary" does not match the rows.');

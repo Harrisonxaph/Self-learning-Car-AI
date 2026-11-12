@@ -102,6 +102,7 @@ export function entryBelongsTo(model: ModelDocument, entry: EvaluationEntry): st
     return 'This evaluation cannot be matched to this champion.';
   }
   if (entry.brakeEnabled !== model.training.configuration.brakeEnabled) return 'This evaluation used a different brake setting from this champion.';
+  if (entry.timestepSeconds !== model.training.configuration.timestepSeconds) return 'This evaluation used a different simulation timestep from this champion.';
   return null;
 }
 
