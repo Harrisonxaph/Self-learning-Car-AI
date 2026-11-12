@@ -4,7 +4,7 @@
 //
 // Nothing here knows what an opening is: validation and the "already opened" refusal are the library's own
 // (`createMemoryLedger`, passed in), so this file only persists. It never overwrites or deletes a ledger.
-import { existsSync, lstatSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { closeSync, existsSync, lstatSync, mkdtempSync, openSync, readFileSync, renameSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 
 export class LedgerFileError extends Error {
@@ -38,19 +38,46 @@ export function createFileLedger(path, createMemoryLedger) {
   return {
     openings: () => load().openings(),
     claim(opening) {
-      const ledger = load();
-      ledger.claim(opening); // refuses a protocol that is already in the ledger
-      const text = `${JSON.stringify(ledger.openings(), null, 2)}\n`;
-      const folder = existsSync(dirname(path)) ? mkdtempSync(join(dirname(path), `.${basename(path)}.tmp-`)) : null;
-      if (folder === null) throw new LedgerFileError(`The folder for the ledger ${path} does not exist; the opening was not claimed.`);
+      if (!existsSync(dirname(path))) throw new LedgerFileError(`The folder for the ledger ${path} does not exist; the opening was not claimed.`);
+      // One claimer at a time across processes: the lock file is created exclusively (it fails if it exists) and is held
+      // from reading the ledger until the new ledger is in place, so two processes can never both see "not opened".
+      // A lock left behind by a crash is refused, not broken: only a person who knows no process is running removes it.
+      const lockPath = `${path}.lock`;
+      let lock;
       try {
-        const temporary = join(folder, 'ledger.json');
-        writeFileSync(temporary, text, { flag: 'wx' });
-        renameSync(temporary, path);
+        lock = openSync(lockPath, 'wx');
       } catch (error) {
-        throw new LedgerFileError(`The opening could not be written to the ledger ${path}, so it was not claimed: ${error.message}`);
+        if (error.code === 'EEXIST') {
+          throw new LedgerFileError(`The ledger ${path} is locked (${lockPath} exists): another process is claiming the opening, or one crashed. Nothing was claimed. Remove the lock only when you are sure no process is running.`);
+        }
+        throw new LedgerFileError(`The ledger ${path} could not be locked, so the opening was not claimed: ${error.message}`);
+      }
+      try {
+        const ledger = load();
+        ledger.claim(opening); // refuses a protocol that is already in the ledger
+        const text = `${JSON.stringify(ledger.openings(), null, 2)}\n`;
+        let folder;
+        try {
+          folder = mkdtempSync(join(dirname(path), `.${basename(path)}.tmp-`));
+        } catch (error) {
+          throw new LedgerFileError(`The opening could not be written beside the ledger ${path}, so it was not claimed: ${error.message}`);
+        }
+        try {
+          const temporary = join(folder, 'ledger.json');
+          writeFileSync(temporary, text, { flag: 'wx' });
+          renameSync(temporary, path);
+        } catch (error) {
+          throw new LedgerFileError(`The opening could not be written to the ledger ${path}, so it was not claimed: ${error.message}`);
+        } finally {
+          rmSync(folder, { recursive: true, force: true });
+        }
       } finally {
-        rmSync(folder, { recursive: true, force: true });
+        closeSync(lock);
+        try {
+          unlinkSync(lockPath);
+        } catch {
+          // The lock was ours; if it is already gone there is nothing left to release.
+        }
       }
     },
   };
