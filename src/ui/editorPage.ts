@@ -48,6 +48,12 @@ export function startEditorPage(deps: EditorPageDeps): EditorPage {
   const insertButton = button('ed-insert');
   const clearButton = button('ed-clear');
   const driveButton = button('ed-drive');
+  const startButtons: [HTMLButtonElement, number][] = [
+    [button('ed-start-back10'), -10],
+    [button('ed-start-back1'), -1],
+    [button('ed-start-fwd1'), 1],
+    [button('ed-start-fwd10'), 10],
+  ];
 
   const controller = createEditorController(deps.history);
   const cleanups: (() => void)[] = [];
@@ -61,6 +67,7 @@ export function startEditorPage(deps: EditorPageDeps): EditorPage {
   };
 
   panel.hidden = false;
+  document.documentElement.classList.add('editing');
   canvas.classList.add('editing');
   canvas.tabIndex = 0;
   canvas.setAttribute('role', 'application');
@@ -144,6 +151,7 @@ export function startEditorPage(deps: EditorPageDeps): EditorPage {
     closeButton.disabled = state.closed || state.points.length < EDITOR_LIMITS.minPoints;
     insertButton.disabled = !state.closed || controller.selected() < 0;
     clearButton.disabled = state.points.length === 0;
+    for (const [b] of startButtons) b.disabled = !state.closed;
     driveButton.disabled = result.kind !== 'valid';
     status.textContent = result.message;
     status.dataset.kind = result.kind;
@@ -218,6 +226,7 @@ export function startEditorPage(deps: EditorPageDeps): EditorPage {
   click(closeButton, () => controller.close());
   click(insertButton, () => controller.insertAfterSelected());
   click(clearButton, () => controller.clear());
+  for (const [b, delta] of startButtons) click(b, () => controller.moveStartBy(delta));
   on(driveButton, 'click', () => {
     const result = controller.status();
     if (result.kind !== 'valid') return;
@@ -311,6 +320,7 @@ export function startEditorPage(deps: EditorPageDeps): EditorPage {
   function stop(): void {
     for (const cleanup of cleanups.splice(0)) cleanup();
     panel.hidden = true;
+    document.documentElement.classList.remove('editing');
     canvas.classList.remove('editing');
     canvas.removeAttribute('tabindex');
     canvas.removeAttribute('role');

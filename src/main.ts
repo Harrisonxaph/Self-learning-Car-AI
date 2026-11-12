@@ -232,8 +232,9 @@ function startDrivingPage(track: Track): () => void {
     restartRequested = true;
   };
   const restartButton = element<HTMLButtonElement>('#restart');
-  // Space on the focused Restart button activates it, as on any button, instead of braking.
-  detach.push(attachKeyboard(window, held, requestRestart, (target) => target === restartButton));
+  // Space on a focused Restart or Back to editing button activates it, as on any button, instead of braking.
+  const isNativeButton = (target: unknown) => target === restartButton || target === document.getElementById('ed-back');
+  detach.push(attachKeyboard(window, held, requestRestart, isNativeButton));
   detach.push(attachSafetyRelease(window, document, held));
   for (const button of holdButtons) detach.push(attachHoldButton(button, button.dataset.action as HoldAction, held));
   const onRestartClick = (event: MouseEvent) => {

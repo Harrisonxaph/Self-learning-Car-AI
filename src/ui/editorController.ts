@@ -35,6 +35,9 @@ export type EditorMode = 'add' | 'move' | 'delete';
 /** How far from the first point a tap, or the crosshair, still counts as "on" it (metres). */
 const CROSSHAIR_REACH = 2;
 
+/** In Add mode a tap selects an existing point only within this share of the touch radius (about the drawn point). */
+const SELECT_REACH_RATIO = 10 / 22;
+
 export interface EditorController {
   state(): EditorState;
   history(): EditorHistory;
@@ -144,13 +147,30 @@ export function createEditorController(initial: EditorHistory = createHistory(cr
     return best;
   };
 
+  /** Distance from point `index` to the nearest other control point (Infinity when there is none). */
+  const nearestNeighbour = (index: number): number => {
+    const pts = state().points;
+    let best = Infinity;
+    pts.forEach((p, i) => {
+      if (i !== index) best = Math.min(best, Math.hypot(p.x - pts[index]!.x, p.y - pts[index]!.y));
+    });
+    return best;
+  };
+
   const tapAdd = (at: Vec2, reach: number): void => {
     const s = history.present;
-    const hit = nearestIndex(at, reach);
+    // Adding is the common gesture, so a tap only selects a point it lands right on (the drawn point, not the whole touch
+    // radius); on a small canvas the touch radius can cover several neighbours and would swallow new points.
+    const hit = nearestIndex(at, reach * SELECT_REACH_RATIO);
     if (!s.closed) {
-      if (hit === 0 && s.points.length >= EDITOR_LIMITS.minPoints) {
-        run(closeLoop(s), 'Loop closed.');
-        return;
+      if (s.points.length >= EDITOR_LIMITS.minPoints) {
+        // Closing gets the generous touch radius, but never more than half way to the first point's nearest neighbour.
+        const closeReach = Math.min(reach, Math.max(reach * SELECT_REACH_RATIO, nearestNeighbour(0) / 2));
+        const first = s.points[0]!;
+        if (Math.hypot(first.x - at.x, first.y - at.y) <= closeReach) {
+          run(closeLoop(s), 'Loop closed.');
+          return;
+        }
       }
       if (hit >= 0) {
         selected = hit;

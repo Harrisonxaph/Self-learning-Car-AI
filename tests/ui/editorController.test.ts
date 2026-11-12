@@ -96,6 +96,25 @@ describe('pointer gestures', () => {
   });
 });
 
+describe('a large touch radius on a small canvas', () => {
+  it('still adds every point of the ring and closes only on the first point (reach 40 m covers several neighbours)', () => {
+    const c = fresh();
+    for (const [x, y] of [[-60, -30], [0, -40], [60, -30], [70, 0], [60, 30], [0, 40], [-60, 30], [-70, 0]] as const) tap(c, x, y, 40);
+    expect(c.state().points.length).toBe(8);
+    expect(c.state().closed).toBe(false);
+    tap(c, -58, -28, 40);
+    expect(c.state().closed).toBe(true);
+    expect(c.status().kind).toBe('valid');
+  });
+  it('Delete and Move still use the full touch radius', () => {
+    const c = fresh();
+    loop(c);
+    c.setMode('delete');
+    tap(c, 0, -52, 14);
+    expect(c.state().points.length).toBe(7);
+  });
+});
+
 describe('toolbar', () => {
   it('width, gate spacing and snap change the state and stop at their limits with a message', () => {
     const c = fresh();

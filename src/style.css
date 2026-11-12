@@ -682,3 +682,32 @@ body {
 #sim-canvas.editing {
   touch-action: none;
 }
+
+/* The editor page scrolls: its canvas keeps a usable size and the panel below it takes the rest, instead of the
+   fixed-height drive layout squeezing the canvas to nothing on a phone. */
+html.editing,
+html.editing body {
+  height: auto;
+  overflow: auto;
+  overscroll-behavior: auto;
+}
+
+html.editing .app {
+  height: auto;
+  min-height: 100dvh;
+}
+
+html.editing .stage {
+  flex: none;
+  height: clamp(280px, 60dvh, 640px);
+}
+
+html.editing .editor-points {
+  max-height: 9.5rem;
+  overflow-y: auto;
+}
+
+html.editing .editor-problems {
+  max-height: 7rem;
+  overflow-y: auto;
+}

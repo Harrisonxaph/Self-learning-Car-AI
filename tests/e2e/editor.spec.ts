@@ -48,12 +48,18 @@ test('builds a loop with pointer events, sees Valid, drives it and comes back to
   await expect(page.locator('#drive-notice')).toBeVisible();
   await expect(page.locator('#editor-panel')).toBeHidden();
   await expect(page.locator('#hud-laps')).toBeVisible();
-  const before = Number(await data(page, 'carX'));
+  const here = async () => ({ x: Number(await data(page, 'carX')), y: Number(await data(page, 'carY')) });
+  const before = await here();
   await page.keyboard.down('ArrowUp');
   await page.waitForTimeout(1500);
   await page.keyboard.up('ArrowUp');
-  expect(Math.abs(Number(await data(page, 'carX')) - before) + Math.abs(Number(await data(page, 'carY')))).toBeGreaterThan(1);
-  await page.locator('#ed-back').click();
+  const after = await here();
+  // The car really moved from where it started (a distance, not an absolute position that is never zero).
+  expect(Math.hypot(after.x - before.x, after.y - before.y)).toBeGreaterThan(2);
+  expect(Number(await data(page, 'carSpeed'))).toBeGreaterThan(0);
+  // Space on the focused Back button activates it (it does not brake).
+  await expect(page.locator('#ed-back')).toBeFocused();
+  await page.keyboard.press('Space');
   await expect(page.locator('#editor-panel')).toBeVisible();
   await expect(page.locator('#drive-notice')).toBeHidden();
   expect(await data(page, 'editorPoints')).toBe('8');
@@ -80,7 +86,10 @@ test('undo, redo, move, delete and width work, and a too-tight corner gives a re
   await page.mouse.move((from.x + to.x) / 2, (from.y + to.y) / 2);
   await page.mouse.move(to.x, to.y);
   await page.mouse.up();
-  await expect(page.locator('#ed-message')).toContainText('moved to (80, 50)');
+  // The pointer lands within a metre or two of the target: browsers round clientX/clientY and the grid snaps to whole metres.
+  const moved = /moved to \((-?\d+(?:\.\d+)?), (-?\d+(?:\.\d+)?)\)/.exec((await page.locator('#ed-message').textContent()) ?? '');
+  expect(moved).not.toBeNull();
+  expect(Math.hypot(Number(moved![1]) - 80, Number(moved![2]) - 50)).toBeLessThanOrEqual(2);
 
   for (let i = 0; i < 18; i += 1) await page.locator('#ed-width-plus').click();
   await expect(page.locator('#ed-width-plus')).toBeDisabled();
@@ -124,6 +133,44 @@ test('a keyboard-only build: crosshair, close the loop, insert a point, nudge it
   await page.keyboard.press('Home');
   await expect(start).toHaveAttribute('aria-valuenow', '0');
   await expect(page.locator('#ed-status')).toContainText('Valid');
+});
+
+test('touch start-position buttons move the start, wrap, and stay disabled until the loop is closed', async ({ page }) => {
+  await expect(page.locator('#ed-start-fwd10')).toBeDisabled();
+  await buildWithPointer(page);
+  const start = page.locator('#ed-start');
+  await expect(page.locator('#ed-start-fwd10')).toBeEnabled();
+  await page.locator('#ed-start-fwd10').click();
+  await expect(start).toHaveAttribute('aria-valuenow', '10');
+  await page.locator('#ed-start-back1').click();
+  await expect(start).toHaveAttribute('aria-valuenow', '9');
+  await page.locator('#ed-start-fwd1').click();
+  await page.locator('#ed-start-back10').click();
+  await expect(start).toHaveAttribute('aria-valuenow', '0');
+  await page.locator('#ed-start-back1').click();
+  expect(Number(await start.getAttribute('aria-valuenow'))).toBeGreaterThan(100);
+  await expect(page.locator('#ed-status')).toContainText('Valid');
+});
+
+test('the canvas keeps a usable size, the page scrolls, and the lists are bounded, on every screen', async ({ page }) => {
+  await buildWithPointer(page);
+  const box = (await page.locator('#sim-canvas').boundingBox())!;
+  expect(box.height).toBeGreaterThanOrEqual(250);
+  expect(box.width).toBeGreaterThanOrEqual(250);
+  // A very long point list scrolls inside its own box instead of pushing the page out.
+  const list = await page.locator('#ed-points').evaluate((node) => {
+    for (let i = 0; i < 150; i += 1) {
+      const li = document.createElement('li');
+      li.textContent = String(i);
+      node.appendChild(li);
+    }
+    const box = node.getBoundingClientRect();
+    return { height: box.height, scrolls: node.scrollHeight > node.clientHeight };
+  });
+  expect(list.height).toBeLessThan(220);
+  expect(list.scrolls).toBe(true);
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  expect(overflow).toBeLessThanOrEqual(0);
 });
 
 test('every toolbar control is at least 44 px and visible without scrolling the page sideways', async ({ page }) => {
