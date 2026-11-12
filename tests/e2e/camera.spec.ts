@@ -213,3 +213,84 @@ test('Space and Enter activate a focused camera button on the driving page, inst
   await page.keyboard.up('ArrowUp');
   expect(await num(page, 'carSpeed')).toBeGreaterThan(0);
 });
+
+test('a followed car stays inside the canvas through a resize or rotation, even before the smoothing has settled (portrait and landscape)', async ({ page }) => {
+  await page.setViewportSize({ width: 900, height: 500 });
+  await openDrive(page);
+  // Follow starts with the view far from the car: the smoothing has not settled when the canvas is resized straight away.
+  await page.locator('#cam-in').click();
+  await page.locator('#cam-in').click();
+  await page.locator('#cam-follow').click();
+  for (const size of [{ width: 390, height: 700 }, { width: 700, height: 390 }, { width: 320, height: 568 }, { width: 568, height: 320 }, { width: 900, height: 500 }]) {
+    await page.setViewportSize(size);
+    await expect.poll(async () => {
+      const d = await data(page);
+      const box = (await canvas(page).boundingBox())!;
+      const x = Number(d.carX) * Number(d.trackScale) + Number(d.trackOffsetX);
+      const y = Number(d.carY) * Number(d.trackScale) + Number(d.trackOffsetY);
+      return x >= 0 && x <= box.width && y >= 0 && y <= box.height;
+    }, `${size.width}x${size.height}`).toBe(true);
+  }
+});
+
+test('with the comparison replay running and Follow A/B offered, all five camera controls stay inside a narrow viewport with full 44 px targets (portrait and landscape)', async ({ page }) => {
+  test.setTimeout(120_000);
+  const { readFileSync } = await import('node:fs');
+  const { fileURLToPath } = await import('node:url');
+  const fixture = JSON.parse(readFileSync(fileURLToPath(new URL('../fixtures/champion-v1.json', import.meta.url)), 'utf8')) as { id: string; name?: string };
+  await page.addInitScript(
+    ({ doc }) => {
+      if (window.localStorage.getItem('sdae:test-seeded') === null) {
+        const ids: string[] = [];
+        for (const [id, name] of [['cmp-a', 'Champion A'], ['cmp-b', 'Champion B']] as const) {
+          window.localStorage.setItem(`sdae:model:${id}`, JSON.stringify({ ...doc, id, name }));
+          ids.push(id);
+        }
+        window.localStorage.setItem('sdae:models:index', JSON.stringify(ids));
+        window.localStorage.setItem('sdae:test-seeded', '1');
+      }
+    },
+    { doc: fixture },
+  );
+  await page.setViewportSize({ width: 320, height: 568 });
+  await page.goto('/?mode=train');
+  await expect(page.locator('#camera-controls')).toBeVisible();
+  await page.locator('#champion-replay > summary').click();
+  await page.locator('#compare-a').selectOption('cmp-a');
+  await page.locator('#compare-b').selectOption('cmp-b');
+  await page.locator('#compare-run').click();
+  await expect(page.locator('#compare-replay')).toBeEnabled({ timeout: 30_000 });
+  await page.locator('#compare-replay').click();
+  await expect(page.locator('#sim-canvas')).toHaveAttribute('data-pair-replay', 'running', { timeout: 30_000 });
+  await page.locator('#cam-follow').click();
+  await expect(page.locator('#cam-follow-ab')).toBeVisible();
+  const ids = ['#cam-fit', '#cam-out', '#cam-in', '#cam-follow', '#cam-follow-ab'];
+  const check = async (label: string) => {
+    const viewport = page.viewportSize()!;
+    for (const id of ids) {
+      const box = (await page.locator(id).boundingBox())!;
+      expect(box.x, `${label} ${id} x`).toBeGreaterThanOrEqual(-0.5);
+      expect(box.x + box.width, `${label} ${id} right`).toBeLessThanOrEqual(viewport.width + 0.5);
+      expect(box.height, `${label} ${id} height`).toBeGreaterThanOrEqual(43.5);
+      expect(box.width, `${label} ${id} width`).toBeGreaterThanOrEqual(43.5);
+    }
+    // each control is the element hit at its own centre (not covered by another control or clipped off screen)
+    for (const id of ids) {
+      const hit = await page.locator(id).evaluate((node) => {
+        const r = node.getBoundingClientRect();
+        const top = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
+        return top === node || node.contains(top);
+      });
+      expect(hit, `${label} ${id} hit target`).toBe(true);
+    }
+  };
+  await check('320x568');
+  const before = await page.locator('#cam-follow-ab').textContent();
+  await page.locator('#cam-follow-ab').click();
+  expect(await page.locator('#cam-follow-ab').textContent()).not.toBe(before);
+  await check('after switching A/B');
+  await page.setViewportSize({ width: 568, height: 320 });
+  await check('568x320');
+  await page.setViewportSize({ width: 360, height: 640 });
+  await check('360x640');
+});

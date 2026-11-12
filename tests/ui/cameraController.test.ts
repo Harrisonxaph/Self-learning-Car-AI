@@ -193,6 +193,60 @@ describe('follow by elapsed render time, resize and rotation', () => {
       expect(y).toBeLessThanOrEqual(h);
     }
   });
+  it('a resize or rotation keeps the latest followed target visible even before smoothing has settled', () => {
+    const { controller, advance } = make(900, 500);
+    controller.frame({ x: 0, y: 0 });
+    controller.toggleFollow(); // the camera starts following from far away: the centre lags the target
+    const target = { x: 400, y: 330 };
+    advance(16);
+    controller.frame(target);
+    for (const [w, h] of [[390, 700], [700, 390], [320, 568], [568, 320], [900, 500]] as const) {
+      controller.setCanvas(w, h);
+      const v = controller.view();
+      const x = target.x * v.scale + v.offsetX;
+      const y = target.y * v.scale + v.offsetY;
+      expect(x, `${w}x${h} x`).toBeGreaterThanOrEqual(0);
+      expect(x, `${w}x${h} x`).toBeLessThanOrEqual(w);
+      expect(y, `${w}x${h} y`).toBeGreaterThanOrEqual(0);
+      expect(y, `${w}x${h} y`).toBeLessThanOrEqual(h);
+      advance(16);
+      controller.frame(target);
+    }
+    // switching to another target (champion B) while the camera lags keeps that one visible after the next resize too
+    const other = { x: -250, y: -60 };
+    controller.frame(other);
+    controller.setCanvas(390, 700);
+    const v = controller.view();
+    expect(other.x * v.scale + v.offsetX).toBeGreaterThanOrEqual(0);
+    expect(other.x * v.scale + v.offsetX).toBeLessThanOrEqual(390);
+  });
+  it("the reported lagging case: a target visible at 900x500 stays visible after a resize to 390x700 (a plain resize loses it)", () => {
+    let clock = 0;
+    const square = { minX: -100, minY: -100, maxX: 100, maxY: 100 };
+    const controller = createCameraController({ bounds: square, cssWidth: 900, cssHeight: 500, now: () => clock });
+    const target = { x: 48, y: 0 };
+    controller.frame(target);
+    controller.zoomIn();
+    controller.zoomIn();
+    controller.zoomIn();
+    controller.toggleFollow();
+    clock += 16;
+    controller.frame(target);
+    const at = (w: number, h: number) => {
+      const v = controller.view();
+      const x = target.x * v.scale + v.offsetX;
+      const y = target.y * v.scale + v.offsetY;
+      return x >= 0 && x <= w && y >= 0 && y <= h;
+    };
+    expect(at(900, 500)).toBe(true);
+    controller.setCanvas(390, 700);
+    expect(at(390, 700)).toBe(true); // immediately, before any further frame
+    clock += 16;
+    controller.frame(target);
+    expect(at(390, 700)).toBe(true);
+    controller.setCanvas(700, 390);
+    expect(at(700, 390)).toBe(true);
+  });
   it('never throws on hostile numbers', () => {
     const { controller } = make();
     for (const v of [Number.NaN, Infinity, -Infinity, 1e308, -1e308, 0]) {

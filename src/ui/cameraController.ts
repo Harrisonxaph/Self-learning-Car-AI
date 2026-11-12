@@ -2,7 +2,7 @@
 // and the pointer, pinch and wheel gestures. The page (ui/cameraPage.ts) only wires events to it. It calls the pure functions in
 // render/camera.ts and reads the render clock for follow smoothing; it never reads or writes simulation state, so a camera change can
 // never change a result (a test runs a seeded training run under every camera and compares the records).
-import { fitCamera, follow, panBy, resized, setMode, viewOf, zoomBy, type Camera, type CameraContext } from '../render/camera';
+import { fitCamera, follow, keepInView, panBy, resized, setMode, viewOf, zoomBy, type Camera, type CameraContext } from '../render/camera';
 import type { WorldToScreen } from '../render/trackView';
 import type { Bounds, Vec2 } from '../sim/track';
 
@@ -47,6 +47,8 @@ export function createCameraController(initial: { bounds: Bounds; cssWidth: numb
   let context: CameraContext = { bounds: initial.bounds, cssWidth: initial.cssWidth, cssHeight: initial.cssHeight };
   let camera: Camera = fitCamera(context.bounds);
   let lastMs: number | null = null;
+  /** The latest world position the page asked to follow: a resize or rotation keeps THIS visible even before smoothing has settled. */
+  let lastTarget: Vec2 | null = null;
   const pointers = new Map<number, Vec2>();
   let pinch: { distance: number; mid: Vec2 } | null = null;
 
@@ -64,6 +66,7 @@ export function createCameraController(initial: { bounds: Bounds; cssWidth: numb
       if (context.cssWidth === cssWidth && context.cssHeight === cssHeight) return;
       context = { ...context, cssWidth, cssHeight };
       camera = resized(camera, context);
+      if (lastTarget !== null) camera = keepInView(camera, lastTarget, context);
     },
     setBounds(bounds) {
       context = { ...context, bounds };
@@ -78,7 +81,8 @@ export function createCameraController(initial: { bounds: Bounds; cssWidth: numb
       const now = initial.now();
       const elapsed = lastMs === null || !finite(now) ? 0 : Math.max(0, (now - lastMs) / 1000);
       lastMs = finite(now) ? now : lastMs;
-      if (camera.mode === 'follow' && target !== null) camera = follow(camera, target, elapsed, context);
+      if (target !== null) lastTarget = target;
+      if (camera.mode === 'follow' && target !== null) camera = keepInView(follow(camera, target, elapsed, context), target, context);
     },
     zoomIn() {
       camera = zoomBy(camera, ZOOM_STEP, centreAnchor(), context);
@@ -91,6 +95,7 @@ export function createCameraController(initial: { bounds: Bounds; cssWidth: numb
     },
     toggleFollow() {
       camera = camera.mode === 'follow' ? setMode(camera, 'zoom', context) : setMode(camera, 'follow', context);
+      if (camera.mode === 'follow' && lastTarget !== null) camera = keepInView(camera, lastTarget, context);
     },
     wheel(deltaY, x, y) {
       if (!finite(deltaY) || !finite(x) || !finite(y)) return false;

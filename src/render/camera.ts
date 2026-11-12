@@ -156,6 +156,28 @@ export function resized(camera: Camera, context: CameraContext): Camera {
   return camera.mode === 'fit' ? fitCamera(context.bounds) : normalised(camera, context);
 }
 
+/** The share of the shorter canvas side kept clear around a followed target when the view has to move to keep it visible. */
+export const FOLLOW_MARGIN_FRACTION = 0.1;
+
+/**
+ * Keeps a followed target inside the view (with a margin) while smoothing has not settled, for example after a resize or rotation: the
+ * centre is moved by the least amount that brings the target back inside the inner rectangle, in world units, and is then clamped into the
+ * track's bounds. A camera that is not following, a target already inside, or a canvas that cannot hold a view is returned unchanged. When the
+ * inner rectangle is empty the centre goes to the target. Render only: it reads a position and writes a camera.
+ */
+export function keepInView(camera: Camera, target: Vec2, context: CameraContext): Camera {
+  if (camera.mode !== 'follow' || !point(target)) return camera;
+  const view = viewOf(camera, context);
+  if (!(view.scale > 0)) return camera;
+  const margin = Math.min(Math.max(0, FOLLOW_MARGIN_FRACTION * Math.min(context.cssWidth, context.cssHeight)), Math.min(context.cssWidth, context.cssHeight) / 2);
+  const x = target.x * view.scale + view.offsetX;
+  const y = target.y * view.scale + view.offsetY;
+  const dx = x < margin ? x - margin : x > context.cssWidth - margin ? x - (context.cssWidth - margin) : 0;
+  const dy = y < margin ? y - margin : y > context.cssHeight - margin ? y - (context.cssHeight - margin) : 0;
+  if (dx === 0 && dy === 0) return camera;
+  return normalised({ mode: 'follow', zoom: camera.zoom, centre: { x: camera.centre.x + dx / view.scale, y: camera.centre.y + dy / view.scale } }, context);
+}
+
 /** Whether a world point is inside the canvas under a camera (for tests and for keeping a followed car in view). */
 export function isVisible(camera: Camera, context: CameraContext, world: Vec2): boolean {
   const view = viewOf(camera, context);

@@ -11,6 +11,7 @@ import {
   fitCamera,
   follow,
   isVisible,
+  keepInView,
   maxZoom,
   panBy,
   resized,
@@ -241,5 +242,52 @@ describe('withFollowedSlot: the followed car is drawn within the existing cap', 
     expect(withFollowedSlot([0, 1, 2, 3, 4, 5, 6, 7, 8, 9], 42, 10)).toHaveLength(10);
     expect(withFollowedSlot([0], 42, 1)).toEqual([42]);
     expect(withFollowedSlot([], 3, 0)).toEqual([]);
+  });
+});
+
+describe('keepInView: a followed target stays visible while smoothing has not settled (resize, rotation, switching targets)', () => {
+  const SQUARE = { minX: -100, minY: -100, maxX: 100, maxY: 100 };
+  const wide = ctx(900, 500, SQUARE);
+  const tall = ctx(390, 700, SQUARE);
+  const lagging: Camera = { mode: 'follow', zoom: 4, centre: { x: 0, y: 0 } };
+  const target = { x: 35, y: 0 };
+
+  it('the reported case: visible at 900x500, invisible after a plain resize to 390x700, visible with keepInView, and still visible after an ordinary 1/60 s follow update', () => {
+    expect(isVisible(lagging, wide, target)).toBe(true);
+    const plain = resized(lagging, tall);
+    expect(isVisible(plain, tall, target)).toBe(false); // what resize alone did
+    const kept = keepInView(plain, target, tall);
+    expect(isVisible(kept, tall, target)).toBe(true);
+    expect(isVisible(follow(kept, target, 1 / 60, tall), tall, target)).toBe(true);
+  });
+  it('moves the centre only as far as needed: a target already inside the inner rectangle leaves the camera unchanged', () => {
+    const inside = { x: 5, y: 5 };
+    expect(keepInView(lagging, inside, wide)).toBe(lagging);
+    const far = keepInView(lagging, { x: 48, y: 0 }, wide);
+    expect(far.centre.x).toBeGreaterThan(0);
+    expect(far.centre.x).toBeLessThan(48);
+    expect(far.centre.y).toBe(0);
+  });
+  it('a moving or switching target stays visible through a sequence of resizes, rotations and target changes', () => {
+    let camera: Camera = { mode: 'follow', zoom: 6, centre: { x: -50, y: 40 } };
+    const sizes = [wide, tall, ctx(320, 240, SQUARE), ctx(1024, 768, SQUARE), ctx(240, 320, SQUARE)];
+    const targets = [{ x: 60, y: -50 }, { x: -70, y: 80 }, { x: 90, y: 90 }, { x: -90, y: -90 }, { x: 0, y: 0 }];
+    sizes.forEach((context, i) => {
+      camera = resized(camera, context);
+      const t = targets[i]!;
+      camera = keepInView(camera, t, context);
+      expect(isVisible(camera, context, t), `size ${i}`).toBe(true);
+      camera = follow(camera, targets[(i + 1) % targets.length]!, 1 / 60, context);
+      camera = keepInView(camera, targets[(i + 1) % targets.length]!, context);
+      expect(isVisible(camera, context, targets[(i + 1) % targets.length]!), `after switching target ${i}`).toBe(true);
+    });
+  });
+  it('is unchanged when not following, for an invalid target and for a canvas that cannot hold a view; a tiny canvas centres on the target', () => {
+    const zoom: Camera = { mode: 'zoom', zoom: 4, centre: { x: 0, y: 0 } };
+    expect(keepInView(zoom, target, tall)).toBe(zoom);
+    expect(keepInView(lagging, { x: Number.NaN, y: 0 }, tall)).toBe(lagging);
+    expect(keepInView(lagging, null as never, tall)).toBe(lagging);
+    expect(keepInView(lagging, target, ctx(0, 0, SQUARE))).toBe(lagging);
+    expect(() => keepInView(lagging, { x: 1e300, y: -1e300 }, tall)).not.toThrow();
   });
 });
