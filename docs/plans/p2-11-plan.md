@@ -1,6 +1,6 @@
 # P2-11 plan: a spatial index for boundary collision and ray queries
 
-> **Status: plan merged (#184); step 2, the profile, merged (#185, section 4a); step 3, the index and its equivalence suite, merged (#187, section 4b); step 4, the integration, is in review on `feat/p2-11-integrate` (section 4c). Step 5, the phone before and after, and the budget decision are the owner's.**
+> **Status: Complete (2026-11-13).** Plan #184, profile #185 (section 4a), index #187 (4b), integration #188 (4c), records #189 and #190; the owner's phone readings (before `957a148`, after `623425b`) and approval are recorded in `docs/MEASUREMENT_CHECKLIST.md` section 0b and `docs/ROADMAP.md`.
 > - **Scope:** the roadmap entry and issue #56: a deterministic uniform-grid index over track boundary segments so collision checks and ray casts only test nearby segments, **without changing any result**. Not in scope: any change to the sensors' contract, the network inputs, the model format, experiment records, track hashes or the manifest; reducing the number of rays or cars; a Web Worker; typed-array rewrites of the simulation; any claim about learning.
 > - **What this plan is not:** a prediction that the budget will be met. Section 6 says what is known, what is not, and what happens if the phone still misses after the index.
 
