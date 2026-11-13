@@ -24,6 +24,7 @@ Version 1 **is the shape of the three built-in files** (`src/data/tracks/*.json`
 ```
 
 - `format`, `schemaVersion` and `split` are **optional**. When present, `format` must be the string above, `schemaVersion` must be `1` (any other value is refused, so a later schema is not misread) and `split` must be `training`, `validation` or `held-out`. `loadTrack` drops these fields, so they never change a content hash.
+- A converted real-world track (`silverstone.json`, P4-06) also carries a `source` object (the source name, URL, commit, SHA-256, licence, attribution and a direction note). It is a documentation header: the validator accepts it, `loadTrack` drops it, and the content hash is over the loaded track, so it never changes a hash. See `src/data/tracks/NOTICE.md`.
 - Boundaries are closed polylines: the last point joins back to the first, which is not repeated. Gates run in driving order from the inner boundary (`a`) to the outer boundary (`b`); gate 0 is the start/finish line.
 - **The split of a built-in track is decided by the manifest** (`src/data/tracks/index.json`). A `split` label inside a built-in file must equal the manifest's, or the manifest fails to load, so a held-out track cannot relabel itself.
 

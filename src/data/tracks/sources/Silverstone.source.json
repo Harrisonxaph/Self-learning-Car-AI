@@ -1,0 +1,9 @@
+{
+  "name": "TUM racetrack-database, tracks/Silverstone.csv",
+  "url": "https://github.com/TUMFTM/racetrack-database/blob/e59595d1f3573b30d1ded6a08984935b957688e0/tracks/Silverstone.csv",
+  "rawUrl": "https://raw.githubusercontent.com/TUMFTM/racetrack-database/e59595d1f3573b30d1ded6a08984935b957688e0/tracks/Silverstone.csv",
+  "commit": "e59595d1f3573b30d1ded6a08984935b957688e0",
+  "sha256": "27c51454e81780a75c353d3e6c9f73dbbcd1e82139782e95bd722ade19736e39",
+  "licence": "LGPL-3.0 (the racetrack-database); the centre lines derive from OpenStreetMap data, ODbL 1.0",
+  "attribution": "TUM racetrack-database (Technical University of Munich, Institute of Automotive Technology); © OpenStreetMap contributors"
+}
