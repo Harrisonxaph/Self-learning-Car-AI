@@ -2,7 +2,7 @@
 //
 //   npm run bench -- [--circuit <id>]... [--generations <n>] [--warmup <n>] [--population <n>] [--seed <n>] [--out <file.json>]
 //
-// It runs the real trainer on each named training circuit (default: stadium-oval, for comparison, and silverstone) with a seeded population and prints how fast
+// (--population is from 3 to 1000: the trainer's tournament size is 3, so a smaller population is not a valid training configuration.) It runs the real trainer on each named training circuit (default: stadium-oval, for comparison, and silverstone) with a seeded population and prints how fast
 // the simulation ran, with the machine it ran on. This file only handles the outside world (arguments, the clock, the machine, git and the output file); the
 // measurement is src/training/benchmark.ts, loaded through Vite so the command line and the tests run the same TypeScript.
 //
@@ -46,7 +46,7 @@ function parseArgs(argv) {
     seen.add(arg);
     if (arg === '--generations') options.generations = wholeArg(arg, value, 1, 1000);
     if (arg === '--warmup') options.warmup = wholeArg(arg, value, 0, 100);
-    if (arg === '--population') options.population = wholeArg(arg, value, 2, 1000);
+    if (arg === '--population') options.population = wholeArg(arg, value, 3, 1000);
     if (arg === '--seed') options.seed = wholeArg(arg, value, 0, 2 ** 31 - 1);
     if (arg === '--out') {
       if (value === undefined || value.startsWith('--')) throw new UsageError('--out needs a file name.');
