@@ -1,7 +1,7 @@
 // P4-06 step 2b: Silverstone is registered as a TRAINING circuit in the split manifest, with its own epoch (3), its proposed episode limits and its
 // provenance. The claims: the registration is exact; `limits` are strictly validated and are part of no hash (so no record is invalidated); every earlier
 // epoch is untouched, an epoch-2 record cannot name Silverstone and an epoch-3 one can; every split boundary treats it as a training circuit and nothing else;
-// the pages do not offer it yet (step 3). The genuine epoch-2 fixtures replay in tests/training/preP406Compat.test.ts. Nothing here trains a model for any
+// the training page offers it and reads its limits (step 3). The genuine epoch-2 fixtures replay in tests/training/preP406Compat.test.ts. Nothing here trains a model for any
 // length of time, evaluates a model on it, or is a result or evidence of learning.
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -27,7 +27,7 @@ import {
   TrackSplitError,
   validationTrack,
 } from '../../src/training/trackSplits';
-import { circuitFromSearch, NOT_YET_OFFERED, offered } from '../../src/ui/trainingCircuit';
+import { circuitCredit, circuitFromSearch, offered, TRAINING_PAGE_ONLY, trainingConfigFor } from '../../src/ui/trainingCircuit';
 import { tracksIn } from '../../src/training/trackSplits';
 
 type Json = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -182,13 +182,69 @@ describe('every boundary treats Silverstone as a training circuit and nothing el
   });
 });
 
-describe('the pages do not offer it yet (step 3 selects it and reads its limits)', () => {
-  it('is registered but not offered: the page lists, and the address, ignore it', () => {
-    expect([...NOT_YET_OFFERED]).toEqual(['silverstone']);
-    const lists = offered(tracksIn('training')).map((t) => t.id);
-    expect(lists).toEqual(['stadium-oval', 'kidney-loop']);
-    expect(circuitFromSearch('?mode=train&circuit=silverstone', lists)).toBe('stadium-oval');
-    expect(circuitFromSearch('?mode=train&circuit=kidney-loop', lists)).toBe('kidney-loop');
+describe('selection and the limits (step 3)', () => {
+  const training = tracksIn('training');
+  it('the training page lists it after the synthetic circuits and the address can choose it; a validation or held-out ID is still ignored', () => {
+    const ids = training.map((t) => t.id);
+    expect(ids).toEqual(['stadium-oval', 'kidney-loop', 'silverstone']);
+    expect(circuitFromSearch('?mode=train&circuit=silverstone', ids)).toBe('silverstone');
+    expect(circuitFromSearch('?mode=train&circuit=s-sweepers', ids)).toBe('stadium-oval');
+    expect(circuitFromSearch('?mode=train&circuit=technical-narrow', ids)).toBe('stadium-oval');
+    expect(circuitFromSearch('?mode=train', ids)).toBe('stadium-oval');
+  });
+  it('the evaluate and race pages still do not offer it as a circuit to run on (their fixed 60 s rules cannot complete a 5.9 km lap), and say so in one list', () => {
+    expect([...TRAINING_PAGE_ONLY]).toEqual(['silverstone']);
+    expect(offered(training).map((t) => t.id)).toEqual(['stadium-oval', 'kidney-loop']);
     expect(offered(tracksIn('validation')).map((t) => t.id)).toEqual(['rounded-rectangle', 's-sweepers']);
+  });
+  it('a new run on it takes its manifest limits; every other circuit keeps the defaults exactly', () => {
+    expect(trainingConfigFor(entry.limits)).toMatchObject({ maxEpisodeSeconds: 420, stallSeconds: 10, maxLaps: 1 });
+    expect(trainingConfigFor(null)).toBe(DEFAULT_TRAINING_CONFIG);
+    for (const t of training.filter((x) => x.id !== 'silverstone')) expect(trainingConfigFor(t.limits), t.id).toBe(DEFAULT_TRAINING_CONFIG);
+    // Only the three episode limits differ from the defaults.
+    const { maxEpisodeSeconds, stallSeconds, maxLaps, ...rest } = trainingConfigFor(entry.limits);
+    const { maxEpisodeSeconds: m0, stallSeconds: s0, maxLaps: l0, ...rest0 } = DEFAULT_TRAINING_CONFIG;
+    expect([maxEpisodeSeconds, stallSeconds, maxLaps]).not.toEqual([m0, s0, l0]);
+    expect(rest).toEqual(rest0);
+  });
+  it('the credit is shown for Silverstone only and names the source, both licences and the direction', () => {
+    const text = circuitCredit('silverstone')!;
+    expect(text).toContain('TUM racetrack-database');
+    expect(text).toContain('LGPL-3.0');
+    expect(text).toContain('OpenStreetMap contributors');
+    expect(text).toContain('ODbL 1.0');
+    expect(text).toContain('opposite way round');
+    for (const t of BUILT_IN_TRACK_SPLITS.tracks) if (t.id !== 'silverstone') expect(circuitCredit(t.id), t.id).toBeNull();
+  });
+});
+
+describe('the seeded training smoke run on Silverstone with its own limits (a mechanics check: no claim about learning)', () => {
+  const run = (seed: number) => {
+    const trainer = createTrainer(
+      { ...trainingConfigFor(entry.limits), seed, populationSize: 6, eliteCount: 1 },
+      { track: trainingTrack('silverstone'), physics: DEFAULT_VEHICLE_PHYSICS, timestepSeconds: DEFAULT_SIM_CONFIG.timestepSeconds },
+    );
+    for (let g = 0; g < 3; g++) trainer.runGeneration();
+    return trainer.record();
+  };
+  it('is deterministic: the same seed gives identical generation records twice, and another seed gives different ones', () => {
+    const a = run(7);
+    const b = run(7);
+    expect(a.generations.map((g) => [g.fitness, g.outcomes, g.maxGatesPassed, g.totalEpisodeTicks, g.championIndex])).toEqual(
+      b.generations.map((g) => [g.fitness, g.outcomes, g.maxGatesPassed, g.totalEpisodeTicks, g.championIndex]),
+    );
+    expect(a.generations.map((g) => [...g.champion])).toEqual(b.generations.map((g) => [...g.champion]));
+    expect(run(8).generations.map((g) => g.fitness)).not.toEqual(a.generations.map((g) => g.fitness));
+  });
+  it('records the limits it ran with, runs three generations of six independent cars, and every car ends with an outcome', () => {
+    const record = run(7);
+    expect(record.config).toMatchObject({ maxEpisodeSeconds: 420, stallSeconds: 10, maxLaps: 1 });
+    expect(record.generations).toHaveLength(3);
+    for (const g of record.generations) {
+      expect(g.fitness).toHaveLength(6);
+      expect(Object.values(g.outcomes).reduce((a, b) => a + b, 0)).toBe(6);
+      // A random brain on a 5.9 km circuit ends by a crash or the 10 s stall rule long before 420 s: nothing times out here.
+      expect(g.outcomes.timeout).toBe(0);
+    }
   });
 });

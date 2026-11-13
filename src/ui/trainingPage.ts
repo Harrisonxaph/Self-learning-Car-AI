@@ -22,8 +22,8 @@ import { createPairReplay, type PairReplay } from '../training/pairReplay';
 import { compareModels, type CompareResult } from '../persistence/modelCompare';
 import { renderComparison } from './compareView';
 import { RACE_COLOURS } from '../render/raceView';
-import { circuitControlState } from './trainingCircuit';
-import { createTrainer, DEFAULT_TRAINING_CONFIG, type Generation, type TrainerState } from '../training/trainer';
+import { circuitControlState, circuitCredit } from './trainingCircuit';
+import { createTrainer, DEFAULT_TRAINING_CONFIG, type Generation, type TrainerState, type TrainingConfig } from '../training/trainer';
 import { MAX_CHECKPOINT_BYTES, type CheckpointDocument } from '../persistence/checkpointFormat';
 import { checkpointFile, CHECKPOINT_MESSAGES, createCheckpointStore, describeCheckpointRefusal, parseCheckpointText } from '../persistence/checkpointStore';
 import { checkpointFromState, checkpointFromTrainer, checkpointValidateOptions, resumeFromCheckpoint } from './checkpointAdapter';
@@ -92,8 +92,12 @@ export interface TrainingPage {
   readonly circuit: {
     readonly select: { value: string; disabled: boolean; title?: string; addEventListener(type: 'change', listener: () => void): void };
     readonly hint: { textContent: string | null };
+    /** Where the third-party data credit is written while such a circuit is selected (P4-06); optional so the Node page tests need not supply it. */
+    readonly credit?: { textContent: string | null; hidden: boolean | string };
     readonly navigate: (circuitId: string) => void;
   };
+  /** The configuration a NEW run starts with: the defaults plus the circuit's own episode limits (P4-06). Absent, the defaults. */
+  readonly trainingConfig?: TrainingConfig;
   readonly physics: VehiclePhysics;
   readonly config: SimConfig;
   /**
@@ -230,7 +234,13 @@ export function startTrainingPage(page: TrainingPage): void {
   page.dashboard.panel.hidden = false;
   const environment = { track, physics, timestepSeconds: config.timestepSeconds };
   // A resume (P3-07) replaces the trainer and its session, so both are rebindable; nothing caches a value derived from them.
-  let trainer = createTrainer(DEFAULT_TRAINING_CONFIG, environment);
+  let trainer = createTrainer(page.trainingConfig ?? DEFAULT_TRAINING_CONFIG, environment);
+  /** Publishes the episode limits the run in progress really uses (seconds in total / stall seconds / laps), so a test or a reader can check them. */
+  const publishLimits = (): void => {
+    const c = trainer.record().config;
+    canvas.dataset.episodeLimits = `${c.maxEpisodeSeconds}/${c.stallSeconds}/${c.maxLaps}`;
+  };
+  publishLimits();
   let session = createTrainingSession(trainer, page.dashboard.outputs);
   /** Set by the checkpoint code below; called when a generation ends. */
   let onBoundary: () => void = () => {};
@@ -254,6 +264,11 @@ export function startTrainingPage(page: TrainingPage): void {
   // The training circuit (P4-04): one per run, changed only before the first generation completes or while paused.
   const circuit = page.circuit;
   circuit.select.value = track.id;
+  const credit = circuitCredit(track.id);
+  if (circuit.credit !== undefined) {
+    circuit.credit.textContent = credit ?? '';
+    circuit.credit.hidden = credit === null;
+  }
   function syncCircuit(): void {
     const state = circuitControlState({ paused: speed.paused, completedGenerations: trainer.record().generations.length });
     if (circuit.select.disabled !== state.disabled) circuit.select.disabled = state.disabled;
@@ -1106,6 +1121,7 @@ export function startTrainingPage(page: TrainingPage): void {
       }
       stopReplay();
       trainer = next;
+      publishLimits();
       session = createTrainingSession(trainer, page.dashboard.outputs, resumed.resume.history);
       ticks = 0;
       replayCount = -1;
