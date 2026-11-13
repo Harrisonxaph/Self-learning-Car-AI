@@ -1,6 +1,6 @@
 # P2-11 plan: a spatial index for boundary collision and ray queries
 
-> **Status: plan only (2026-11-13). Nothing here is implemented.** The owner approved the **architectural reason** for P2-11 on 2026-11-13 (relayed owner instruction, recorded on [#56](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/56), #57 and #58, verbatim: "1. Approve the reasoning now / 2.approve small follow up / 3.waive it"; the first item). That triggers P2-11 under condition 2 of its roadmap entry. It is **not** approval to implement the index: this plan, and then each step below, still needs the owner's explicit authorisation, as for every feature.
+> **Status: plan merged (#184, 2026-11-13); step 2 (the profile) is in review on `feat/p2-11-profile` and its result is recorded in section 4a. The index itself is not implemented.** The owner approved the **architectural reason** for P2-11 on 2026-11-13 (relayed owner instruction, recorded on [#56](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/56), #57 and #58, verbatim: "1. Approve the reasoning now / 2.approve small follow up / 3.waive it"; the first item). That triggers P2-11 under condition 2 of its roadmap entry. It is **not** approval to implement the index: this plan, and then each step below, still needs the owner's explicit authorisation, as for every feature.
 > - **Scope:** the roadmap entry and issue #56: a deterministic uniform-grid index over track boundary segments so collision checks and ray casts only test nearby segments, **without changing any result**. Not in scope: any change to the sensors' contract, the network inputs, the model format, experiment records, track hashes or the manifest; reducing the number of rays or cars; a Web Worker; typed-array rewrites of the simulation; any claim about learning.
 > - **What this plan is not:** a prediction that the budget will be met. Section 6 says what is known, what is not, and what happens if the phone still misses after the index.
 
@@ -37,6 +37,27 @@ The index is an optimisation. Its acceptance is **bit-identical results**, teste
 3. **The index and its equivalence suite, not integrated.** `trackIndex.ts` and tests only: the grid rule chosen and recorded from candidate counts; the three query functions written to return candidate ids; the equivalence suites below pass against brute force. Nothing calls it yet.
 4. **Integration.** The three call sites use the index through the cache. The entire existing suite, the golden and determinism tests and the seeded bit-identical checks pass unchanged; `npm run bench -- --car-ticks 60000` reports **exactly the same car-tick counts** as before (the work is identical) with the new time. Desktop before and after figures go into the PR.
 5. **The phone: before and after, and the decision.** The owner runs the same readings before (already in the checklist) and after on the reference phone: the update p95 at 1x and the headless rate from `?mode=bench`, under the same workload, and the figures go to #56 and #57. P2-11 is Complete only when the budget is met (roadmap acceptance); see section 6 for what happens if it is not.
+
+### 4a. Step 2 result: the profile (2026-11-13; development container, not the phone)
+
+Authorised by the owner's "Let's action p2-11, then following on from that once it's close we will finish p4 in full" (relayed owner instruction, Claude Code, 2026-11-13, recorded verbatim; read as authorising **steps 2 to 4** of this plan in order, each as its own PR, with step 5 (the phone readings) and every owner decision still the owner's; I will stop if this was not meant). Tooling only: `npm run profile` (`scripts/profile.mjs`, the pure aggregator `src/training/profileSummary.ts`, `tests/training/profileSummary.test.ts`) runs the same fixed-work job as `npm run bench -- --car-ticks 60000` (5,000 untimed warm-up, population 50, seed 1) under the V8 sampling profiler (100 microsecond interval, started after the warm-up) and splits self time by function into the plan's groups. **No simulation code changed.** Machine: Intel Xeon @ 2.10 GHz, 4 logical cores, Linux x64, Node 22.22.0, commit 34a9c7f.
+
+| group (self time) | Silverstone, 2,356 segments | Silverstone, inlining off | stadium oval, 52 segments |
+| --- | ---: | ---: | ---: |
+| rays (`castRay`, `castRays`, `raySegment`) | 79.9% | 82.8% | 49.1% |
+| sweep (`shapeTouchesBoundary`, `sweepHitsTrack`, `segmentNearConvex`, hull and helpers) | 9.2% | 5.8% | 9.6% |
+| `pointOnRoad` and `inPolygon` | 7.5% | 4.6% | 4.5% |
+| network and inputs | 2.2% | 2.1% | 25.4% |
+| physics, gates, training harness, other | 1.2% | 4.7% | 11.4% |
+
+(Sampled time on Silverstone 23.9 s, 60,014 car-ticks, against about 22 s unprofiled; the shares are what matter. "Inlining off" is `--no-inlining`, a V8 flag that stops a small function's time being credited to its caller; it shows how far that moves the split.)
+
+What this says, and does not:
+
+- **The hypothesis holds in order of magnitude.** Section 1 predicted about 78% rays, 11% sweep and 11% `pointOnRoad` from the operation counts; measured, rays are 80 to 83%, the sweep 6 to 9% and `pointOnRoad` 5 to 7.5%. On the oval the segments are so few that the network and inputs take a quarter of the time, which is why it runs about 21 times faster per car-tick.
+- **The rays are the work.** An index for the rays alone removes most of the cost; but if it makes them nearly free, the sweep and `pointOnRoad` (about 14 to 17% together) become most of what is left, so reaching a 10-fold speed-up needs all three indexed. That supports decision 1 below (include the sweep and `pointOnRoad`); it does not show they are enough. The rays' own bound is about 5 times if nothing else changes (1 / (1 - 0.8)), which is below the 10 times the desktop figure needs, so a ray index that is only as good as that bound would still miss the headless budget on this container.
+- **Not changed by this profile:** the design in section 3. No part of it is dropped; the ray traversal is built first in step 3 because it dominates.
+- **Limits:** one container; a sampling profiler adds overhead and attributes inlined code to the caller (hence the second column); self time by function, not by line; the phone's split may differ. No claim about learning.
 
 ## 5. Tests (written with the plan, so the acceptance cannot drift)
 
