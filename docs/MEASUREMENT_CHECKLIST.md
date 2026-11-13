@@ -30,6 +30,10 @@ Relayed owner instruction (Claude Code, 2026-11-13), the owner's reply to the th
 - Take a screenshot of each reading (the readout is at the bottom of the screen and stays put).
 - **A reading is valid only when the readout shows `Frames 600/600`** (and `frames 600/600` on the update line). Changing the speed, pausing, changing the cars-drawn choice or starting a replay **restarts the window**, on purpose, so each workload collects its own 600 frames. **Zoom and follow do not restart it: reload the page between zoom levels** so each reading is a fresh window.
 
+## 1b. Before and after the spatial index (P2-11 step 5)
+
+The spatial index (P2-11) is used by the simulation from the merge of its integration PR. The readings in this checklist are therefore **after** readings from that merge onward. For the **before** readings use the deployment of main at `957a148` (the index merged but not used: brute force; it already has the update-time readout and `?mode=bench`), and take the same readings under the same workload, same phone state and same Low Power Mode setting on each. Desktop figures: section 9. A phone reading from the old build is the only honest "before"; nothing here predicts it.
+
 ## 2. Session A: Silverstone, Normal speed, 50 cars (the P2-11 baseline, and partial P4-07 evidence)
 
 Address: `/?mode=train&circuit=silverstone&debug=drawtime,fps` (both readouts together).
@@ -120,6 +124,8 @@ plus the device block from section 1, your decisions from section 0 and the cove
 - Nothing here says anything about learning. The cars are a seeded training run; no model is saved or judged.
 
 ## 9. Desktop reference (comparison only, never the phone's result)
+
+**After the spatial index (P2-11 step 4), same container, `npm run bench -- --car-ticks 60000`, three runs:** Silverstone 2,086; 2,088; 1,933 ticks/s at the full population (the tables below are the brute-force figures before it: about 57 to 61), the oval 2,364; 1,943; 2,285; the car-tick counts are unchanged (60,014 and 60,046). Desktop figures only; see `docs/plans/p2-11-plan.md` section 4c.
 
 Measured with `npm run bench` (`scripts/bench.mjs`, `src/training/benchmark.ts`), the real trainer, population 50, seed 1, brute-force collision and rays, 10 timed generations after 2 warm-up generations. Machine: an Intel Xeon at 2.10 GHz, 4 logical cores, a shared development container, Node v22.22.0, `main` at `60f0574` with these changes uncommitted. Timings come from one machine in one container and vary run to run; the simulated work (the car-tick count) is deterministic.
 

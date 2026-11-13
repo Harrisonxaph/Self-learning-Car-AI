@@ -3,8 +3,8 @@
 //
 //   npm run index:measure -- [--factors 1,2,4] [--queries 1500] [--out <file.md>]
 //
-// It times the QUERY FUNCTIONS only (seven-ray reading, one tick's sweep) against brute force, for cars placed across the checkpoint gates (on the road). It is
-// not the simulation: the index is not integrated yet (step 4), so the end-to-end figure is `npm run bench -- --car-ticks 60000` after step 4. The figures
+// It times the QUERY FUNCTIONS only (seven-ray reading, one tick's sweep), the brute-force reference against the indexed version, for cars placed across the
+// checkpoint gates (on the road). It is not the simulation: the end-to-end figure is `npm run bench -- --car-ticks 60000`. The figures
 // describe THIS machine under THIS Node; they are never the owner's reference phone and say nothing about learning.
 import { writeFileSync } from 'node:fs';
 import { cpus } from 'node:os';
@@ -28,7 +28,6 @@ for (let i = 0; i < args.length; i += 2) {
 }
 
 const { module: ti } = await runnerImport(join(ROOT, 'src/sim/trackIndex.ts'));
-const { module: ri } = await runnerImport(join(ROOT, 'src/sensors/rayIndex.ts'));
 const { module: rays } = await runnerImport(join(ROOT, 'src/sensors/rays.ts'));
 const { module: col } = await runnerImport(join(ROOT, 'src/sim/collision.ts'));
 const { module: cfg } = await runnerImport(join(ROOT, 'src/sim/config.ts'));
@@ -86,10 +85,10 @@ for (const { id, track } of tracks) {
       return ((clock() - t0) / (3 * poses.length)) * 1000;
     };
     const stepOf = (p) => ({ position: { x: p.position.x + Math.cos(p.heading) * 0.3, y: p.position.y + Math.sin(p.heading) * 0.3 }, heading: p.heading + 0.01 });
-    const readBrute = time((p) => rays.castRays(p, track, PHYSICS, rays.DEFAULT_SENSOR_CONFIG));
-    const readFast = time((p) => ri.castRaysIndexed(p, index, PHYSICS, rays.DEFAULT_SENSOR_CONFIG));
-    const sweepBrute = time((p) => col.sweepHitsTrack(p, stepOf(p), track, PHYSICS));
-    const sweepFast = time((p) => ti.sweepHitsTrackIndexed(p, stepOf(p), index, PHYSICS));
+    const readBrute = time((p) => rays.castRaysBruteForce(p, track, PHYSICS, rays.DEFAULT_SENSOR_CONFIG));
+    const readFast = time((p) => rays.castRaysIndexed(p, index, PHYSICS, rays.DEFAULT_SENSOR_CONFIG));
+    const sweepBrute = time((p) => col.sweepHitsTrackBruteForce(p, stepOf(p), track, PHYSICS));
+    const sweepFast = time((p) => col.sweepHitsTrackIndexed(p, stepOf(p), index, PHYSICS));
     lines.push(`| ${id} | ${factor} | ${stats.cellEdge.toFixed(1)} | ${stats.cells} | ${stats.registrations} | ${buildMs.toFixed(1)} | ${(rayTotal / rayCount).toFixed(1)} | ${(boxTotal / poses.length).toFixed(1)} | ${(pointTotal / poses.length).toFixed(1)} | ${readBrute.toFixed(1)} / ${readFast.toFixed(1)} | ${sweepBrute.toFixed(1)} / ${sweepFast.toFixed(1)} |`);
   }
 }
