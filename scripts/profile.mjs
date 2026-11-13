@@ -91,7 +91,7 @@ async function profileOne(session, entry, options, bench, circuit, sim, summaris
   const environment = { track: entry.track, physics: sim.DEFAULT_VEHICLE_PHYSICS, timestepSeconds: sim.DEFAULT_SIM_CONFIG.timestepSeconds };
   const clock = () => Number(process.hrtime.bigint()) / 1e6;
   const job = bench.createCarTickBenchmarkJob({ environment, config, warmupCarTicks: options.warmupCarTicks, measureCarTicks: options.carTicks, clock });
-  // Warm-up runs unprofiled in short slices, so the profile starts close to the start of the measured phase.
+  // Warm-up runs unprofiled; a slice ends exactly where the warm-up does (the job returns at that boundary), so no measured work runs before the profiler starts.
   while (job.progress().phase === 'warm-up') job.advance(1);
   await session.post('Profiler.start');
   while (!job.advance(12)) {
