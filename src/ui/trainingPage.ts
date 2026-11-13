@@ -326,7 +326,13 @@ export function startTrainingPage(page: TrainingPage): void {
         context: () => {
           const size = viewport.current();
           const view = camera.camera();
-          return `zoom ${view.zoom.toFixed(2)}x ${camera.following() ? 'following' : 'free'} · ${active ? 'replay' : speed.paused ? 'paused' : speed.mode} · ${effectiveDrawCap(speed.mode, drawCap, population)} cars drawn · population ${population} · ${track.id} · canvas ${Math.round(size.cssWidth)}x${Math.round(size.cssHeight)} css px at ${size.pixelRatio}x · build ${page.saved.codeVersion}`;
+          // The workload is what draw() draws now: a comparison replay draws two cars, a champion replay one car with its sensor rays, training the cars-drawn cap.
+          const workload = activePair
+            ? 'comparison replay · 2 cars drawn'
+            : active
+              ? 'champion replay · 1 car drawn with its sensor rays'
+              : `${speed.paused ? 'paused' : speed.mode} · ${effectiveDrawCap(speed.mode, drawCap, population)} cars drawn`;
+          return `zoom ${view.zoom.toFixed(2)}x ${camera.following() ? 'following' : 'free'} · ${workload} · population ${population} · ${track.id} · canvas ${Math.round(size.cssWidth)}x${Math.round(size.cssHeight)} css px at ${size.pixelRatio}x · build ${page.saved.codeVersion}`;
         },
       })
     : undefined;
