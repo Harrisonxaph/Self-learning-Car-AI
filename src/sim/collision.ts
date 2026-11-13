@@ -177,7 +177,7 @@ function inConvex(polygon: readonly Vec2[], p: Vec2): boolean {
 }
 
 /** Even-odd test; only called for points known not to lie on the polygon's edges. */
-function inPolygon(polygon: readonly Vec2[], p: Vec2): boolean {
+export function inPolygon(polygon: readonly Vec2[], p: Vec2): boolean {
   let inside = false;
   for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i, i += 1) {
     const a = polygon[i]!;
@@ -197,7 +197,7 @@ function pointSegmentDistance(p: Vec2, a: Vec2, b: Vec2): number {
 }
 
 /** Is the closed segment a–b within `margin` of the convex polygon (touching or inside counts as 0)? */
-function segmentNearConvex(a: Vec2, b: Vec2, polygon: readonly Vec2[], margin: number): boolean {
+export function segmentNearConvex(a: Vec2, b: Vec2, polygon: readonly Vec2[], margin: number): boolean {
   if (inConvex(polygon, a)) return true;
   for (let k = 0; k < polygon.length; k += 1) {
     const c = polygon[k]!;
@@ -214,7 +214,7 @@ function segmentNearConvex(a: Vec2, b: Vec2, polygon: readonly Vec2[], margin: n
   return false;
 }
 
-function pointOnRoad(p: Vec2, track: Track): boolean {
+export function pointOnRoad(p: Vec2, track: Track): boolean {
   return inPolygon(track.outer, p) && !inPolygon(track.inner, p);
 }
 
@@ -223,7 +223,7 @@ function pointOnRoad(p: Vec2, track: Track): boolean {
  * its edges, lie inside it, or (for a positive margin) pass within that distance? With every segment tested,
  * a whole boundary loop inside the hull is caught by its own points.
  */
-function shapeTouchesBoundary(points: readonly Vec2[], track: Track, margin = 0): boolean {
+export function shapeTouchesBoundary(points: readonly Vec2[], track: Track, margin = 0): boolean {
   const convex = convexHull(points);
   // A quick bounding-box test skips segments that are clearly too far away (most of them), before the
   // detailed test. Not a spatial index: every segment is still looked at.

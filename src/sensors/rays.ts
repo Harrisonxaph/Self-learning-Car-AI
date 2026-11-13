@@ -188,7 +188,7 @@ export function castRays(pose: Pose, track: Track, physics: Pick<VehiclePhysics,
  * Distance along the ray (origin o, unit direction d) to the nearest point of the closed segment a–b, or
  * Infinity if the ray does not reach it. Exact comparisons, as in sim/collision.ts.
  */
-function raySegment(o: Vec2, dx: number, dy: number, a: Vec2, b: Vec2): number {
+export function raySegment(o: Vec2, dx: number, dy: number, a: Vec2, b: Vec2): number {
   // An origin on the segment touches it: 0 whichever way the ray points.
   const ax = a.x - o.x;
   const ay = a.y - o.y;

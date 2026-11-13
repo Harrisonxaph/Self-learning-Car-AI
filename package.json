@@ -28,7 +28,8 @@
     "e3": "node scripts/e3.mjs",
     "e4": "node scripts/e4.mjs",
     "bench": "node scripts/bench.mjs",
-    "profile": "node scripts/profile.mjs"
+    "profile": "node scripts/profile.mjs",
+    "index:measure": "node scripts/index-measure.mjs"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
