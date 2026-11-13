@@ -33,8 +33,11 @@ export interface DrawTimeProbeDeps {
 export interface DrawTimeProbe {
   /** Runs `draw` and times it. */
   measure(draw: () => void): void;
-  /** Ends a rendered frame at `timeMs` whose whole render callback took `renderMs`; refreshes the readout about four times a second. */
-  endFrame(timeMs: number, renderMs: number): void;
+  /**
+   * Ends a rendered frame at `timeMs` whose whole render callback took `renderMs` and whose simulation tick(s) took `updateMs` (optional, P4-06 step 4);
+   * refreshes the readout about four times a second.
+   */
+  endFrame(timeMs: number, renderMs: number, updateMs?: number): void;
   reset(): void;
   stop(): void;
 }
@@ -78,6 +81,8 @@ export function createDrawTimeProbe(deps: DrawTimeProbeDeps): DrawTimeProbe {
       else delete dataset.drawP50Ms;
       if (snapshot.drawP95 !== null) dataset.drawP95Ms = snapshot.drawP95.toFixed(3);
       else delete dataset.drawP95Ms;
+      if (snapshot.updateP95 !== null) dataset.updateP95Ms = snapshot.updateP95.toFixed(3);
+      else delete dataset.updateP95Ms;
     }
   };
   return {
@@ -86,8 +91,8 @@ export function createDrawTimeProbe(deps: DrawTimeProbeDeps): DrawTimeProbe {
       draw();
       lastDrawMs = Math.max(0, deps.now() - started);
     },
-    endFrame(timeMs, renderMs) {
-      meter.record(timeMs, lastDrawMs, renderMs);
+    endFrame(timeMs, renderMs, updateMs) {
+      meter.record(timeMs, lastDrawMs, renderMs, updateMs);
       lastDrawMs = 0;
       if (timeMs - lastReadoutMs < 250 && timeMs >= lastReadoutMs) return;
       lastReadoutMs = timeMs;
