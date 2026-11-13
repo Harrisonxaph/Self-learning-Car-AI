@@ -80,3 +80,42 @@ describe('the readout names what is being drawn', () => {
     expect(p.canvas.dataset.pairReplay).toBe('running');
   });
 });
+
+describe('a change of workload starts the measurement window again', () => {
+  const framesIn = (text: string): number => Number(/Frames (\d+)\/600/.exec(text)?.[1] ?? Number.NaN);
+
+  it('changing the speed does not carry the old samples or verdict over', () => {
+    const p = setup();
+    const before = p.until((t) => framesIn(t) >= 40);
+    expect(before).toMatch(/normal · \d+ cars drawn/);
+    p.controls.speeds.fast.click();
+    const after = p.until((t) => /fast · \d+ cars drawn/.test(t));
+    expect(framesIn(after)).toBeLessThanOrEqual(3);
+    expect(after).toContain('needs more frames');
+  });
+
+  it('starting a champion replay starts a new window (the training samples are not attributed to the replay), and so does leaving it', () => {
+    const p = setup();
+    p.controls.speeds.max.click();
+    for (let i = 0; i < 100_000 && Number(p.canvas.dataset.completedGenerations ?? 0) < 1; i += 1) p.run();
+    p.controls.speeds.normal.click();
+    p.until((t) => framesIn(t) >= 40);
+    p.replay.generation.value = '1';
+    p.replay.start.click();
+    const during = p.until((t) => t.includes('champion replay'));
+    expect(framesIn(during)).toBeLessThanOrEqual(3);
+    p.until((t) => t.includes('champion replay') && framesIn(t) >= 30);
+    p.replay.stop.click();
+    const after = p.until((t) => !t.includes('champion replay'));
+    expect(framesIn(after)).toBeLessThanOrEqual(3);
+  });
+
+  it('starting a comparison replay starts a new window', () => {
+    const p = setup();
+    p.compare!.run.click();
+    p.until((t) => framesIn(t) >= 40);
+    p.compare!.replay.click();
+    const during = p.until((t) => t.includes('comparison replay'));
+    expect(framesIn(during)).toBeLessThanOrEqual(3);
+  });
+});

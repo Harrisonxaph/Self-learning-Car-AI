@@ -317,6 +317,13 @@ export function startTrainingPage(page: TrainingPage): void {
     (page.frames ?? browserFrameEnvironment()).onVisibilityChange(resetMeters);
   }
   // Optional camera draw-time readout (P4-07, `?debug=drawtime`): the p50, p95 and largest draw time of the camera draw over the last 600 frames.
+  // The workload is what draw() draws now: a comparison replay draws two cars, a champion replay one car with its sensor rays, training the cars-drawn cap.
+  const drawWorkload = (): string =>
+    activePair
+      ? 'comparison replay · 2 cars drawn'
+      : active
+        ? 'champion replay · 1 car drawn with its sensor rays'
+        : `${speed.paused ? 'paused' : speed.mode} · ${effectiveDrawCap(speed.mode, drawCap, population)} cars drawn`;
   const drawTime = page.drawTime
     ? createDrawTimeProbe({
         element: page.drawTime,
@@ -326,16 +333,22 @@ export function startTrainingPage(page: TrainingPage): void {
         context: () => {
           const size = viewport.current();
           const view = camera.camera();
-          // The workload is what draw() draws now: a comparison replay draws two cars, a champion replay one car with its sensor rays, training the cars-drawn cap.
-          const workload = activePair
-            ? 'comparison replay · 2 cars drawn'
-            : active
-              ? 'champion replay · 1 car drawn with its sensor rays'
-              : `${speed.paused ? 'paused' : speed.mode} · ${effectiveDrawCap(speed.mode, drawCap, population)} cars drawn`;
-          return `zoom ${view.zoom.toFixed(2)}x ${camera.following() ? 'following' : 'free'} · ${workload} · population ${population} · ${track.id} · canvas ${Math.round(size.cssWidth)}x${Math.round(size.cssHeight)} css px at ${size.pixelRatio}x · build ${page.saved.codeVersion}`;
+          return `zoom ${view.zoom.toFixed(2)}x ${camera.following() ? 'following' : 'free'} · ${drawWorkload()} · population ${population} · ${track.id} · canvas ${Math.round(size.cssWidth)}x${Math.round(size.cssHeight)} css px at ${size.pixelRatio}x · build ${page.saved.codeVersion}`;
         },
       })
     : undefined;
+  // A reading is only about one workload: when it changes (a replay starts or ends, the speed, pause or cars-drawn cap changes) the window starts again, so each
+  // workload collects its own 600 frames and never inherits another's timings or full-window verdict. Camera zoom is NOT a reset (the plan's measurement includes a
+  // 10 s zoom gesture); reload the page between zoom levels for a fresh window.
+  let measuredWorkload = '';
+  const restartDrawTimeOnChange = () => {
+    if (!drawTime) return;
+    const now = drawWorkload();
+    if (now !== measuredWorkload) {
+      measuredWorkload = now;
+      drawTime.reset();
+    }
+  };
   if (drawTime) (page.frames ?? browserFrameEnvironment()).onVisibilityChange(() => drawTime.reset());
   const updateFps = (timeMs: number) => {
     if (!fpsReadout) return;
@@ -1307,6 +1320,7 @@ export function startTrainingPage(page: TrainingPage): void {
     render: () => {
       const drawStarted = fpsReadout || drawTime ? measureClock() : 0;
       camera.frame(followed().position);
+      restartDrawTimeOnChange();
       if (drawTime) drawTime.measure(() => draw(viewport.current()));
       else draw(viewport.current());
       cameraUi?.refresh();
