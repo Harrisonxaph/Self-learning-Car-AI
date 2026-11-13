@@ -251,6 +251,31 @@ describe('the simulation update figures (P4-06 step 4: the P2-11 budget in the s
     expect(createDrawTimeMeter().snapshot()).toMatchObject({ updateFrames: 0, updateP50: null, updateP95: null, updateMax: null });
   });
 
+  it('update samples leave the window with their own frames: old updates never outlive the frames they belong to (stale verdict)', () => {
+    // Capacity 3: three frames with 20 ms updates, then three frames with none. None of the current three frames has an update time.
+    const meter = createDrawTimeMeter({ capacity: 3 });
+    for (let i = 0; i < 3; i += 1) meter.record(i * 16, 1, 2, 20);
+    expect(updateBudgetVerdict(meter.snapshot())).toBe('over budget'); // the full window of 20 ms updates is over 8
+    for (let i = 3; i < 6; i += 1) meter.record(i * 16, 1, 2);
+    const s = meter.snapshot();
+    expect(s.frames).toBe(3);
+    expect(s).toMatchObject({ updateFrames: 0, updateP50: null, updateP95: null, updateMax: null });
+    expect(updateBudgetVerdict(s)).toBe('needs more frames');
+    expect(formatDrawTimeReadout(s, null, 'ctx')).not.toContain('Simulation update');
+    // Partly: updates 20, 20, 20 and then a frame without one: the window holds frames 2 to 4, so two samples remain.
+    const part = createDrawTimeMeter({ capacity: 3 });
+    for (let i = 0; i < 3; i += 1) part.record(i * 16, 1, 2, 20);
+    part.record(3 * 16, 1, 2);
+    expect(part.snapshot()).toMatchObject({ frames: 3, updateFrames: 2, updateP95: 20 });
+    expect(updateBudgetVerdict(part.snapshot())).toBe('needs more frames'); // two of three frames carry an update time, not a full window
+    // A bad update time on a later frame also expires the old one.
+    const bad = createDrawTimeMeter({ capacity: 2 });
+    bad.record(0, 1, 2, 5);
+    bad.record(16, 1, 2, Number.NaN);
+    bad.record(32, 1, 2, -1);
+    expect(bad.snapshot()).toMatchObject({ frames: 2, updateFrames: 0 });
+  });
+
   it('starts again with the frames: a reset, a long gap and a backwards clock clear the update series too', () => {
     const meter = createDrawTimeMeter({ capacity: 10 });
     for (let i = 0; i < 5; i += 1) meter.record(i * 16, 1, 2, 4);

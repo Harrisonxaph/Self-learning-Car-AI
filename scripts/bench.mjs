@@ -6,7 +6,7 @@
 // With --car-ticks the work is the fixed-work job the in-page benchmark (`?mode=bench`) runs on the owner's phone: that many car-ticks after an untimed warm-up
 // (default 5,000), timed in slices, so a desktop figure and a phone figure are for exactly the same simulated work. Without it, the work is whole generations.
 //
-// It runs the real trainer on each named training circuit (default: stadium-oval, for comparison, and silverstone) with a seeded population and prints how fast
+// (--population is from 3 to 1000: the trainer's tournament size is 3, so a smaller population is not a valid training configuration.) It runs the real trainer on each named training circuit (default: stadium-oval, for comparison, and silverstone) with a seeded population and prints how fast
 // the simulation ran, with the machine it ran on. This file only handles the outside world (arguments, the clock, the machine, git and the output file); the
 // measurement is src/training/benchmark.ts, loaded through Vite so the command line and the tests run the same TypeScript.
 //
@@ -51,7 +51,7 @@ function parseArgs(argv) {
     seen.add(arg);
     if (arg === '--generations') options.generations = wholeArg(arg, value, 1, 1000);
     if (arg === '--warmup') options.warmup = wholeArg(arg, value, 0, 100);
-    if (arg === '--population') options.population = wholeArg(arg, value, 2, 1000);
+    if (arg === '--population') options.population = wholeArg(arg, value, 3, 1000);
     if (arg === '--seed') options.seed = wholeArg(arg, value, 0, 2 ** 31 - 1);
     if (arg === '--car-ticks') options.carTicks = wholeArg(arg, value, 1, 10_000_000);
     if (arg === '--warmup-car-ticks') options.warmupCarTicks = wholeArg(arg, value, 0, 10_000_000);

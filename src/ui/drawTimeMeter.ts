@@ -36,7 +36,7 @@ export interface DrawTimeSnapshot {
   readonly gapsOver: number;
   /** Single draws in the window above LONG_TASK_MS. */
   readonly drawsOver: number;
-  /** Frames in the window that carry a simulation update time (P4-06 step 4); 0 when the page gave none. */
+  /** Frames in the CURRENT window that carry a simulation update time (P4-06 step 4); 0 when none do. */
   readonly updateFrames: number;
   /** The simulation update time per rendered frame: the milliseconds the frame's tick(s) took. At 1x that is one tick; at Max speed it is many. */
   readonly updateP50: number | null;
@@ -68,7 +68,8 @@ export function createDrawTimeMeter(options: DrawTimeOptions = {}): DrawTimeMete
   let times: number[] = [];
   let draws: number[] = [];
   let renders: number[] = [];
-  let updates: number[] = [];
+  // One entry per frame in the window: the frame's update time, or null when the page gave none, so a sample leaves the window with its own frame.
+  let updates: (number | null)[] = [];
   const reset = (): void => {
     times = [];
     draws = [];
@@ -83,16 +84,17 @@ export function createDrawTimeMeter(options: DrawTimeOptions = {}): DrawTimeMete
       times.push(timeMs);
       draws.push(drawMs);
       renders.push(renderMs);
-      if (updateMs !== undefined && Number.isFinite(updateMs) && updateMs >= 0) updates.push(updateMs);
+      updates.push(updateMs !== undefined && Number.isFinite(updateMs) && updateMs >= 0 ? updateMs : null);
       if (times.length > capacity) {
         times.shift();
         draws.shift();
         renders.shift();
+        updates.shift();
       }
-      if (updates.length > capacity) updates.shift();
     },
     reset,
     snapshot() {
+      const updateValues = updates.filter((u): u is number => u !== null);
       let gapsOver = 0;
       for (let i = 1; i < times.length; i += 1) if (times[i]! - times[i - 1]! > LONG_TASK_MS) gapsOver += 1;
       return {
@@ -104,10 +106,10 @@ export function createDrawTimeMeter(options: DrawTimeOptions = {}): DrawTimeMete
         renderP95: percentile(renders, 0.95),
         gapsOver,
         drawsOver: draws.filter((d) => d > LONG_TASK_MS).length,
-        updateFrames: updates.length,
-        updateP50: percentile(updates, 0.5),
-        updateP95: percentile(updates, 0.95),
-        updateMax: updates.length === 0 ? null : Math.max(...updates),
+        updateFrames: updateValues.length,
+        updateP50: percentile(updateValues, 0.5),
+        updateP95: percentile(updateValues, 0.95),
+        updateMax: updateValues.length === 0 ? null : Math.max(...updateValues),
       };
     },
   };
