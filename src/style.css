@@ -94,6 +94,9 @@ body {
   flex: 1;
   min-height: 0;
   padding: 0 0.5rem;
+  /* The canvas fills the stage; the camera toolbar (when shown) is a row under it, never over the track. */
+  display: flex;
+  flex-direction: column;
   /* Touches on the track never scroll or zoom the page. */
   touch-action: none;
 }
@@ -101,7 +104,8 @@ body {
 #sim-canvas {
   display: block;
   width: 100%;
-  height: 100%;
+  flex: 1 1 0;
+  min-height: 0;
 }
 
 .fps-readout {
@@ -816,27 +820,50 @@ html.evaluating .stage {
   color: #9fb0c0;
 }
 
-/* Camera controls (P4-07): a compact toolbar laid over the bottom-right corner of the race canvas, so it takes no height from the page (the small-screen
-   layouts keep the track's space). The buttons are the same 44 px ones; the status text is for screen readers only. */
+/* Camera controls (P4-07): a compact toolbar in its own row under the race canvas, so it never covers the track (it used to be laid over the
+   bottom-right corner, and on Silverstone the track ran under it). The buttons are the same 44 px ones; the status text is for screen readers only. */
 .camera-controls {
-  position: absolute;
-  right: 0.75rem;
-  bottom: 0.5rem;
+  flex: none;
   /* Never wider than the stage: at 320 px the five-button state (Follow A/B offered) wraps to a second row instead of running off the
      left edge. The touch targets keep their 44 px size. */
-  max-width: calc(100% - 1.5rem);
+  max-width: 100%;
   box-sizing: border-box;
   flex-wrap: wrap;
   justify-content: flex-end;
   display: flex;
   gap: 0.25rem;
-  padding: 0.2rem;
-  border-radius: 0.5rem;
-  background: rgb(0 0 0 / 0.5);
+  padding: 0.25rem 0 0;
 }
 
 .camera-controls[hidden] {
   display: none;
+}
+
+/* Where height is scarce the row would take too much of the track, so the toolbar stays laid over the bottom-right corner as it was before: a short
+   landscape screen (a phone on its side: a row would take about 40% of the canvas), and a short screen with the graph or the champion replay open
+   (the page promises the track a usable share of the screen then; tests/e2e/training.spec.ts). Portrait and taller screens use the row. */
+@media (orientation: landscape) and (max-height: 500px) {
+  .camera-controls {
+    position: absolute;
+    right: 0.75rem;
+    bottom: 0.5rem;
+    max-width: calc(100% - 1.5rem);
+    padding: 0.2rem;
+    border-radius: 0.5rem;
+    background: rgb(0 0 0 / 0.5);
+  }
+}
+
+@media (max-height: 640px) {
+  .app.graph-open .camera-controls {
+    position: absolute;
+    right: 0.75rem;
+    bottom: 0.5rem;
+    max-width: calc(100% - 1.5rem);
+    padding: 0.2rem;
+    border-radius: 0.5rem;
+    background: rgb(0 0 0 / 0.5);
+  }
 }
 
 .camera-controls .tc-button:disabled {
