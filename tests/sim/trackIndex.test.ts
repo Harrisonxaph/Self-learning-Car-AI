@@ -6,26 +6,39 @@
 // the synthetic tracks are generated here. Nothing here measures speed (that is `npm run bench`); it checks the answers, and that the index really prunes.
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { castRay, castRays, DEFAULT_SENSOR_CONFIG, raySegment, type SensorReadings } from '../../src/sensors/rays';
-import { castRayIndexed, castRaysIndexed } from '../../src/sensors/rayIndex';
+// The brute-force functions (every segment tested) are the reference; the public castRays, footprintHitsTrack and sweepHitsTrack are now the indexed ones.
+import { castRay, castRayIndexed, castRays, castRaysBruteForce as bruteCastRays, castRaysIndexed, DEFAULT_SENSOR_CONFIG, raySegment, type SensorReadings } from '../../src/sensors/rays';
 import { DEFAULT_VEHICLE_PHYSICS } from '../../src/sim/config';
-import { footprintHitsTrack, inPolygon, pointOnRoad, shapeTouchesBoundary, sweepHitsTrack, vehicleFootprint } from '../../src/sim/collision';
+import {
+  createCar,
+  footprintHitsTrack,
+  footprintHitsTrackBruteForce,
+  footprintHitsTrackIndexed,
+  inPolygon,
+  pointOnRoad,
+  shapeTouchesBoundary,
+  shapeTouchesBoundaryIndexed,
+  stepCar,
+  sweepHitsTrack,
+  sweepHitsTrackBruteForce,
+  sweepHitsTrackIndexed,
+  vehicleFootprint,
+} from '../../src/sim/collision';
 import { loadTrack, type Pose, type Track, type Vec2 } from '../../src/sim/track';
 import {
   boxCandidateIds,
   buildTrackIndex,
-  footprintHitsTrackIndexed,
   MAX_CELLS,
   MAX_REGISTRATIONS,
   pointCandidateIds,
   pointOnRoadIndexed,
   rayCandidateIds,
-  shapeTouchesBoundaryIndexed,
-  sweepHitsTrackIndexed,
   trackIndexFor,
+  trackIndexOrNull,
   trackIndexStats,
   type TrackIndex,
 } from '../../src/sim/trackIndex';
+import { stepVehicle, type Controls } from '../../src/sim/vehicle';
 import { tracksIn } from '../../src/training/trackSplits';
 import { createRng, type Rng } from '../../src/utils/rng';
 
@@ -320,7 +333,7 @@ describe('ray casts: the index gives brute force\'s distance and hit flag exactl
       for (let i = 0; i < 1200; i += 1) {
         const pose = carPose(track, rng);
         const config = i % 4 === 0 ? { ...DEFAULT_SENSOR_CONFIG, maxDistance: rng.range(1, 200) } : DEFAULT_SENSOR_CONFIG;
-        expect(sameReadings(castRays(pose, track, PHYSICS, config), castRaysIndexed(pose, index, PHYSICS, config)), `${id} #${i}`).toBe(true);
+        expect(sameReadings(bruteCastRays(pose, track, PHYSICS, config), castRaysIndexed(pose, index, PHYSICS, config)), `${id} #${i}`).toBe(true);
       }
     }
   });
@@ -543,14 +556,14 @@ describe('collision: footprints and sweeps give brute force\'s verdict exactly',
       for (let i = 0; i < n; i += 1) {
         const before = carPose(track, rng);
         const footprint = vehicleFootprint(before, PHYSICS);
-        const verdict = footprintHitsTrack(footprint, track);
+        const verdict = footprintHitsTrackBruteForce(footprint, track);
         expect(footprintHitsTrackIndexed(footprint, index), `${id} footprint #${i}`).toBe(verdict);
         const speed = i % 10 === 0 ? rng.range(0, 40) : rng.range(0, 0.6);
         const turn = i % 4 === 0 ? rng.range(-Math.PI, Math.PI) : i % 4 === 1 ? rng.range(-0.3, 0.3) : rng.range(-0.03, 0.03);
         const heading = before.heading + turn;
         const direction = i % 3 === 0 ? rng.range(-Math.PI, Math.PI) : before.heading;
         const after: Pose = { position: { x: before.position.x + Math.cos(direction) * speed, y: before.position.y + Math.sin(direction) * speed }, heading };
-        const sweep = sweepHitsTrack(before, after, track, PHYSICS);
+        const sweep = sweepHitsTrackBruteForce(before, after, track, PHYSICS);
         expect(sweepHitsTrackIndexed(before, after, index, PHYSICS), `${id} sweep #${i}`).toBe(sweep);
         if (sweep) hitCount += 1;
         else clearCount += 1;
@@ -581,8 +594,9 @@ describe('collision: footprints and sweeps give brute force\'s verdict exactly',
     const index = buildTrackIndex(track);
     const before: Pose = { position: { x: -10, y: 0.005 }, heading: 0 };
     const after: Pose = { position: { x: 10, y: 0.005 }, heading: 0 };
-    expect(sweepHitsTrack(before, after, track, PHYSICS)).toBe(true);
+    expect(sweepHitsTrackBruteForce(before, after, track, PHYSICS)).toBe(true);
     expect(sweepHitsTrackIndexed(before, after, index, PHYSICS)).toBe(true);
+    expect(sweepHitsTrack(before, after, track, PHYSICS)).toBe(true); // the public one is the indexed one
   });
 
   it('non-finite shapes and margins give brute force\'s answer', () => {
@@ -655,6 +669,77 @@ describe('determinism and independence from history', () => {
     // Force the counter to its limit through the public API: no way to set it, so run enough queries to know the path is exercised elsewhere (stamps are per query).
     for (let i = 0; i < 20_000; i += 1) castRayIndexed(index, probes[i % 50]!.origin, probes[i % 50]!.angle, 50);
     expect(probes.map((p) => castRayIndexed(index, p.origin, p.angle, 50))).toEqual(expected);
+  });
+});
+
+describe('integration (P2-11 step 4): the simulation\'s own functions are the indexed ones and still give brute force\'s answers', () => {
+  it('castRays, footprintHitsTrack and sweepHitsTrack equal their brute-force references bit for bit, on every circuit', { timeout: 180_000 }, () => {
+    for (const { id, track } of everything.filter((e) => segmentCount(e.track) < 5000)) {
+      const rng = createRng(2718);
+      for (let i = 0; i < 1500; i += 1) {
+        const pose = carPose(track, rng);
+        expect(sameReadings(castRays(pose, track, PHYSICS, DEFAULT_SENSOR_CONFIG), bruteCastRays(pose, track, PHYSICS, DEFAULT_SENSOR_CONFIG)), `${id} readings #${i}`).toBe(true);
+        const footprint = vehicleFootprint(pose, PHYSICS);
+        expect(footprintHitsTrack(footprint, track), `${id} footprint #${i}`).toBe(footprintHitsTrackBruteForce(footprint, track));
+        const after: Pose = { position: { x: pose.position.x + rng.range(-1, 1), y: pose.position.y + rng.range(-1, 1) }, heading: pose.heading + rng.range(-0.4, 0.4) };
+        expect(sweepHitsTrack(pose, after, track, PHYSICS), `${id} sweep #${i}`).toBe(sweepHitsTrackBruteForce(pose, after, track, PHYSICS));
+      }
+    }
+  });
+
+  it('whole trajectories are identical: stepCar (indexed) and a stepper built on the brute-force sweep give the same state, bit for bit, every tick', { timeout: 180_000 }, () => {
+    const stepBrute = (car: ReturnType<typeof createCar>, controls: Controls, track: Track) => {
+      if (car.crashed) return car;
+      const next = stepVehicle(car.vehicle, controls, PHYSICS, 1 / 60);
+      if (!sweepHitsTrackBruteForce(car.vehicle, next, track, PHYSICS)) return { vehicle: next, crashed: false };
+      return { vehicle: { ...car.vehicle, speed: 0 }, crashed: true };
+    };
+    for (const { id, track } of everything.filter((e) => e.strict && segmentCount(e.track) < 5000)) {
+      const rng = createRng(4242);
+      let crashes = 0;
+      let moving = 0;
+      for (let run = 0; run < 24; run += 1) {
+        const start = carPose(track, rng);
+        const fast = createCar(start, track, PHYSICS);
+        const brute = { vehicle: fast.vehicle, crashed: footprintHitsTrackBruteForce(vehicleFootprint(start, PHYSICS), track) };
+        expect(fast.crashed, `${id} createCar #${run}`).toBe(brute.crashed);
+        let a = fast;
+        let b = brute;
+        let steering = 0;
+        for (let tick = 0; tick < 500; tick += 1) {
+          steering = Math.max(-1, Math.min(1, steering + rng.range(-0.2, 0.2)));
+          const controls: Controls = { steering, throttle: rng.next() < 0.85 ? 1 : 0, brake: rng.next() < 0.05 ? 1 : 0 };
+          a = stepCar(a, controls, track, PHYSICS, 1 / 60);
+          b = stepBrute(b, controls, track);
+          const same4 = same(a.vehicle.position.x, b.vehicle.position.x) && same(a.vehicle.position.y, b.vehicle.position.y) && same(a.vehicle.heading, b.vehicle.heading) && same(a.vehicle.speed, b.vehicle.speed) && a.crashed === b.crashed;
+          if (!same4) throw new Error(`${id} run ${run} tick ${tick}: indexed ${JSON.stringify(a)} brute ${JSON.stringify(b)}`);
+          if (a.crashed) break;
+        }
+        if (a.crashed) crashes += 1;
+        else moving += 1;
+      }
+      expect(crashes + moving, id).toBe(24);
+      expect(crashes, `${id}: some runs end in a crash, so the crash path is compared`).toBeGreaterThan(0);
+    }
+  });
+
+  it('a track that cannot be indexed falls back to brute force instead of throwing', () => {
+    const bad: Track = { ...smalls[0]!.track, id: 'unindexable', outer: [{ x: -1e308, y: 0 }, { x: 1e308, y: 0 }, { x: 0, y: 1e308 }], inner: [] };
+    expect(trackIndexOrNull(bad)).toBeNull();
+    expect(trackIndexOrNull(bad)).toBeNull(); // remembered, not retried
+    expect(() => trackIndexFor(bad)).toThrow(RangeError);
+    const pose: Pose = { position: { x: 3, y: 3 }, heading: 0.5 };
+    expect(() => castRays(pose, bad, PHYSICS, DEFAULT_SENSOR_CONFIG)).not.toThrow();
+    expect(sameReadings(castRays(pose, bad, PHYSICS, DEFAULT_SENSOR_CONFIG), bruteCastRays(pose, bad, PHYSICS, DEFAULT_SENSOR_CONFIG))).toBe(true);
+    const footprint = vehicleFootprint(pose, PHYSICS);
+    expect(footprintHitsTrack(footprint, bad)).toBe(footprintHitsTrackBruteForce(footprint, bad));
+    expect(sweepHitsTrack(pose, { position: { x: 4, y: 3 }, heading: 0.5 }, bad, PHYSICS)).toBe(sweepHitsTrackBruteForce(pose, { position: { x: 4, y: 3 }, heading: 0.5 }, bad, PHYSICS));
+  });
+
+  it('the index is built once per track object and shared by every caller', () => {
+    const { track } = circuits[0]!;
+    expect(trackIndexOrNull(track)).toBe(trackIndexOrNull(track));
+    expect(trackIndexOrNull(track)).toBe(trackIndexFor(track));
   });
 });
 

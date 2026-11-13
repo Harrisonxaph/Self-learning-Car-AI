@@ -22,10 +22,11 @@
 //   about 1e-15 m.
 // - An origin off the road (for example a crashed car past a corner) still reports its nearest hit.
 //
-// Every boundary segment is tested for every ray (7 × 52 on the built-in track). A spatial index (P2-11)
-// waits until a measured track needs one.
+// Only the boundary segments near a ray are tested: a grid index over the track's segments (sim/trackIndex.ts, P2-11) picks which segments `raySegment` sees
+// and never changes a result (tests/sim/trackIndex.test.ts compares every reading with `castRaysBruteForce`, which tests every segment, bit for bit).
 import type { VehiclePhysics } from '../sim/config';
 import type { Pose, Track, Vec2 } from '../sim/track';
+import { candidateBuffer, collectRayCandidates, trackIndexOrNull, type TrackIndex } from '../sim/trackIndex';
 
 /** Where the rays start. Only the body centre is defined; it is part of the observation contract. */
 export type SensorOrigin = 'body-centre';
@@ -165,23 +166,76 @@ export function castRay(origin: Vec2, angle: number, maxDistance: number, bounda
 /**
  * Casts every configured ray for a car at `pose` (its rear-axle reference, as stored in the vehicle state).
  * Pure and deterministic. Throws RangeError for an invalid config, a non-finite pose or an invalid wheelbase.
+ * Uses the track's index (sim/trackIndex.ts), which only chooses which boundary segments `raySegment` sees, so each reading is brute force's, bit for bit;
+ * a track that cannot be indexed uses brute force.
  */
 export function castRays(pose: Pose, track: Track, physics: Pick<VehiclePhysics, 'wheelbase'>, config: SensorConfig): SensorReadings {
+  const index = trackIndexOrNull(track);
+  return index === null ? castRaysBruteForce(pose, track, physics, config) : castRaysIndexed(pose, index, physics, config);
+}
+
+/** `castRays` testing every boundary segment for every ray: the reference the indexed version must equal exactly (tests/sim/trackIndex.test.ts). */
+export function castRaysBruteForce(pose: Pose, track: Track, physics: Pick<VehiclePhysics, 'wheelbase'>, config: SensorConfig): SensorReadings {
   checkSensorConfig(config);
   const origin = sensorOrigin(pose, physics);
   const boundaries = [track.outer, track.inner];
   const rays = config.anglesDegrees.map((degrees): RayReading => {
     const angle = pose.heading + (degrees * Math.PI) / 180;
     const { distance, hit } = castRay(origin, angle, config.maxDistance, boundaries);
-    return {
-      angle,
-      distance,
-      normalised: distance / config.maxDistance,
-      hit,
-      end: { x: origin.x + Math.cos(angle) * distance, y: origin.y + Math.sin(angle) * distance },
-    };
+    return readingOf(origin, angle, distance, hit, config.maxDistance);
   });
   return { origin, rays };
+}
+
+/** `castRays` through a built index. Same validation (in the same order), same readings, bit for bit. */
+export function castRaysIndexed(pose: Pose, index: TrackIndex, physics: Pick<VehiclePhysics, 'wheelbase'>, config: SensorConfig): SensorReadings {
+  checkSensorConfig(config);
+  const origin = sensorOrigin(pose, physics);
+  const rays = config.anglesDegrees.map((degrees): RayReading => {
+    const angle = pose.heading + (degrees * Math.PI) / 180;
+    // The config, the origin and so the angle are validated above, so the per-ray checks of `castRay` would only repeat them.
+    const { distance, hit } = castRayCore(index, origin, angle, config.maxDistance);
+    return readingOf(origin, angle, distance, hit, config.maxDistance);
+  });
+  return { origin, rays };
+}
+
+/**
+ * `castRay` against both of the track's boundaries through a built index. Validates exactly as `castRay` does (it calls it with no boundaries first, which throws
+ * the same RangeError for a bad origin, angle or range and otherwise does nothing). The nearest of all is order-independent except that a distance of +0 and one
+ * of -0 compare equal; ties are therefore broken towards the lower segment number, which is the one brute force meets first.
+ */
+export function castRayIndexed(index: TrackIndex, origin: Vec2, angle: number, maxDistance: number): RayHit {
+  castRay(origin, angle, maxDistance, []);
+  return castRayCore(index, origin, angle, maxDistance);
+}
+
+function castRayCore(index: TrackIndex, origin: Vec2, angle: number, maxDistance: number): RayHit {
+  const dx = Math.cos(angle);
+  const dy = Math.sin(angle);
+  const count = collectRayCandidates(index, origin.x, origin.y, dx, dy, maxDistance);
+  const ids = candidateBuffer(index);
+  let nearest = Infinity;
+  let nearestId = -1;
+  for (let k = 0; k < count; k += 1) {
+    const id = ids[k] as number;
+    const t = raySegment(origin, dx, dy, index.segA[id]!, index.segB[id]!);
+    if (t < nearest || (t === nearest && id < nearestId)) {
+      nearest = t;
+      nearestId = id;
+    }
+  }
+  return nearest <= maxDistance ? { distance: nearest, hit: true } : { distance: maxDistance, hit: false };
+}
+
+function readingOf(origin: Vec2, angle: number, distance: number, hit: boolean, maxDistance: number): RayReading {
+  return {
+    angle,
+    distance,
+    normalised: distance / maxDistance,
+    hit,
+    end: { x: origin.x + Math.cos(angle) * distance, y: origin.y + Math.sin(angle) * distance },
+  };
 }
 
 /**

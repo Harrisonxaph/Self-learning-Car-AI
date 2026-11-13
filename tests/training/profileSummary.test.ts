@@ -25,6 +25,14 @@ describe('groupOf', () => {
     expect(groupOf('src/sim/collision.ts', 'inPolygon')).toBe('on-road');
     expect(groupOf('src/sim/collision.ts', 'stepCar')).toBe('physics');
   });
+  it('puts the track index apart: its collectors are track-index, its road test is on-road, and the indexed sweep functions are the sweep', () => {
+    expect(groupOf('src/sim/trackIndex.ts', 'collectRay')).toBe('track-index');
+    expect(groupOf('src/sim/trackIndex.ts', 'addCell')).toBe('track-index');
+    expect(groupOf('src/sim/trackIndex.ts', 'pointOnRoadIndexed')).toBe('on-road');
+    expect(groupOf('src/sim/collision.ts', 'shapeTouchesBoundaryIndexed')).toBe('sweep');
+    expect(groupOf('src/sim/collision.ts', 'sweepSlices')).toBe('sweep');
+    expect(groupOf('src/sensors/rays.ts', 'castRayCore')).toBe('rays');
+  });
   it('names the other groups', () => {
     expect(groupOf('src/sensors/rays.ts', '(anonymous)')).toBe('rays');
     expect(groupOf('src/sim/checkpoints.ts', 'x')).toBe('gates');

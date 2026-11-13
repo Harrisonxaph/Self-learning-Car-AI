@@ -25,7 +25,7 @@ export interface CpuProfile {
 }
 
 /** The groups, in the order they are reported. */
-export const PROFILE_GROUPS = ['rays', 'sweep', 'on-road', 'physics', 'gates', 'network-inputs', 'training-harness', 'other-src', 'outside-src'] as const;
+export const PROFILE_GROUPS = ['rays', 'sweep', 'on-road', 'track-index', 'physics', 'gates', 'network-inputs', 'training-harness', 'other-src', 'outside-src'] as const;
 export type ProfileGroup = (typeof PROFILE_GROUPS)[number];
 
 export interface GroupShare {
@@ -52,8 +52,14 @@ export interface ProfileSummary {
 // The exact functions of src/sim/collision.ts that belong to the sweep (the bounding-box pass and the exact tests it hands survivors to) and to pointOnRoad.
 const SWEEP_FUNCTIONS: ReadonlySet<string> = new Set([
   'footprintHitsTrack',
+  'footprintHitsTrackBruteForce',
+  'footprintHitsTrackIndexed',
   'sweepHitsTrack',
+  'sweepHitsTrackBruteForce',
+  'sweepHitsTrackIndexed',
+  'sweepSlices',
   'shapeTouchesBoundary',
+  'shapeTouchesBoundaryIndexed',
   'segmentNearConvex',
   'segmentsTouch',
   'pointSegmentDistance',
@@ -80,6 +86,8 @@ export function sourcePath(url: string): string | null {
 export function groupOf(file: string | null, functionName: string): ProfileGroup {
   if (file === null) return 'outside-src';
   if (file === 'src/sensors/rays.ts') return 'rays';
+  // The grid and its candidate collection (P2-11), and the road test through it, which is the on-road work once the index is used.
+  if (file === 'src/sim/trackIndex.ts') return functionName === 'pointOnRoadIndexed' ? 'on-road' : 'track-index';
   if (file === 'src/sim/collision.ts') {
     if (ON_ROAD_FUNCTIONS.has(functionName)) return 'on-road';
     if (SWEEP_FUNCTIONS.has(functionName)) return 'sweep';

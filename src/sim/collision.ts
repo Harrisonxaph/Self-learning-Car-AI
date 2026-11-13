@@ -14,10 +14,12 @@
 // the price is that a turning car may be flagged up to that margin early: at most about 0.2 mm with the
 // default timestep (at most 0.0225 rad per tick) and about 1.1 mm for a full 0.05 rad slice.
 //
-// Every boundary segment is tested each tick, after a quick bounding-box rejection. The built-in track has
-// 52, so this is cheap; a spatial index (P2-11) waits until a measured track needs one.
+// The boundary tests look only at the segments near the car: a grid index over the track's segments (sim/trackIndex.ts, P2-11) picks which segments the exact
+// tests below see, and never changes an answer (tests/sim/trackIndex.test.ts compares every result with the brute-force functions, which test every segment
+// after a quick bounding-box rejection and are kept as the reference).
 import type { VehiclePhysics } from './config';
 import type { Pose, Track, Vec2 } from './track';
+import { candidateBuffer, collectBoxCandidates, pointOnRoadIndexed, trackIndexOrNull, type TrackIndex } from './trackIndex';
 import { createVehicle, stepVehicle, wrapAngle, type Controls, type VehicleState } from './vehicle';
 
 /**
@@ -56,16 +58,47 @@ export function vehicleFootprint(pose: Pose, physics: VehiclePhysics): [Vec2, Ve
   return [at(back, half), at(front, half), at(front, -half), at(back, -half)];
 }
 
-/** True if the footprint touches a boundary or is not on the road (for example wholly in the infield). */
+/**
+ * True if the footprint touches a boundary or is not on the road (for example wholly in the infield). Uses the track's index (sim/trackIndex.ts), which only
+ * chooses which segments the exact tests see, so the answer is brute force's, bit for bit; a track that cannot be indexed uses brute force.
+ */
 export function footprintHitsTrack(footprint: readonly Vec2[], track: Track): boolean {
+  const index = trackIndexOrNull(track);
+  return index === null ? footprintHitsTrackBruteForce(footprint, track) : footprintHitsTrackIndexed(footprint, index);
+}
+
+/** `footprintHitsTrack` testing every boundary segment: the reference the indexed version must equal exactly (tests/sim/trackIndex.test.ts). */
+export function footprintHitsTrackBruteForce(footprint: readonly Vec2[], track: Track): boolean {
   return shapeTouchesBoundary(footprint, track) || !pointOnRoad(footprint[0]!, track);
+}
+
+/** `footprintHitsTrack` through a built index. */
+export function footprintHitsTrackIndexed(footprint: readonly Vec2[], index: TrackIndex): boolean {
+  return shapeTouchesBoundaryIndexed(footprint, index) || !pointOnRoadIndexed(footprint[0]!, index);
 }
 
 /**
  * True if the car touches or crosses a boundary anywhere on its way from `before` to `after`, or ends off
  * the road. The motion between the two poses is taken as a straight line with the heading turning evenly.
+ * Uses the track's index (see `footprintHitsTrack`): the same answer as brute force, bit for bit.
  */
 export function sweepHitsTrack(before: Pose, after: Pose, track: Track, physics: VehiclePhysics): boolean {
+  const index = trackIndexOrNull(track);
+  return index === null ? sweepHitsTrackBruteForce(before, after, track, physics) : sweepHitsTrackIndexed(before, after, index, physics);
+}
+
+/** `sweepHitsTrack` testing every boundary segment: the reference the indexed version must equal exactly. */
+export function sweepHitsTrackBruteForce(before: Pose, after: Pose, track: Track, physics: VehiclePhysics): boolean {
+  return sweepSlices(before, after, physics, track, null);
+}
+
+/** `sweepHitsTrack` through a built index. */
+export function sweepHitsTrackIndexed(before: Pose, after: Pose, index: TrackIndex, physics: VehiclePhysics): boolean {
+  return sweepSlices(before, after, physics, null, index);
+}
+
+/** The sweep itself, with brute force (`track`) or an index: the slices, the margin and the order of tests are the same either way. */
+function sweepSlices(before: Pose, after: Pose, physics: VehiclePhysics, track: Track | null, index: TrackIndex | null): boolean {
   const turn = wrapAngle(after.heading - before.heading);
   const slices = Math.max(1, Math.ceil(Math.abs(turn) / MAX_SWEEP_ROTATION));
   const margin = turnMargin(turn / slices, physics);
@@ -83,10 +116,11 @@ export function sweepHitsTrack(before: Pose, after: Pose, track: Track, physics:
             heading: before.heading + turn * t,
           };
     const to = vehicleFootprint(pose, physics);
-    if (shapeTouchesBoundary([...from, ...to], track, margin)) return true;
+    const touches = index !== null ? shapeTouchesBoundaryIndexed([...from, ...to], index, margin) : shapeTouchesBoundary([...from, ...to], track!, margin);
+    if (touches) return true;
     from = to;
   }
-  return !pointOnRoad(from[0]!, track);
+  return !(index !== null ? pointOnRoadIndexed(from[0]!, index) : pointOnRoad(from[0]!, track!));
 }
 
 /** The distance from the rear axle to the farthest point of the body, m. */
@@ -250,6 +284,36 @@ export function shapeTouchesBoundary(points: readonly Vec2[], track: Track, marg
       }
       if (segmentNearConvex(a, b, convex, margin)) return true;
     }
+  }
+  return false;
+}
+
+/** As `shapeTouchesBoundary`, with only the segments whose bounding box meets the (widened) shape box tested. */
+export function shapeTouchesBoundaryIndexed(points: readonly Vec2[], index: TrackIndex, margin = 0): boolean {
+  const convex = convexHull(points);
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  for (const p of convex) {
+    minX = Math.min(minX, p.x);
+    minY = Math.min(minY, p.y);
+    maxX = Math.max(maxX, p.x);
+    maxY = Math.max(maxY, p.y);
+  }
+  minX -= margin;
+  minY -= margin;
+  maxX += margin;
+  maxY += margin;
+  const count = collectBoxCandidates(index, minX, minY, maxX, maxY);
+  const ids = candidateBuffer(index);
+  const total = count < 0 ? index.segA.length : count;
+  for (let k = 0; k < total; k += 1) {
+    const id = count < 0 ? k : (ids[k] as number);
+    const a = index.segA[id]!;
+    const b = index.segB[id]!;
+    if (Math.max(a.x, b.x) < minX || Math.min(a.x, b.x) > maxX || Math.max(a.y, b.y) < minY || Math.min(a.y, b.y) > maxY) continue;
+    if (segmentNearConvex(a, b, convex, margin)) return true;
   }
   return false;
 }

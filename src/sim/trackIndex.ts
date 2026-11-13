@@ -1,4 +1,6 @@
-// A uniform-grid index over a track's boundary segments (P2-11 step 3; docs/plans/p2-11-plan.md). NOT YET USED by the simulation: step 4 wires it in.
+// A uniform-grid index over a track's boundary segments (P2-11; docs/plans/p2-11-plan.md). Built in step 3, used by the simulation since step 4: `castRays`
+// (sensors/rays.ts) and `footprintHitsTrack` and `sweepHitsTrack` (sim/collision.ts) ask `trackIndexOrNull(track)` and fall back to brute force if a track cannot be indexed.
+// This file holds the grid, the cache and the candidate collectors and the road test, and imports nothing from collision or sensors, so both can import it.
 //
 // The index is an optimisation and nothing else. Every query here hands the EXACT existing per-segment routines (`raySegment`, `segmentNearConvex`, the even-odd
 // crossing expression) only the segments that could change the answer, and takes the answer from them unchanged, so each result is the same IEEE-754 value
@@ -16,10 +18,7 @@
 // (floor of a division), so "the segment's box overlaps the query box" implies "their cell ranges overlap", with no rounding gap. The ray and point queries
 // also widen their reach by INDEX_EPSILON, far above float error and far below a cell, for the cases the exact routines treat specially (an origin on a
 // segment, a segment within LINE_TOLERANCE of a ray's line, a hit at exactly the range, a crossing that rounds a hair outside its segment's box).
-import type { VehiclePhysics } from './config';
-import { convexHull, MAX_SWEEP_ROTATION, segmentNearConvex, turnMargin, vehicleFootprint } from './collision';
-import type { Pose, Track, Vec2 } from './track';
-import { wrapAngle } from './vehicle';
+import type { Track, Vec2 } from './track';
 
 /** How far queries reach beyond the exact geometry, m. Far above float error on any realistic track, far below a cell. */
 export const INDEX_EPSILON = 1e-6;
@@ -179,16 +178,27 @@ export function trackIndexStats(index: TrackIndex): TrackIndexStats {
   return { segments: index.segA.length, cells: index.cols * index.rows, registrations: index.cellItems.length, cellEdge: index.cellEdge, cols: index.cols, rows: index.rows };
 }
 
-// A track is immutable once loaded and a custom track is a new object each load, so an index is cached by the track object.
-const cache = new WeakMap<Track, TrackIndex>();
-/** The index for a track, built on first use and kept for as long as the track object lives. */
+// A track is immutable once loaded and a custom track is a new object each load, so an index is cached by the track object. A track that cannot be indexed (a
+// non-finite point, or an extent too large to measure) is remembered as such, so the simulation falls back to brute force for it every time without retrying.
+const cache = new WeakMap<Track, TrackIndex | null>();
+/** The index for a track, built on first use and kept for as long as the track object lives. Throws RangeError for a track that cannot be indexed. */
 export function trackIndexFor(track: Track): TrackIndex {
-  let index = cache.get(track);
-  if (index === undefined) {
-    index = buildTrackIndex(track);
-    cache.set(track, index);
-  }
+  const index = trackIndexOrNull(track);
+  if (index === null) return buildTrackIndex(track); // throws the reason
   return index;
+}
+/** The index for a track, or null if it cannot be indexed (then the caller uses brute force, which accepts any geometry). Never throws. */
+export function trackIndexOrNull(track: Track): TrackIndex | null {
+  const known = cache.get(track);
+  if (known !== undefined) return known;
+  let built: TrackIndex | null;
+  try {
+    built = buildTrackIndex(track);
+  } catch {
+    built = null;
+  }
+  cache.set(track, built);
+  return built;
 }
 
 // ---- Query scratch: candidate ids and the stamps that list each one once. Results never depend on it. ----
@@ -348,67 +358,7 @@ export function pointOnRoadIndexed(p: Vec2, index: TrackIndex): boolean {
   return outer && !inner;
 }
 
-/** As `shapeTouchesBoundary`, with only the segments whose bounding box meets the (widened) shape box tested. */
-export function shapeTouchesBoundaryIndexed(points: readonly Vec2[], index: TrackIndex, margin = 0): boolean {
-  const convex = convexHull(points);
-  let minX = Infinity;
-  let minY = Infinity;
-  let maxX = -Infinity;
-  let maxY = -Infinity;
-  for (const p of convex) {
-    minX = Math.min(minX, p.x);
-    minY = Math.min(minY, p.y);
-    maxX = Math.max(maxX, p.x);
-    maxY = Math.max(maxY, p.y);
-  }
-  minX -= margin;
-  minY -= margin;
-  maxX += margin;
-  maxY += margin;
-  const s = scratchOf(index);
-  const count = collectBox(index, s, minX, minY, maxX, maxY);
-  const total = count < 0 ? index.segA.length : count;
-  for (let k = 0; k < total; k += 1) {
-    const id = count < 0 ? k : (s.ids[k] as number);
-    const a = index.segA[id]!;
-    const b = index.segB[id]!;
-    if (Math.max(a.x, b.x) < minX || Math.min(a.x, b.x) > maxX || Math.max(a.y, b.y) < minY || Math.min(a.y, b.y) > maxY) continue;
-    if (segmentNearConvex(a, b, convex, margin)) return true;
-  }
-  return false;
-}
-
-/** As `footprintHitsTrack`. */
-export function footprintHitsTrackIndexed(footprint: readonly Vec2[], index: TrackIndex): boolean {
-  return shapeTouchesBoundaryIndexed(footprint, index) || !pointOnRoadIndexed(footprint[0]!, index);
-}
-
-/** As `sweepHitsTrack`: the same slices and margin, with the indexed boundary test. */
-export function sweepHitsTrackIndexed(before: Pose, after: Pose, index: TrackIndex, physics: VehiclePhysics): boolean {
-  const turn = wrapAngle(after.heading - before.heading);
-  const slices = Math.max(1, Math.ceil(Math.abs(turn) / MAX_SWEEP_ROTATION));
-  const margin = turnMargin(turn / slices, physics);
-  let from = vehicleFootprint(before, physics);
-  for (let i = 1; i <= slices; i += 1) {
-    const t = i / slices;
-    const pose: Pose =
-      i === slices
-        ? after
-        : {
-            position: {
-              x: before.position.x + (after.position.x - before.position.x) * t,
-              y: before.position.y + (after.position.y - before.position.y) * t,
-            },
-            heading: before.heading + turn * t,
-          };
-    const to = vehicleFootprint(pose, physics);
-    if (shapeTouchesBoundaryIndexed([...from, ...to], index, margin)) return true;
-    from = to;
-  }
-  return !pointOnRoadIndexed(from[0]!, index);
-}
-
-// ---- Ray candidates (used by sensors/rayIndex.ts, which may import sensors; this file may not) ----
+// ---- Candidate collectors (used by sensors/rays.ts and sim/collision.ts, which import this file) ----
 
 /**
  * Lists the segments a ray could hit within `maxDistance`: every segment in a cell the ray's INDEX_EPSILON neighbourhood touches. The numbers are written to the
@@ -417,6 +367,13 @@ export function sweepHitsTrackIndexed(before: Pose, after: Pose, index: TrackInd
  */
 export function collectRayCandidates(index: TrackIndex, ox: number, oy: number, dx: number, dy: number, maxDistance: number): number {
   return collectRay(index, scratchOf(index), ox, oy, dx, dy, maxDistance);
+}
+/**
+ * Lists the segments whose bounding box can meet the closed box (x0, y0)-(x1, y1): every segment in a cell the box touches. Written to `candidateBuffer(index)`;
+ * returns the count, or -1 when a side of the box is NaN (then no segment can be ruled out and the caller tests every segment).
+ */
+export function collectBoxCandidates(index: TrackIndex, x0: number, y0: number, x1: number, y1: number): number {
+  return collectBox(index, scratchOf(index), x0, y0, x1, y1);
 }
 /** The buffer `collectRayCandidates` writes to. Shared per index: read it before the next query. */
 export function candidateBuffer(index: TrackIndex): Int32Array {
