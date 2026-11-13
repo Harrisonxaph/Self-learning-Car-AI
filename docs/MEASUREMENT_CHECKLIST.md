@@ -5,15 +5,17 @@ One sitting on your reference iPhone settles **both** remaining measurement item
 - **P2-11's performance budget** (the P4-06 step 4 baseline, [#56](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/56) and [#57](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/57)): Silverstone, a population of 50, 7 rays plus collision per car per tick. Rendered at 1×, a p95 **simulation update** of at most **8 ms** per frame at 60 ticks/s. Headless, at least **600 ticks/s**.
 - **P4-07's draw-time budget** ([#58](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/58), `docs/plans/p4-07-plan.md` section 6): the same phone and workload, the training page with its usual cars, camera at zoom 1.5, 4 and the maximum, in zoom and in follow mode, in portrait and landscape. A p95 **camera draw time** of at most **4 ms** over at least 600 frames, and no long task above 50 ms during a 10 s gesture.
 
-The overlap is **Session A** below: Silverstone, 50 cars, Normal (1×) speed. One readout, `?debug=drawtime`, reports the draw time (P4-07) and, since this step, the simulation update time per frame (P2-11) over the **same** 600-frame window, so one reading answers both. Everything else in this list is either only P4-07 (the zoom and follow grid) or only P2-11 (the Max-speed rate).
+The overlap is **Session A** below: Silverstone, 50 cars, Normal (1×) speed. One readout, `?debug=drawtime`, reports the draw time (P4-07) and, since this step, the simulation update time per frame (P2-11) over the **same** 600-frame window, so one reading answers both. Everything else in this list is either only P4-07 (the zoom and follow grid) or only P2-11 (the update figure and, later, the in-page headless benchmark).
 
 Nothing here has been measured on a phone. The desktop figures at the end are from a development container and are for comparison only: the budget names your phone.
 
-## 0. Three decisions first (they change what you need to do)
+## 0. The owner's three decisions (made 2026-11-13; they change what this checklist asks)
 
-1. **The headless figure on a phone.** The page cannot run a truly headless benchmark; the closest figure is the tick rate at Maximum speed from the `?debug=fps` readout, which includes drawing. Choose: **(a)** accept that Max-speed tick rate as the phone's headless proxy; **(b)** approve a small follow-up that adds an in-page headless benchmark (a code change, its own PR); or **(c)** treat the headless budget as desktop-only. Until you choose, I record the Max-speed rate and say it is a proxy.
-2. **Is the desktop result already enough?** On the development container, Silverstone with 50 cars runs at about **57 ticks/s** against the budget of **600**, about ten times short, while the stadium oval runs at about 1,200. A phone is slower than a desktop, so a pass on the phone is not expected. The roadmap says P2-11 is triggered by a **phone** baseline that misses the budget **or** by an architectural reason **you** approve in #56. You can: **(a)** take the phone readings below and decide from them; or **(b)** approve the architectural reason now from the desktop evidence, which makes the phone's P2-11 figures confirmatory and lets P2-11 be planned first. I make neither decision.
-3. **Waive any single reading you do not want to take** (for example the full zoom grid). Say which, and I record it as waived, not as passed.
+Relayed owner instruction (Claude Code, 2026-11-13), the owner's reply to the three decisions put to them, verbatim: "1. Approve the reasoning now / 2.approve small follow up / 3.waive it". Read against the numbered questions in the step 4 summary (the headless figure on a phone; whether the desktop result is already enough; input responsiveness): I will stop if this was not meant.
+
+1. **P2-11's trigger: the architectural reason is approved now** (from the desktop result: Silverstone with 50 cars at about 57 ticks/s against the 600 budget; see section 9). The phone's P2-11 figures are therefore **confirmatory**, not the trigger. P2-11 is triggered but is not implemented: it starts as a plan-only PR, and P4-06 stays In Progress and cannot be Complete until P2-11 is Complete and the budget is met (ROADMAP, P4-06 acceptance). Approving the reasoning is not approval to implement the index.
+2. **The headless figure on a phone: the small follow-up is approved.** An opt-in in-page headless benchmark (its own PR, to come after this one) will report the phone's headless ticks per second directly, so the Max-speed tick rate (Session B) is **not** the headless figure and is recorded as a context reading only. Until that PR merges, the headless budget has no phone figure and this checklist does not claim one.
+3. **Input responsiveness (the pinch-to-frame time in the P4-07 plan) is waived** by the owner and recorded as waived, not as passed or measured. It is not part of what P4-07's remaining measurement shows.
 
 ## 1. Before you start
 
@@ -37,13 +39,13 @@ Address: `/?mode=train&circuit=silverstone&debug=drawtime,fps` (both readouts to
 4. **Take the reading twice:** once at the start, and once again about two minutes later, after a few generations. The update time depends on how many cars are still running, so the first window and a later one can differ; record both.
 5. Do it in **portrait** and again in **landscape** (reload after rotating).
 
-## 3. Session B: Silverstone, Maximum speed (P2-11's headless proxy; P4-07's Max mode)
+## 3. Session B: Silverstone, Maximum speed (P4-07's Max mode; the tick rate is context only)
 
 Address: `/?mode=train&circuit=silverstone&debug=drawtime,fps`. Press **Max**.
 
 1. Let it run 30 seconds, then read the `?debug=fps` ticks per second and frames per second. Record both. (At Max, many ticks run per frame, so the update-per-frame figure is large by design and the 8 ms budget does **not** apply to it. The readout says "1x speed only".)
 2. The draw readout at Max draws about ten cars (the cars-drawn cap at Max): record its p95 against 4 ms with `Frames 600/600`.
-3. Decision 0.1 says how the ticks-per-second figure is used.
+3. Per decision 0.2, the ticks-per-second figure here is context only; the phone's headless figure comes from the approved in-page benchmark.
 
 ## 4. Session C: P4-07's zoom and follow grid (P4-07 only)
 
@@ -71,14 +73,14 @@ plus the device block from section 1 and your decision from section 0. Attach th
 ## 7. What each result means (stated now so it cannot be bent later)
 
 - **P4-07:** draw p95 at most 4 ms in every reading you took, and no draw or gap over 50 ms during the 10 s gesture, passes the plan's criterion for the readings taken. A p95 over 4 ms means the plan's fallback (the transformed cache, then culling) is measured next. It is your decision to call P4-07 Complete; waived readings are recorded as waived.
-- **P2-11:** update p95 at most 8 ms at Normal speed **and** the headless rate at least 600 (by decision 0.1) means P2-11 is not triggered by the baseline. Either figure missing the budget triggers P2-11 and keeps P4-06 In Review until P2-11 is Complete and the budget is met (ROADMAP, P4-06 acceptance). An architectural reason you approve in #56 triggers it regardless.
+- **P2-11:** it is **already triggered** by the approved architectural reason (decision 0.1). The phone's update p95 (at most 8 ms at Normal speed) and, once the in-page benchmark exists, headless rate (at least 600) are the baseline the index is later measured against, before and after, under the same workload; P4-06 stays In Progress until P2-11 is Complete and the budget is met (ROADMAP, P4-06 acceptance).
 - A pass on a phone is a statement about one phone, one build and one workload on the day, nothing more.
 
 ## 8. What this checklist cannot measure (so nobody reads more into it)
 
-- **Input responsiveness** (the time from a pinch to the frame that shows it) is in the P4-07 plan's measures but is **not instrumented**: there is no readout for it. Say whether you want it waived or judged by feel, or approve a small follow-up that adds a probe.
+- **Input responsiveness** (the time from a pinch to the frame that shows it) is in the P4-07 plan's measures but is not instrumented; the owner **waived** it (decision 0.3), so it is recorded as waived.
 - **Long tasks:** Safari has no Long Tasks API; the frame-gap and slow-draw counts are proxies that catch the same stalls, not the same numbers.
-- **The headless budget on a phone** is a proxy (decision 0.1). The Node benchmark (`npm run bench`) runs headless but on a computer, not on the phone.
+- **The headless budget on a phone** has no figure yet: the in-page benchmark the owner approved (decision 0.2) is a separate PR. The Node benchmark (`npm run bench`) runs headless but on a computer, not on the phone.
 - **Heat and battery state** change timings; one reading is not a distribution. The two-minutes-later reading in Session A is the only repeat asked for.
 - Nothing here says anything about learning. The cars are a seeded training run; no model is saved or judged.
 
