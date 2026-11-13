@@ -1,6 +1,6 @@
 # P2-11 plan: a spatial index for boundary collision and ray queries
 
-> **Status: plan merged (#184, 2026-11-13); step 2 (the profile) is in review on `feat/p2-11-profile` and its result is recorded in section 4a. The index itself is not implemented.** The owner approved the **architectural reason** for P2-11 on 2026-11-13 (relayed owner instruction, recorded on [#56](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/56), #57 and #58, verbatim: "1. Approve the reasoning now / 2.approve small follow up / 3.waive it"; the first item). That triggers P2-11 under condition 2 of its roadmap entry. It is **not** approval to implement the index: this plan, and then each step below, still needs the owner's explicit authorisation, as for every feature.
+> **Status: plan merged (#184); step 2, the profile, merged (#185; result in section 4a); step 3, the index and its equivalence suite (not integrated), is in review on `feat/p2-11-index` (record in section 4b). The simulation does not use the index yet.**
 > - **Scope:** the roadmap entry and issue #56: a deterministic uniform-grid index over track boundary segments so collision checks and ray casts only test nearby segments, **without changing any result**. Not in scope: any change to the sensors' contract, the network inputs, the model format, experiment records, track hashes or the manifest; reducing the number of rays or cars; a Web Worker; typed-array rewrites of the simulation; any claim about learning.
 > - **What this plan is not:** a prediction that the budget will be met. Section 6 says what is known, what is not, and what happens if the phone still misses after the index.
 
@@ -58,6 +58,34 @@ What this says, and does not:
 - **The rays are the work.** An index for the rays alone removes most of the cost; but if it makes them nearly free, the sweep and `pointOnRoad` (about 14 to 17% together) become most of what is left, so reaching a 10-fold speed-up needs all three indexed. That supports decision 1 below (include the sweep and `pointOnRoad`); it does not show they are enough. The rays' own bound is about 5 times if nothing else changes (1 / (1 - 0.8)), which is below the 10 times the desktop figure needs, so a ray index that is only as good as that bound would still miss the headless budget on this container.
 - **Not changed by this profile:** the design in section 3. No part of it is dropped; the ray traversal is built first in step 3 because it dominates.
 - **Limits:** one container; a sampling profiler adds overhead and attributes inlined code to the caller (hence the second column); self time by function, not by line; the phone's split may differ. No claim about learning.
+
+### 4b. Step 3 result: the index and its equivalence suite, not integrated (2026-11-13; development container, not the phone)
+
+Authorised by the same relayed owner instruction as step 2 (recorded in section 4a): "Let's action p2-11, then following on from that once it's close we will finish p4 in full", read as authorising steps 2 to 4 in order. **Nothing calls the index yet; the simulation is unchanged.**
+
+**What was added:**
+- `src/sim/trackIndex.ts`: the grid (`buildTrackIndex`, `trackIndexFor` with a `WeakMap` cache), the indexed collision and road queries (`shapeTouchesBoundaryIndexed`, `footprintHitsTrackIndexed`, `sweepHitsTrackIndexed`, `pointOnRoadIndexed`) and the candidate collectors.
+- `src/sensors/rayIndex.ts`: `castRayIndexed` and `castRaysIndexed`. **Deviation from section 3's "where it lives":** the ray queries are here, not in `src/sim`, because `docs/ARCHITECTURE.md` and the lint rules forbid `src/sim` importing `src/sensors`; both files hand the same exact routines their candidates.
+- **Five `export` keywords, no other change to existing code:** `raySegment` (`src/sensors/rays.ts`) and `inPolygon`, `segmentNearConvex`, `pointOnRoad`, `shapeTouchesBoundary` (`src/sim/collision.ts`), so the index reuses the exact routines instead of copying them and the tests can call the brute-force versions. (Step 4 will route the call sites through the index and can then drop the duplicated slice loop in `sweepHitsTrackIndexed`.)
+- `scripts/index-measure.mjs` (`npm run index:measure`): candidate counts and query times by cell factor.
+
+**The cell rule, chosen from the measurement:** the cell edge is `CELL_EDGE_FACTOR` (2) times the mean segment length, at least 1 m, doubled until the grid has at most 262,144 cells and at most 4,000,000 (segment, cell) registrations (so building is bounded for any valid track; the 2,000-point synthetic track hits the cell cap and uses 2.2 m cells). Measured on this container (`npm run index:measure`, 1,500 cars across the checkpoint gates, so on the road; microseconds per call, brute force / indexed):
+
+| track (segments) | factor | cell edge | candidates per ray / footprint / road test | seven-ray reading | one tick's sweep |
+| --- | ---: | ---: | --- | --- | --- |
+| Silverstone (2,356) | 1 | 5.0 m | 4.1 / 1.9 / 7.3 | 264 / 4.9 | 56 / 3.1 |
+| Silverstone | **2** | 10.0 m | 7.4 / 4.1 / 12.6 | 300 / 4.9 | 67 / 2.5 |
+| Silverstone | 4 | 20.0 m | 13.8 / 9.1 / 23.3 | 266 / 6.0 | 57 / 1.9 |
+| Silverstone | 8 | 40.0 m | 24.8 / 17.5 / 43.1 | 280 / 5.1 | 62 / 3.4 |
+| Silverstone | 12 | 60.0 m | 34.4 / 26.1 / 62.4 | 240 / 5.9 | 43 / 2.0 |
+| synthetic, 2,000 points (4,000) | **2** | 2.2 m | 6.2 / 1.9 / 11.2 | 579 / 5.6 | 127 / 2.8 |
+| stadium oval (52) | **2** | 37.7 m | 8.9 / 6.7 / 13.3 | 8.1 / 3.7 | 2.4 / 3.1 |
+
+Factors 1 to 8 are within noise of each other on time, and candidate counts grow with the factor, so the smallest factor with a modest cell count (2) was kept; it also has 4,083 registrations for Silverstone's 2,356 segments and builds in about 1 ms (7 ms for the 2,000-point track).
+
+**What this does and does not show.** On Silverstone the query functions are about **50 to 60 times** faster for a seven-ray reading (about 300 microseconds to about 5) and about **25 times** faster for a tick's sweep (about 60 to about 2.5), and about **100 times** and **40 times** on the 2,000-point track; on the 52-segment oval the gain is small (the oval is not slow). These are **microbenchmarks of the query functions on one container**: they are not the simulation (the network, the physics and the trainer are unchanged and now a larger share), not the owner's phone, and they do not say the budget is met. Using only the step 2 profile (the rays, the sweep and `pointOnRoad` are about 97% of a Silverstone car-tick, the other 3% about 10 microseconds) the arithmetic would put the whole car-tick at roughly 20 microseconds and the headless rate on this container above the 600 ticks/s budget; that is a **hypothesis for step 4 to measure** with `npm run bench -- --car-ticks 60000` (the car-tick counts must be exactly unchanged), then the owner's phone in step 5. Section 6's risk stands: if the phone misses, the owner decides.
+
+**The equivalence acceptance is met for this step:** `tests/sim/trackIndex.test.ts` (69 tests) checks every query against brute force with `Object.is` on the five built-in circuits (training and validation only), the 2,000-point synthetic track (also translated to (-3200, 7100) and (1e5, -1e5)), Silverstone translated, and six small synthetic tracks; about 420,000 seeded random ray queries, plus road tests, footprints and sweeps (straight, turning and sharply turning), shape tests with margins, and the adversarial cases listed in section 5; plus a direct test that the candidate list contains every segment that could change a result. See `docs/TESTING.md`.
 
 ## 5. Tests (written with the plan, so the acceptance cannot drift)
 
