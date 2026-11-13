@@ -22,6 +22,31 @@ Relayed owner instruction (Claude Code, 2026-11-13), the owner's reply to the th
 - **Geometry.** The plan names a maximum-size stand-in (2,000 points per boundary) because Silverstone did not exist yet. Silverstone has 1,178 points per boundary (2,356 segments), fewer than the stand-in, so a pass on Silverstone does **not** show a pass on the plan's worst case. **(a)** Record an explicit criterion change that Silverstone, now built, replaces the stand-in; or **(b)** keep the maximum-size workload, for which the training page has **no way to run one today** (it offers only the built-in training circuits): that needs a small measurement-only follow-up, which I will build only if you ask.
 - **Coverage.** The plan's grid is zoom 1.5, 4 and maximum, in zoom and follow mode, in portrait and landscape, for the 50-car workload, Max mode's ten cars and the champion replay (section 4). If you want a smaller grid, record that as an explicit criterion change; I will not treat it as optional.
 
+### 0b. The owner's phone-test acceptance, the evidence on record and the two P4-07 criterion changes (recorded 2026-11-13)
+
+Relayed owner instructions (Claude Code, 2026-11-13), the owner's words, verbatim. First: "Phone tests have been confirmed and accepted by me. I am happy with both the other points". The "other points" are the two choices put to them: "whether Silverstone replaces the 2,000-point stand-in geometry, and whether a smaller grid is acceptable". Asked which items they approve as Complete, which phone tests the acceptance covers, and whether the reading of the two choices below was right, they answered: "Recording device testing"; "Recording testing"; "Yes, that reading". Then, after an audit of the evidence below put the question of which cells the accepted grid is: "Push correction. The fit-view readings are what I'm accepting." I will stop if any of this was not meant.
+
+**The measurements are on record.** The owner supplied them to Codex, which transcribed them in its comments on [#56](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/56#issuecomment-6865038582), [#57](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/57#issuecomment-6865038901) and [#58](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/58#issuecomment-6865039241) (an earlier version of this section said no figures were supplied; that was true of what the owner told Claude Code directly, and was incomplete). Build identities were checked against Vercel: **before** `957a148` (brute force), **after** `623425b` (the #188 merge, index integrated).
+
+| Headless (`?mode=bench`, Silverstone, population 50, seed 1) | Car-ticks | Compute | Ticks/s at the full population (budget 600) |
+| --- | ---: | ---: | ---: |
+| Before, ~19:55 | 60,014 | 28.36 s | **42.3** |
+| After, ~19:55 | 60,014 | 0.32 s | **3,798** |
+| After, ~20:04 (recording) | 60,014 | 0.32 s | **3,786** |
+
+| Rendered, after build, Normal 1x, 50 drawn, fit view (zoom 1.00) | Update p95 (budget 8 ms) | Draw p95 | Frame gaps over 50 ms | Draws over 50 ms |
+| --- | ---: | ---: | ---: | ---: |
+| Portrait (~20:04) | 1 ms | 1 ms | 0 | 0 |
+| Landscape | 1 ms | 1 ms | **1** | 0 |
+
+**Limits that stay on record:** the device is "an iPhone" from the page's user-agent (iOS 18_7 as observed); model, Low Power Mode and thermal state were not confirmed. Each reading is a single reading, not a distribution. Alive cars vary within a window (portrait showed 50 running, landscape 1). The only **before** rendered reading (update p95 120 ms) drew 25 cars, so the rendered before and after comparison is **not matched** (no 50-drawn before reading, no before landscape); the headless comparison is matched (identical work). The landscape frame gap is unexplained and its timing relative to any gesture is unknown; Safari has no Long Tasks API, so gaps and slow draws are proxies. The screenshots and the 4.5 s portrait recording are not attached to GitHub. No learning or generalisation claim.
+
+**The owner's two P4-07 criterion changes:**
+1. **Geometry:** Silverstone, now built, replaces the 2,000-point maximum-size stand-in as the P4-07 workload. No maximum-size workload is built.
+2. **Coverage:** the accepted P4-07 draw-time evidence is **the fit-view readings above** (Silverstone, 50 cars drawn, Normal speed, zoom 1.00, portrait and landscape), in place of the plan's grid (zoom 1.5, about 4 and the maximum, in zoom and follow mode, Max mode's ten cars, the champion replay, and the 10 s gesture). Those cells were **not taken**, and the owner's acceptance removes them from the criterion; section 4 is no longer the completion test.
+
+**What this record does not do:** it marks **nothing Complete**. The owner chose to record the testing, so P2-11 stays Not Started (triggered), P4-06 stays In Progress and P4-07 stays In Review until the owner approves each explicitly, as for P4-02 to P4-05 (`docs/ROADMAP.md`, 2026-11-12). Open and the owner's: Silverstone's 420 s episode limit against the roughly 494 s scripted lap (P4-06); the landscape frame gap; a physical tablet check of Silverstone's display (no iPad model is recorded).
+
 ## 1. Before you start
 
 - Use the deployed site after this PR is merged (the address you used before: `https://self-learning-car-ai.vercel.app`), so the build is the one with the update figures. The readout's last line names the build.
@@ -70,6 +95,8 @@ Address: `/?mode=bench` (Silverstone by default; `&circuit=stadium-oval` or `&ci
 The Node equivalent, for comparison on the same work: `npm run bench -- --car-ticks 60000` (section 9).
 
 ## 4. Session C: the prescribed P4-07 coverage (mandatory for completion; outstanding until done)
+
+> **Superseded by the owner's criterion change (section 0b, 2026-11-13):** the accepted P4-07 draw-time evidence is the fit-view readings, so the cells below are **not required** for completion. They are kept as the original plan and as a method if anyone wants more evidence.
 
 This is the plan's condition set, written out so nothing is left to memory. **You choose the order, and you can spread it over several sittings.** What you cannot do is treat P4-07's measurement as complete while any cell below is missing, unless you record a waiver or an explicit criterion change for that cell (as you did for input responsiveness).
 
