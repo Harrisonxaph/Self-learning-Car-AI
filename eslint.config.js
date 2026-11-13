@@ -30,7 +30,7 @@ const boundary = (from, forbidden, reason) => ({
 });
 
 /** Folders that must run headless and deterministically (no DOM, clock or Math.random). */
-const HEADLESS = ['sim', 'sensors', 'ai', 'evolution', 'training', 'utils'];
+const HEADLESS = ['sim', 'sensors', 'ai', 'evolution', 'training', 'utils', 'tracks'];
 
 export default tseslint.config(
   { ignores: ['dist/', 'playwright-report/', 'test-results/', 'node_modules/'] },
