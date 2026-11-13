@@ -38,7 +38,7 @@ jobs:
     runs-on: ubuntu-24.04
     # Slow package mirrors must not consume the time reserved for the full browser suite.
     # Bound setup and test execution separately, with headroom for npm ci and cleanup.
-    timeout-minutes: 40
+    timeout-minutes: 50
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -52,8 +52,9 @@ jobs:
       - run: npx playwright install --with-deps chromium webkit
         timeout-minutes: 15
       # Builds the app and runs every Playwright project against `vite preview` (see playwright.config.ts).
+      # The suite takes about 16 to 21 minutes depending on the runner, so 20 minutes cut off complete, passing runs (PR #178, PR #179): 30 leaves headroom.
       - run: npm run test:e2e
-        timeout-minutes: 20
+        timeout-minutes: 30
       - name: Upload Playwright report
         if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
