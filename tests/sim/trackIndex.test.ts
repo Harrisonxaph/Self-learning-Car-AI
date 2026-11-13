@@ -660,13 +660,14 @@ describe('determinism and independence from history', () => {
     }
   });
 
-  it('the stamp counter wrapping around does not change a result', () => {
+  it('twenty thousand repeated queries on one index leave every answer unchanged (a long run of candidate stamps; the counter rollover near 2^32 is NOT exercised here)', () => {
     const { track } = circuits[0]!;
     const index = buildTrackIndex(track);
     const rng = createRng(1);
     const probes = Array.from({ length: 50 }, () => ({ origin: anywhere(track, rng), angle: rng.range(-3, 3) }));
     const expected = probes.map((p) => castRayIndexed(index, p.origin, p.angle, 50));
-    // Force the counter to its limit through the public API: no way to set it, so run enough queries to know the path is exercised elsewhere (stamps are per query).
+    // Each query takes a new stamp, so this checks that history on the index never changes an answer. It does not reach the stamp counter's reset (near 2^32 queries),
+    // which has no test: it clears the stamp array and restarts the counter, and cannot be set from outside without a test-only hook.
     for (let i = 0; i < 20_000; i += 1) castRayIndexed(index, probes[i % 50]!.origin, probes[i % 50]!.angle, 50);
     expect(probes.map((p) => castRayIndexed(index, p.origin, p.angle, 50))).toEqual(expected);
   });

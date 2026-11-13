@@ -32,7 +32,7 @@ Relayed owner instruction (Claude Code, 2026-11-13), the owner's reply to the th
 
 ## 1b. Before and after the spatial index (P2-11 step 5)
 
-The spatial index (P2-11) is used by the simulation from the merge of its integration PR. The readings in this checklist are therefore **after** readings from that merge onward. For the **before** readings use the deployment of main at `957a148` (the index merged but not used: brute force; it already has the update-time readout and `?mode=bench`), and take the same readings under the same workload, same phone state and same Low Power Mode setting on each. Desktop figures: section 9. A phone reading from the old build is the only honest "before"; nothing here predicts it.
+The spatial index (P2-11) is used by the simulation from the merge of its integration PR (#188, main at `623425b`). The readings in this checklist are therefore **after** readings from that merge onward. For the **before** readings use the deployment of main at `957a148` (the index merged but not used: brute force; it already has the update-time readout and `?mode=bench`), and take the same readings under the same workload, same phone state and same Low Power Mode setting on each. Desktop figures: section 9. A phone reading from the old build is the only honest "before"; nothing here predicts it.
 
 ## 2. Session A: Silverstone, Normal speed, 50 cars (the P2-11 baseline, and partial P4-07 evidence)
 
