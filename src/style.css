@@ -946,3 +946,24 @@ html.race-finished .stage {
 #rr-table th:first-child {
   width: 34%;
 }
+
+.drawtime-readout {
+  /* Opt-in (?debug=drawtime, P4-07): the camera draw-time figures, drawn over the top-left of the track, out of the layout, and never in the way of a tap. */
+  position: absolute;
+  top: 0.25rem;
+  left: 0.75rem;
+  max-width: calc(100% - 1.5rem);
+  margin: 0;
+  padding: 0.15rem 0.4rem;
+  border-radius: 0.3rem;
+  background: rgb(0 0 0 / 0.72);
+  font: 0.62rem/1.35 ui-monospace, monospace;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  pointer-events: none;
+}
+
+/* With both opt-in readouts on (?debug=fps,drawtime) the draw-time one sits below the frame-rate one. */
+.fps-readout:not([hidden]) ~ .drawtime-readout {
+  top: 3rem;
+}
