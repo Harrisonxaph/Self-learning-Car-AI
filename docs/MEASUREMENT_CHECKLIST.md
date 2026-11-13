@@ -84,6 +84,13 @@ plus the device block from section 1 and your decision from section 0. Attach th
 
 ## 9. Desktop reference (comparison only, never the phone's result)
 
-Measured with `npm run bench` (`scripts/bench.mjs`, `src/training/benchmark.ts`), the real trainer, population 50, seed 1, brute-force collision and rays, 10 timed generations after 2 warm-up generations. Machine: an Intel Xeon at 2.10 GHz, 4 logical cores, a shared development container, Node v22.22.0, commit `60f0574` with these changes uncommitted. Timings come from one machine in one container and vary run to run; the simulated work (the car-tick count) is deterministic.
+Measured with `npm run bench` (`scripts/bench.mjs`, `src/training/benchmark.ts`), the real trainer, population 50, seed 1, brute-force collision and rays, 10 timed generations after 2 warm-up generations. Machine: an Intel Xeon at 2.10 GHz, 4 logical cores, a shared development container, Node v22.22.0, `main` at `60f0574` with these changes uncommitted. Timings come from one machine in one container and vary run to run; the simulated work (the car-tick count) is deterministic.
 
-<!-- DESKTOP_FIGURES -->
+| Circuit | Boundary segments | Mean running cars | Car-ticks (deterministic) | Wall time, three runs (s) | Car-ticks/s | Ticks/s at the full population of 50 (budget: 600) |
+| --- | ---: | ---: | ---: | --- | ---: | --- |
+| stadium-oval | 52 | 10.8 | 234,983 | 3.92, 3.87, 3.83 | about 60,000 to 61,300 | 1,199.5, 1,215.2, 1,225.5 |
+| silverstone | 2,356 | 7.7 | 855,978 | 299.3, 296.0, 292.8 | about 2,860 to 2,920 | **57.2, 57.8, 58.5** |
+
+How to read it: "ticks/s at the full population" is the car-tick rate divided by 50, the rate if every car stayed running, which is conservative (see `src/training/benchmark.ts`). Per car-tick, Silverstone costs about 21 times the oval here (45 times the boundary segments), as brute-force collision and ray queries would predict. **This is a desktop container figure, not your phone's, and it is not by itself the P2-11 trigger** (section 0.2). It also means a 50-car Silverstone generation takes about 30 seconds of one core here, so training on Silverstone on a phone will be far slower than on the oval.
+
+Reproduce it: `npm run bench -- --generations 10 --warmup 2 --out bench.json` (about five minutes for Silverstone). The car-tick counts must match the table exactly; the timings will differ on another machine.
