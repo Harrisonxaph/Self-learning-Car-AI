@@ -6,11 +6,13 @@ import { addPoint, buildTrack, closeLoop, createEditorState } from '../../src/ed
 import { createModelStore } from '../../src/persistence/modelStore';
 import { createTrackStore } from '../../src/persistence/trackStore';
 import { BUILT_IN_TRACK_SPLITS, classifyCustomTrack, tracksIn } from '../../src/training/trackSplits';
+import { offered } from '../../src/ui/trainingCircuit';
 import { createEvaluateController } from '../../src/ui/evaluateController';
 import { customRegistryLookup, entryBelongsTo, type CustomSource } from '../../src/ui/modelEvaluation';
 import { EVALUATION_TRACKS, MemoryStorage, TRAINING_REGISTRY, makeModel } from '../helpers/evaluationFixtures';
 
-const names = (split: 'training' | 'validation') => tracksIn(split).map((t) => ({ id: t.id, name: t.track.name }));
+// The pages list the circuits main.ts offers: every one of the split except those not yet offered (Silverstone, until P4-06 step 3).
+const names = (split: 'training' | 'validation') => offered(tracksIn(split)).map((t) => ({ id: t.id, name: t.track.name }));
 const ring = (rx: number, ry: number) => Array.from({ length: 10 }, (_, i) => ({ x: Math.round(rx * Math.cos((2 * Math.PI * i) / 10)), y: Math.round(ry * Math.sin((2 * Math.PI * i) / 10)) }));
 function drawn(rx: number, ry: number, name: string): Record<string, unknown> {
   let state = createEditorState({ snap: 0, name });

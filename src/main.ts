@@ -21,7 +21,7 @@ import { startEditorPage } from './ui/editorPage';
 import { classifyCustomTrack, tracksIn, trainingTrack } from './training/trackSplits';
 import { createTrackStore } from './persistence/trackStore';
 import { createTrackLibrary, type TrackLibrary } from './ui/trackLibrary';
-import { circuitFromSearch, searchForCircuit } from './ui/trainingCircuit';
+import { circuitFromSearch, offered, searchForCircuit } from './ui/trainingCircuit';
 import { createModelStore } from './persistence/modelStore';
 import { createEvaluateController } from './ui/evaluateController';
 import { RESERVED_CIRCUIT_IDS, customRegistryLookup, customSourceFromStore, entryBelongsTo, type CustomSource } from './ui/modelEvaluation';
@@ -86,7 +86,7 @@ let trackLibrary: TrackLibrary | undefined;
 
 if (pageMode(window.location.search) === 'train') {
   // One training circuit per run (P4-04): chosen from the address, training circuits only; the default is the stadium oval.
-  const trainingCircuits = tracksIn('training');
+  const trainingCircuits = offered(tracksIn('training'));
   const circuitSelect = element<HTMLSelectElement>('#training-circuit');
   for (const entry of trainingCircuits) {
     const option = document.createElement('option');
@@ -236,7 +236,7 @@ if (pageMode(window.location.search) === 'train') {
  */
 function startEvaluating(): void {
   for (const panel of [element<HTMLElement>('.hud'), element<HTMLElement>('.controls'), element<HTMLElement>('.keys-help')]) panel.hidden = true;
-  const training = tracksIn('training');
+  const training = offered(tracksIn('training'));
   const validation = tracksIn('validation');
   const tracks = customTrackStore();
   /** The saved custom track an ID names, read and checked again on every call (a hand-edited or reserved entry is never returned). */
@@ -274,7 +274,7 @@ function startEvaluating(): void {
  * custom tracks (every circuit is resolved through resolveCircuit, so a held-out circuit is never reached from this page).
  */
 function startRacing(): void {
-  const training = tracksIn('training');
+  const training = offered(tracksIn('training'));
   const validation = tracksIn('validation');
   const tracks = customTrackStore();
   const customTracks: CustomSource = customSourceFromStore(tracks);

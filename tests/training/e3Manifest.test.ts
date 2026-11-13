@@ -34,7 +34,8 @@ const expected = (): Json => ({
     training: { id: 'stadium-oval', contentHash: trackContentHash(trainingTrack('stadium-oval')) },
     validation: { id: 'rounded-rectangle', contentHash: trackContentHash(validationTrack('rounded-rectangle')) },
     heldOut: HELD.map((id) => ({ id, contentHash: tracksIn('held-out').find((t) => t.id === id)!.contentHash })),
-    splitManifestHash: manifestRecord().hash,
+    // The preregistered manifest was written against epoch 2 and must never change: its recorded hash is epoch 2's, not the latest epoch's.
+    splitManifestHash: manifestRecord(BUILT_IN_TRACK_SPLITS, 2).hash,
   },
   rules: ruleIds(),
   analysis: { metric: METRIC, delta: 0.25, bootstrap: { ...E3_BOOTSTRAP }, decisionRule: E3_DECISION_RULE },
@@ -67,7 +68,8 @@ describe('the committed E3 manifest', () => {
   });
   it('names the split epoch it was written against (the P4-04 expansion), so every listed circuit belongs to it', () => {
     expect(manifestEpochOf(load().tracks.splitManifestHash)).toBe(2);
-    expect(load().tracks.splitManifestHash).toBe(manifestRecord().hash);
+    expect(load().tracks.splitManifestHash).toBe(manifestRecord(BUILT_IN_TRACK_SPLITS, 2).hash);
+    expect(manifestRecord().hash).not.toBe(load().tracks.splitManifestHash); // later epochs exist now (P4-06), and the frozen manifest still names epoch 2
   });
   it('the held-out circuits are registered as held-out and the training and validation circuits are not among them', () => {
     const held = new Set<string>(load().tracks.heldOut.map((h: Json) => h.id));

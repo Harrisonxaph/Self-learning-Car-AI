@@ -18,6 +18,7 @@ import hairpinChicane from '../data/tracks/hairpin-chicane.json';
 import kidneyLoop from '../data/tracks/kidney-loop.json';
 import longSweepers from '../data/tracks/long-sweepers.json';
 import roundedRectangle from '../data/tracks/rounded-rectangle.json';
+import silverstone from '../data/tracks/silverstone.json';
 import sSweepers from '../data/tracks/s-sweepers.json';
 import stadiumOval from '../data/tracks/stadium-oval.json';
 import technicalNarrow from '../data/tracks/technical-narrow.json';
@@ -27,6 +28,9 @@ import { sha256Hex } from '../utils/sha256';
 
 export const TRACK_SPLITS_FORMAT = 'self-driving-ai-evolution/track-splits';
 export const TRACK_SPLITS_VERSION = 1;
+/** The most seconds and laps a manifest entry's `limits` may name, so a typo cannot switch an episode rule off. */
+const MAX_LIMIT_SECONDS = 36_000;
+const MAX_LIMIT_LAPS = 100;
 export const SPLITS = Object.freeze(['training', 'validation', 'held-out'] as const);
 export type Split = (typeof SPLITS)[number];
 
@@ -51,6 +55,18 @@ export interface SplitTrack {
   readonly track: Track;
   /** Where the circuit came from (P4-04); null when a manifest gives none (every built-in entry has one). Not part of the content hash or of a recorded manifest. */
   readonly provenance: TrackProvenance | null;
+  /**
+   * The episode limits this circuit proposes for NEW runs (P4-06), or null for the circuits that keep the defaults (60 s, 5 s and 3 laps). Not part of the
+   * content hash or of a recorded manifest, and never applied to a record that already has its own: a record's recorded settings always win on replay.
+   */
+  readonly limits: TrackLimits | null;
+}
+
+/** Episode limits proposed for new runs on one circuit: simulated seconds in total, simulated seconds without a new gate credit, and laps to complete. */
+export interface TrackLimits {
+  readonly maxEpisodeSeconds: number;
+  readonly stallSeconds: number;
+  readonly maxLaps: number;
 }
 
 /** Split provenance of one circuit: who introduced it, the criteria it was designed to, and whether it was designed before any evaluation. */
@@ -140,11 +156,28 @@ export function loadTrackSplits(manifest: unknown, files: Readonly<Record<string
       if (typeof given.designedBeforeAnyEvaluation !== 'boolean') fail(`tracks[${i}] ("${id}") provenance.designedBeforeAnyEvaluation must be true or false.`);
       provenance = Object.freeze({ introducedBy: given.introducedBy as string, designCriteria: given.designCriteria as string, designedBeforeAnyEvaluation: given.designedBeforeAnyEvaluation as boolean });
     }
+    let limits: TrackLimits | null = null;
+    if (e.limits !== undefined) {
+      const given = e.limits as Record<string, unknown> | null;
+      if (given === null || typeof given !== 'object' || Array.isArray(given)) fail(`tracks[${i}] ("${id}") limits must be an object.`);
+      const lim = given as Record<string, unknown>;
+      for (const key of Object.keys(lim)) {
+        if (!['maxEpisodeSeconds', 'stallSeconds', 'maxLaps'].includes(key)) fail(`tracks[${i}] ("${id}") limits has an unknown field "${key}".`);
+      }
+      for (const key of ['maxEpisodeSeconds', 'stallSeconds']) {
+        const v = lim[key];
+        if (typeof v !== 'number' || !Number.isFinite(v) || !(v > 0) || v > MAX_LIMIT_SECONDS) fail(`tracks[${i}] ("${id}") limits.${key} must be a finite number of seconds greater than 0 and at most ${MAX_LIMIT_SECONDS}, got ${String(v)}.`);
+      }
+      const laps = lim.maxLaps;
+      if (typeof laps !== 'number' || !Number.isInteger(laps) || laps < 1 || laps > MAX_LIMIT_LAPS) fail(`tracks[${i}] ("${id}") limits.maxLaps must be a whole number from 1 to ${MAX_LIMIT_LAPS}, got ${String(laps)}.`);
+      if ((lim.stallSeconds as number) > (lim.maxEpisodeSeconds as number)) fail(`tracks[${i}] ("${id}") limits.stallSeconds (${String(lim.stallSeconds)}) must not exceed limits.maxEpisodeSeconds (${String(lim.maxEpisodeSeconds)}).`);
+      limits = Object.freeze({ maxEpisodeSeconds: lim.maxEpisodeSeconds as number, stallSeconds: lim.stallSeconds as number, maxLaps: laps as number });
+    }
     const geometryHash = trackGeometryHash(track);
     const same = hashes.get(geometryHash);
     if (same !== undefined) fail(`tracks "${same}" and "${id}" have the same geometry.`);
     hashes.set(geometryHash, id!);
-    tracks.push(Object.freeze({ id: id!, version: version!, split: split as Split, contentHash: actual, geometryHash, track, provenance }));
+    tracks.push(Object.freeze({ id: id!, version: version!, split: split as Split, contentHash: actual, geometryHash, track, provenance, limits }));
   }
   for (const split of SPLITS) {
     if (!tracks.some((t) => t.split === split)) fail(`the "${split}" split has no tracks.`);
@@ -161,10 +194,11 @@ export const BUILT_IN_TRACK_SPLITS: TrackSplits = loadTrackSplits(manifestData, 
   'long-sweepers.json': longSweepers,
   's-sweepers.json': sSweepers,
   'technical-narrow.json': technicalNarrow,
+  'silverstone.json': silverstone,
 });
 
 /**
- * The split-manifest epochs: an APPEND-ONLY registry of explicit circuit-ID lists (P4-04). Epoch 1 is the three circuits of P2-10.
+ * The split-manifest epochs: an APPEND-ONLY registry of explicit circuit-ID lists (P4-04). Epoch 1 is the three circuits of P2-10, epoch 2 (P4-04) adds four, epoch 3 (P4-06) adds Silverstone.
  * Every change that adds circuits appends exactly ONE new epoch (the previous epoch's IDs plus the added ones, in manifest
  * order); an epoch is never redefined and an added circuit is never absorbed into an existing epoch. A recorded split manifest
  * is accepted only if it equals the manifest record of one of these epochs, recomputed from today's data restricted to that
@@ -181,6 +215,11 @@ export const SPLIT_EPOCHS: readonly SplitEpoch[] = Object.freeze([
     epoch: 2,
     introducedBy: 'P4-04',
     ids: Object.freeze(['stadium-oval', 'rounded-rectangle', 'hairpin-chicane', 'kidney-loop', 's-sweepers', 'long-sweepers', 'technical-narrow']),
+  }),
+  Object.freeze({
+    epoch: 3,
+    introducedBy: 'P4-06',
+    ids: Object.freeze(['stadium-oval', 'rounded-rectangle', 'hairpin-chicane', 'kidney-loop', 's-sweepers', 'long-sweepers', 'technical-narrow', 'silverstone']),
   }),
 ]);
 export const LATEST_SPLIT_EPOCH: number = SPLIT_EPOCHS[SPLIT_EPOCHS.length - 1]!.epoch;

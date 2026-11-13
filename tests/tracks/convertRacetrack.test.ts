@@ -305,13 +305,16 @@ describe('the importer script', () => {
   }, 60_000);
 });
 
-describe('the converter is pure and Silverstone is not registered by this step', () => {
+describe('the converter is pure, and its output is what the split manifest registers (step 2b)', () => {
   it('reads no file, clock or randomness', () => {
     const text = readFileSync(join(ROOT, 'src/tracks/convertRacetrack.ts'), 'utf8').replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '');
     expect(/from 'node:|require\(|Date\.|Math\.random|performance\.|document\.|window\.|fetch\(/.test(text)).toBe(false);
   });
-  it('is in no manifest, so nothing selects, trains or evaluates on it yet', () => {
-    const manifest = readFileSync(join(TRACKS, 'index.json'), 'utf8');
-    expect(manifest).not.toContain('silverstone');
+  it('the manifest entry\'s content hash is the hash of the converter\'s output', () => {
+    const manifest = JSON.parse(readFileSync(join(TRACKS, 'index.json'), 'utf8')) as { tracks: { id: string; contentHash: string; version: string }[] };
+    const entry = manifest.tracks.find((t) => t.id === 'silverstone')!;
+    const converted = loadTrack(JSON.parse(serialiseRacetrack(convertRacetrack(csvText, SILVERSTONE()).document)));
+    expect(entry.contentHash).toBe(`sha256:${createHash('sha256').update(JSON.stringify(converted)).digest('hex')}`);
+    expect(entry.version).toBe(converted.version);
   });
 });

@@ -13,10 +13,12 @@ import stadiumOval from '../../src/data/tracks/stadium-oval.json';
 import { PARAMETER_COUNT } from '../../src/ai/network';
 import { entryBelongsTo } from '../../src/ui/modelEvaluation';
 import { tracksIn } from '../../src/training/trackSplits';
+import { offered } from '../../src/ui/trainingCircuit';
 import type { Controls } from '../../src/sim/vehicle';
 import { EVALUATION_TRACKS, MemoryStorage, TRAINING_REGISTRY, makeModel } from '../helpers/evaluationFixtures';
 
-const names = (split: 'training' | 'validation') => tracksIn(split).map((t) => ({ id: t.id, name: t.track.name }));
+// The pages list the circuits main.ts offers: every one of the split except those not yet offered (Silverstone, until P4-06 step 3).
+const names = (split: 'training' | 'validation') => offered(tracksIn(split)).map((t) => ({ id: t.id, name: t.track.name }));
 const HELD_OUT = tracksIn('held-out').map((t) => t.id);
 const FULL: Controls = { steering: 0, throttle: 1, brake: 0 };
 const IDLE: Controls = { steering: 0, throttle: 0, brake: 0 };

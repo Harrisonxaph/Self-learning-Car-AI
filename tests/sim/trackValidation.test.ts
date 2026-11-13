@@ -559,6 +559,6 @@ describe('manifest integration', () => {
   });
   it('a matching split label loads', () => {
     const labelled = { ...oval(), split: 'training' };
-    expect(loadTrackSplits(manifestData, { ...FILES, 'stadium-oval.json': labelled }).tracks).toHaveLength(7);
+    expect(loadTrackSplits(manifestData, { ...FILES, 'stadium-oval.json': labelled }).tracks).toHaveLength(8);
   });
 });

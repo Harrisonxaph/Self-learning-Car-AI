@@ -4,6 +4,7 @@ import hairpinChicane from '../../src/data/tracks/hairpin-chicane.json';
 import kidneyLoop from '../../src/data/tracks/kidney-loop.json';
 import longSweepers from '../../src/data/tracks/long-sweepers.json';
 import roundedRectangle from '../../src/data/tracks/rounded-rectangle.json';
+import silverstone from '../../src/data/tracks/silverstone.json';
 import sSweepers from '../../src/data/tracks/s-sweepers.json';
 import stadiumOval from '../../src/data/tracks/stadium-oval.json';
 import technicalNarrow from '../../src/data/tracks/technical-narrow.json';
@@ -16,4 +17,5 @@ export const BUILT_IN_FILES: Readonly<Record<string, unknown>> = {
   's-sweepers.json': sSweepers,
   'long-sweepers.json': longSweepers,
   'technical-narrow.json': technicalNarrow,
+  'silverstone.json': silverstone,
 };
