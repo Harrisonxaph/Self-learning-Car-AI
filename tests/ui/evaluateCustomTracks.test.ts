@@ -11,7 +11,7 @@ import { createEvaluateController } from '../../src/ui/evaluateController';
 import { customRegistryLookup, entryBelongsTo, type CustomSource } from '../../src/ui/modelEvaluation';
 import { EVALUATION_TRACKS, MemoryStorage, TRAINING_REGISTRY, makeModel } from '../helpers/evaluationFixtures';
 
-// The pages list the circuits main.ts offers: every one of the split except those not yet offered (Silverstone, until P4-06 step 3).
+// The pages list the circuits main.ts offers: every one of the split except those only the training page offers (Silverstone: the evaluate and race rules cannot complete its lap).
 const names = (split: 'training' | 'validation') => offered(tracksIn(split)).map((t) => ({ id: t.id, name: t.track.name }));
 const ring = (rx: number, ry: number) => Array.from({ length: 10 }, (_, i) => ({ x: Math.round(rx * Math.cos((2 * Math.PI * i) / 10)), y: Math.round(ry * Math.sin((2 * Math.PI * i) / 10)) }));
 function drawn(rx: number, ry: number, name: string): Record<string, unknown> {

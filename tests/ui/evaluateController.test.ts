@@ -10,7 +10,7 @@ import { tracksIn } from '../../src/training/trackSplits';
 import { offered } from '../../src/ui/trainingCircuit';
 import { EVALUATION_TRACKS, MemoryStorage, TRAINING_REGISTRY, makeModel } from '../helpers/evaluationFixtures';
 
-// The pages list the circuits main.ts offers: every one of the split except those not yet offered (Silverstone, until P4-06 step 3).
+// The pages list the circuits main.ts offers: every one of the split except those only the training page offers (Silverstone: the evaluate and race rules cannot complete its lap).
 const names = (split: 'training' | 'validation') => offered(tracksIn(split)).map((t) => ({ id: t.id, name: t.track.name }));
 const HELD_OUT = tracksIn('held-out').map((t) => t.id);
 

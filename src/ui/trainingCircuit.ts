@@ -2,18 +2,43 @@
 // chosen from the page address (`?mode=train&circuit=<id>`), and changing it in the page starts a new run by loading the
 // address for the new circuit. Only training circuits are ever offered or accepted: a validation or held-out ID in the
 // address is ignored, so the page can never be pointed at one. Evolving across several circuits is the approval-gated R-06.
+import { DEFAULT_TRAINING_CONFIG, type TrainingConfig } from '../training/trainer';
+import type { TrackLimits } from '../training/trackSplits';
+
 export const DEFAULT_TRAINING_CIRCUIT = 'stadium-oval';
 
 /**
- * Built-in circuits that are registered (P4-06 step 2b) but not yet OFFERED in any page list or accepted from the address: Silverstone's episode limits
- * (420 s, 10 s, one lap) are not read by the pages yet, so training on it with the 60 s default would only time out. Step 3 (selection, scaled limits, the
- * credit line) empties this list. Nothing else changes: the circuit is registered, hashed and recognised by every split check.
+ * Built-in circuits offered on the TRAINING page only (P4-06 step 3). Silverstone's episode limits (420 s, a 10 s stall rule, one lap) are read by the
+ * training page, which records them in the run's configuration. The evaluate page (a fixed 60 s, 5 s, 3-lap protocol, so that evaluations are comparable)
+ * and the race page (its own 60 s per lap rule) cannot complete a 5.9 km lap, so neither offers it as a circuit to run on: a champion trained on
+ * Silverstone is still listed and usable there, on the other circuits. Widening those protocols is a separate, owner-approved change.
  */
-export const NOT_YET_OFFERED: readonly string[] = Object.freeze(['silverstone']);
+export const TRAINING_PAGE_ONLY: readonly string[] = Object.freeze(['silverstone']);
 
-/** The tracks a page may list: every one except those not yet offered. */
+/** The tracks the evaluate and race pages may list: every one except those only the training page offers. */
 export function offered<T extends { readonly id: string }>(tracks: readonly T[]): T[] {
-  return tracks.filter((t) => !NOT_YET_OFFERED.includes(t.id));
+  return tracks.filter((t) => !TRAINING_PAGE_ONLY.includes(t.id));
+}
+
+/**
+ * The trainer configuration for a NEW run on a circuit: the defaults, with the circuit's own episode limits when its manifest entry proposes
+ * them (null keeps the 60 s, 5 s and 3-lap defaults). A saved model's or checkpoint's own recorded configuration always wins on a replay or a resume;
+ * this is only where a new run starts.
+ */
+export function trainingConfigFor(limits: TrackLimits | null): TrainingConfig {
+  if (limits === null) return DEFAULT_TRAINING_CONFIG;
+  return Object.freeze({
+    ...DEFAULT_TRAINING_CONFIG,
+    maxEpisodeSeconds: limits.maxEpisodeSeconds,
+    stallSeconds: limits.stallSeconds,
+    maxLaps: limits.maxLaps,
+  });
+}
+
+/** The credit shown while a circuit made from third-party data is selected, or null. The wording follows src/data/tracks/NOTICE.md. */
+export function circuitCredit(id: string): string | null {
+  if (id !== 'silverstone') return null;
+  return 'Silverstone: centre line and widths from the TUM racetrack-database (LGPL-3.0), which is derived from OpenStreetMap data, © OpenStreetMap contributors (ODbL 1.0). The layout is the real circuit driven the opposite way round, as a simplified model with no kerbs, run-offs or elevation.';
 }
 
 /** The circuit named by the query string's last `circuit` parameter if it is one of `available`, otherwise the default. */

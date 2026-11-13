@@ -21,7 +21,7 @@ import { startEditorPage } from './ui/editorPage';
 import { classifyCustomTrack, tracksIn, trainingTrack } from './training/trackSplits';
 import { createTrackStore } from './persistence/trackStore';
 import { createTrackLibrary, type TrackLibrary } from './ui/trackLibrary';
-import { circuitFromSearch, offered, searchForCircuit } from './ui/trainingCircuit';
+import { circuitFromSearch, offered, searchForCircuit, trainingConfigFor } from './ui/trainingCircuit';
 import { createModelStore } from './persistence/modelStore';
 import { createEvaluateController } from './ui/evaluateController';
 import { RESERVED_CIRCUIT_IDS, customRegistryLookup, customSourceFromStore, entryBelongsTo, type CustomSource } from './ui/modelEvaluation';
@@ -86,7 +86,7 @@ let trackLibrary: TrackLibrary | undefined;
 
 if (pageMode(window.location.search) === 'train') {
   // One training circuit per run (P4-04): chosen from the address, training circuits only; the default is the stadium oval.
-  const trainingCircuits = offered(tracksIn('training'));
+  const trainingCircuits = tracksIn('training');
   const circuitSelect = element<HTMLSelectElement>('#training-circuit');
   for (const entry of trainingCircuits) {
     const option = document.createElement('option');
@@ -94,7 +94,9 @@ if (pageMode(window.location.search) === 'train') {
     option.textContent = entry.track.name;
     circuitSelect.append(option);
   }
-  const trainingCircuit = trainingTrack(circuitFromSearch(window.location.search, trainingCircuits.map((t) => t.id)));
+  const trainingId = circuitFromSearch(window.location.search, trainingCircuits.map((t) => t.id));
+  const trainingCircuit = trainingTrack(trainingId);
+  const trainingLimits = trainingCircuits.find((t) => t.id === trainingId)?.limits ?? null;
   const graphCanvas = element<HTMLCanvasElement>('#graph-canvas');
   const graphContext = graphCanvas.getContext('2d');
   if (!graphContext) throw new Error('Canvas 2D drawing is not supported.');
@@ -211,9 +213,11 @@ if (pageMode(window.location.search) === 'train') {
     },
     trackLayer,
     track: trainingCircuit,
+    trainingConfig: trainingConfigFor(trainingLimits),
     circuit: {
       select: circuitSelect,
       hint: element<HTMLElement>('#training-circuit-hint'),
+      credit: element<HTMLElement>('#training-circuit-credit'),
       navigate: (id) => window.location.assign(`${window.location.pathname}${searchForCircuit(window.location.search, id)}`),
     },
     physics: DEFAULT_VEHICLE_PHYSICS,
@@ -236,14 +240,16 @@ if (pageMode(window.location.search) === 'train') {
  */
 function startEvaluating(): void {
   for (const panel of [element<HTMLElement>('.hud'), element<HTMLElement>('.controls'), element<HTMLElement>('.keys-help')]) panel.hidden = true;
-  const training = offered(tracksIn('training'));
+  // The model registry knows every training circuit (a champion trained on Silverstone is a valid model); only the circuits to run on are limited.
+  const trainingAll = tracksIn('training');
+  const training = offered(trainingAll);
   const validation = tracksIn('validation');
   const tracks = customTrackStore();
   /** The saved custom track an ID names, read and checked again on every call (a hand-edited or reserved entry is never returned). */
   const customTracks: CustomSource = customSourceFromStore(tracks);
   const store = createModelStore({
     storage: () => window.localStorage,
-    registry: training,
+    registry: trainingAll,
     evaluationTracks: [...training, ...validation],
     evaluationBinding: entryBelongsTo,
     evaluationCustom: customRegistryLookup(customTracks),
@@ -274,13 +280,15 @@ function startEvaluating(): void {
  * custom tracks (every circuit is resolved through resolveCircuit, so a held-out circuit is never reached from this page).
  */
 function startRacing(): void {
-  const training = offered(tracksIn('training'));
+  // The model registry knows every training circuit (a champion trained on Silverstone is a valid model); only the circuits to run on are limited.
+  const trainingAll = tracksIn('training');
+  const training = offered(trainingAll);
   const validation = tracksIn('validation');
   const tracks = customTrackStore();
   const customTracks: CustomSource = customSourceFromStore(tracks);
   const store = createModelStore({
     storage: () => window.localStorage,
-    registry: training,
+    registry: trainingAll,
     evaluationTracks: [...training, ...validation],
     evaluationBinding: entryBelongsTo,
     evaluationCustom: customRegistryLookup(customTracks),

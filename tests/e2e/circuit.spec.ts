@@ -22,7 +22,9 @@ test('the default is the stadium oval and the choice offers the training circuit
   await expect(page.locator('#sim-canvas')).toHaveAttribute('data-track-id', 'stadium-oval');
   await page.locator('#champion-replay > summary').click();
   const options = await page.locator('#training-circuit option').evaluateAll((nodes) => nodes.map((n) => [(n as HTMLOptionElement).value, n.textContent]));
-  expect(options).toEqual([['stadium-oval', 'Stadium oval'], ['kidney-loop', 'Kidney loop']]);
+  expect(options.map((o) => o[0])).toEqual(['stadium-oval', 'kidney-loop', 'silverstone']);
+  expect(options[0]).toEqual(['stadium-oval', 'Stadium oval']);
+  expect(options[1]).toEqual(['kidney-loop', 'Kidney loop']);
   await expect(page.locator('#training-circuit')).toHaveValue('stadium-oval');
   await expect(page.locator('#training-circuit')).toBeEnabled();
 });
@@ -71,4 +73,39 @@ test('the default page and the editor page do not show the circuit choice', asyn
   await expect(page.locator('#training-circuit')).toBeHidden();
   await page.goto('/?mode=edit');
   await expect(page.locator('#training-circuit')).toBeHidden();
+});
+
+test('Silverstone can be chosen from the address: it is drawn whole, credited, and trains under its own limits; the others keep the defaults and show no credit', async ({ page }) => {
+  await page.goto('/?mode=train');
+  await expect(page.locator('#sim-canvas')).toHaveAttribute('data-episode-limits', '60/5/3');
+  await page.locator('#champion-replay > summary').click();
+  await expect(page.locator('#training-circuit-credit')).toBeHidden();
+
+  await page.goto('/?mode=train&circuit=silverstone');
+  await expect(page.locator('#sim-canvas')).toHaveAttribute('data-track-id', 'silverstone');
+  await expect(page.locator('#sim-canvas')).toHaveAttribute('aria-label', /Silverstone/);
+  await expect(page.locator('#sim-canvas')).toHaveAttribute('data-episode-limits', '420/10/1');
+  await page.locator('#champion-replay > summary').click();
+  await expect(page.locator('#training-circuit')).toHaveValue('silverstone');
+  const credit = page.locator('#training-circuit-credit');
+  await expect(credit).toBeVisible();
+  await expect(credit).toContainText('TUM racetrack-database');
+  await expect(credit).toContainText('OpenStreetMap contributors');
+  await expect(credit).toContainText('opposite way round');
+
+  // The whole circuit is fitted: its bounds (about 1,020 m by 1,724 m) lie inside the canvas at the fitted scale.
+  const view = await page.locator('#sim-canvas').evaluate((c) => {
+    const el = c as HTMLCanvasElement;
+    return { scale: Number(el.dataset.trackScale), x: Number(el.dataset.trackOffsetX), y: Number(el.dataset.trackOffsetY), w: el.width, h: el.height };
+  });
+  expect(view.scale).toBeGreaterThan(0);
+  expect(1020 * view.scale).toBeLessThanOrEqual(view.w + 1);
+  expect(1724 * view.scale).toBeLessThanOrEqual(view.h + 1);
+});
+
+test('a run on Silverstone completes generations at maximum speed (random brains end by crash or stall, long before 420 s)', async ({ page }) => {
+  await page.goto('/?mode=train&circuit=silverstone');
+  await page.locator('[data-speed="max"]').click();
+  await expect.poll(async () => Number(await data(page, 'completed-generations')), { timeout: 90_000 }).toBeGreaterThanOrEqual(1);
+  await expect(page.locator('#sim-canvas')).toHaveAttribute('data-episode-limits', '420/10/1');
 });
