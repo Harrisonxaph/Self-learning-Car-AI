@@ -26,7 +26,8 @@
     "feasibility": "node scripts/feasibility.mjs",
     "rule-tuning": "node scripts/ruleTuning.mjs",
     "e3": "node scripts/e3.mjs",
-    "e4": "node scripts/e4.mjs"
+    "e4": "node scripts/e4.mjs",
+    "bench": "node scripts/bench.mjs"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

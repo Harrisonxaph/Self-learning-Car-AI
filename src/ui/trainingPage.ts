@@ -311,6 +311,8 @@ export function startTrainingPage(page: TrainingPage): void {
   const drawCostMeter = createRateMeter();
   let stepMsThisFrame = 0;
   let drawMsThisFrame = 0;
+  // Simulation time spent in this rendered frame's tick(s), for the draw-time readout's update figures (P4-06 step 4). Separate from stepMsThisFrame, which only the frame-rate readout resets.
+  let updateMsThisFrame = 0;
   const measureClock = page.now ?? (() => performance.now());
   let ticksThisFrame = 0;
   let lastReadoutMs = Number.NEGATIVE_INFINITY;
@@ -1307,11 +1309,13 @@ export function startTrainingPage(page: TrainingPage): void {
       ticks += 1;
       ticksThisFrame += 1;
       const completed = session.generations.length;
-      if (fpsReadout) {
-        // Only the opt-in readout pays for the two clock reads per tick.
+      if (fpsReadout || drawTime) {
+        // Only the opt-in readouts pay for the two clock reads per tick.
         const started = measureClock();
         session.step();
-        stepMsThisFrame += measureClock() - started;
+        const took = measureClock() - started;
+        if (fpsReadout) stepMsThisFrame += took;
+        if (drawTime) updateMsThisFrame += took;
       } else {
         session.step();
       }
@@ -1324,11 +1328,13 @@ export function startTrainingPage(page: TrainingPage): void {
     step: () => {
       if (active || activePair) {
         const run = () => (activePair ? stepPair(activePair) : stepReplay(active!));
-        if (!fpsReadout) return run() ? undefined : false;
+        if (!fpsReadout && !drawTime) return run() ? undefined : false;
         // Replay ticks are counted as simulation ticks, so they are timed too: the step-time numerator matches its denominator.
         const started = measureClock();
         const carryOn = run();
-        stepMsThisFrame += measureClock() - started;
+        const took = measureClock() - started;
+        if (fpsReadout) stepMsThisFrame += took;
+        if (drawTime) updateMsThisFrame += took;
         return carryOn ? undefined : false;
       }
       return stepper.step();
@@ -1343,7 +1349,10 @@ export function startTrainingPage(page: TrainingPage): void {
       show();
       chart.frame();
       if (fpsReadout) drawMsThisFrame += measureClock() - drawStarted;
-      if (drawTime) drawTime.endFrame(measureClock(), measureClock() - drawStarted);
+      if (drawTime) {
+        drawTime.endFrame(measureClock(), measureClock() - drawStarted, updateMsThisFrame);
+        updateMsThisFrame = 0;
+      }
       stepper.endFrame();
       updateFps(page.now ? page.now() : performance.now());
     },

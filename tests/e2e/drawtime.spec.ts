@@ -47,6 +47,19 @@ for (const [name, url] of [['driving', '/?debug=drawtime'], ['training', '/?mode
   });
 }
 
+test('the training page also reports the simulation update time per frame, with the P2-11 verdict; the driving page does not (it has no simulation update to time)', async ({ page }) => {
+  await page.goto('/?mode=train&debug=drawtime');
+  await expect.poll(async () => Number(await canvas(page).getAttribute('data-draw-frames')), { timeout: 15_000 }).toBeGreaterThan(30);
+  await expect(readout(page)).toContainText('Simulation update per frame');
+  await expect(readout(page)).toContainText('P2-11 budget (1x speed only');
+  const p95 = Number(await canvas(page).getAttribute('data-update-p95-ms'));
+  expect(Number.isFinite(p95) && p95 >= 0).toBe(true);
+  await page.goto('/?debug=drawtime');
+  await expect(readout(page)).toContainText('Camera draw time');
+  await expect(readout(page)).not.toContainText('Simulation update per frame');
+  await expect(canvas(page)).not.toHaveAttribute('data-update-p95-ms', /.*/);
+});
+
 test('the readout is out of the layout and never in the way of a tap', async ({ page }) => {
   await page.goto('/');
   const before = await page.locator('button[data-action="accelerate"]').boundingBox();

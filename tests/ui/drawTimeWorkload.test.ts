@@ -47,6 +47,18 @@ function setup() {
   return { ...made, run, until, frames };
 }
 
+describe('the readout carries the simulation update time (P4-06 step 4)', () => {
+  it('training at 1x: update figures appear beside the draw figures, measured around the frame\'s tick', () => {
+    const p = setup();
+    // Each clock read costs 0.5 ms in this fake, and the tick is timed with two reads, so a frame's update is 0.5 ms. The first frame runs no tick (0 ms), so wait for a few.
+    const text = p.until((t) => /Simulation update per frame: p50 0\.50 ms · p95 0\.50 ms · max 0\.50 ms/.test(t));
+    expect(text).toMatch(/Simulation update per frame: p50 0\.50 ms/);
+    expect(text).toContain('P2-11 budget (1x speed only');
+    expect(Number(p.canvas.dataset.updateP95Ms)).toBeCloseTo(0.5, 3);
+    expect(Number(p.canvas.dataset.drawP95Ms)).toBeGreaterThan(0);
+  });
+});
+
 describe('the readout names what is being drawn', () => {
   it('training: the cars-drawn cap, as before', () => {
     const p = setup();
