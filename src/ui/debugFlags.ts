@@ -18,3 +18,8 @@ export function debugRaysEnabled(search: string): boolean {
 export function debugFpsEnabled(search: string): boolean {
   return debugFlag(search, 'fps');
 }
+
+/** True if the query string's `debug` parameter lists `drawtime`: the driving and training pages then show the camera draw-time readout (P4-07). */
+export function debugDrawTimeEnabled(search: string): boolean {
+  return debugFlag(search, 'drawtime');
+}

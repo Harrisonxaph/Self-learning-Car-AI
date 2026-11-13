@@ -127,6 +127,8 @@ export interface FakePageOptions {
   readonly storage?: (() => StorageLike | null) | undefined;
   /** Gives the page the opt-in frame-rate readout element. */
   readonly fps?: boolean | undefined;
+  /** Opt into the camera draw-time readout (P4-07). */
+  readonly drawTime?: boolean | undefined;
   /** Gives the page the comparison of two saved champions (P3-08). */
   readonly compare?: boolean | undefined;
   /** Gives the page the checkpoint feature (P3-07), with its own storage (a fresh one by default) and settings. */
@@ -176,6 +178,7 @@ export function fakePage(frames: FakeFrames, options: FakePageOptions | { ms: nu
     },
   };
   const fps = opts.fps ? { hidden: true, textContent: '' } : undefined;
+  const drawTime = opts.drawTime ? { hidden: true, textContent: '' } : undefined;
   const savedStorage = new FakeLocalStorage();
   const saved = {
     name: Object.assign(new FakeControl(), { value: '' }),
@@ -257,6 +260,7 @@ export function fakePage(frames: FakeFrames, options: FakePageOptions | { ms: nu
     compare,
     checkpoint,
     fps,
+    drawTime,
     isPhone: opts.isPhone ?? false,
     // No track layer yet: the frame draws nothing, which leaves the per-frame paths under test.
     trackLayer: { get: () => (opts.drawing ? { canvas: {}, view: { scale: 1, offsetX: 0, offsetY: 0 } } : null) },
@@ -275,5 +279,5 @@ export function fakePage(frames: FakeFrames, options: FakePageOptions | { ms: nu
     for (const entry of deferred.splice(0)) if (includeCancelled || !entry.cancelled) entry.run();
   };
   const hide = () => hideListeners.forEach((listener) => listener());
-  return { page, canvas, dashboard, panel, hidden, graph, controls, replay, saved, savedStorage, compare, checkpoint, checkpointStorage, runDeferred, hide, status, fps, circuitSelect, circuitHint, navigated };
+  return { page, canvas, dashboard, panel, hidden, graph, controls, replay, saved, savedStorage, compare, checkpoint, checkpointStorage, runDeferred, hide, status, fps, drawTime, circuitSelect, circuitHint, navigated };
 }

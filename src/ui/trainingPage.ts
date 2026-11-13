@@ -38,6 +38,7 @@ import { renderSavedList, type UiFactory, type UiList, type UiNode } from './sav
 import { replayForModel, setupForModel } from './savedReplay';
 import { browserFrameEnvironment, startFrameLoop, type FrameEnvironment, type FrameLoop } from './frameLoop';
 import { createRateMeter, formatRateReadout, meanMs } from './rateMeter';
+import { browserLongTasks, createDrawTimeProbe, type LongTaskSource } from './drawTimeProbe';
 import { createTrainingChart, type GraphContext } from './trainingChart';
 import { createTrainingSession, type DashboardOutputs } from './trainingDashboard';
 import {
@@ -112,6 +113,13 @@ export interface TrainingPage {
    * times a second with the rate of rendered frames and, separately, the rate of simulation ticks. Absent, nothing is measured.
    */
   readonly fps?: HTMLElement | undefined;
+  /**
+   * The optional camera draw-time readout (P4-07, opt in with `?debug=drawtime`): p50, p95 and the largest draw time over the last 600 frames. When given,
+   * the camera draw is timed with two clock reads per frame; absent, nothing is measured. It only reads the clock and writes its own element.
+   */
+  readonly drawTime?: HTMLElement | undefined;
+  /** Where long tasks are counted for the draw-time readout (the browser's own by default). */
+  readonly longTasks?: LongTaskSource | undefined;
   /** Whether this is a phone, which starts with fewer cars drawn. The browser is asked by default. */
   readonly isPhone?: boolean;
   /** The training graph (P3-02): a collapsible block that is shown in training mode, with its canvas and text summary. */
@@ -308,6 +316,40 @@ export function startTrainingPage(page: TrainingPage): void {
     controls.drawCap.addEventListener('change', resetMeters);
     (page.frames ?? browserFrameEnvironment()).onVisibilityChange(resetMeters);
   }
+  // Optional camera draw-time readout (P4-07, `?debug=drawtime`): the p50, p95 and largest draw time of the camera draw over the last 600 frames.
+  // The workload is what draw() draws now: a comparison replay draws two cars, a champion replay one car with its sensor rays, training the cars-drawn cap.
+  const drawWorkload = (): string =>
+    activePair
+      ? 'comparison replay · 2 cars drawn'
+      : active
+        ? 'champion replay · 1 car drawn with its sensor rays'
+        : `${speed.paused ? 'paused' : speed.mode} · ${effectiveDrawCap(speed.mode, drawCap, population)} cars drawn`;
+  const drawTime = page.drawTime
+    ? createDrawTimeProbe({
+        element: page.drawTime,
+        now: measureClock,
+        longTasks: page.longTasks ?? browserLongTasks(),
+        dataset: canvas.dataset,
+        context: () => {
+          const size = viewport.current();
+          const view = camera.camera();
+          return `zoom ${view.zoom.toFixed(2)}x ${camera.following() ? 'following' : 'free'} · ${drawWorkload()} · population ${population} · ${track.id} · canvas ${Math.round(size.cssWidth)}x${Math.round(size.cssHeight)} css px at ${size.pixelRatio}x · build ${page.saved.codeVersion}`;
+        },
+      })
+    : undefined;
+  // A reading is only about one workload: when it changes (a replay starts or ends, the speed, pause or cars-drawn cap changes) the window starts again, so each
+  // workload collects its own 600 frames and never inherits another's timings or full-window verdict. Camera zoom is NOT a reset (the plan's measurement includes a
+  // 10 s zoom gesture); reload the page between zoom levels for a fresh window.
+  let measuredWorkload = '';
+  const restartDrawTimeOnChange = () => {
+    if (!drawTime) return;
+    const now = drawWorkload();
+    if (now !== measuredWorkload) {
+      measuredWorkload = now;
+      drawTime.reset();
+    }
+  };
+  if (drawTime) (page.frames ?? browserFrameEnvironment()).onVisibilityChange(() => drawTime.reset());
   const updateFps = (timeMs: number) => {
     if (!fpsReadout) return;
     frameMeter.add(timeMs);
@@ -1276,13 +1318,16 @@ export function startTrainingPage(page: TrainingPage): void {
       return stepper.step();
     },
     render: () => {
-      const drawStarted = fpsReadout ? measureClock() : 0;
+      const drawStarted = fpsReadout || drawTime ? measureClock() : 0;
       camera.frame(followed().position);
-      draw(viewport.current());
+      restartDrawTimeOnChange();
+      if (drawTime) drawTime.measure(() => draw(viewport.current()));
+      else draw(viewport.current());
       cameraUi?.refresh();
       show();
       chart.frame();
       if (fpsReadout) drawMsThisFrame += measureClock() - drawStarted;
+      if (drawTime) drawTime.endFrame(measureClock(), measureClock() - drawStarted);
       stepper.endFrame();
       updateFps(page.now ? page.now() : performance.now());
     },

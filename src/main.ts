@@ -36,7 +36,8 @@ import {
   createHeldInputs,
   type HoldAction,
 } from './ui/controls/input';
-import { debugFpsEnabled, debugRaysEnabled } from './ui/debugFlags';
+import { debugDrawTimeEnabled, debugFpsEnabled, debugRaysEnabled } from './ui/debugFlags';
+import { browserLongTasks, createDrawTimeProbe } from './ui/drawTimeProbe';
 import { browserFrameEnvironment, startFrameLoop } from './ui/frameLoop';
 import { hudView, nextFeedback, type Feedback } from './ui/hud';
 import { pageMode } from './ui/pageMode';
@@ -103,6 +104,7 @@ if (pageMode(window.location.search) === 'train') {
     status: hud.message,
     hide: [element<HTMLElement>('.hud'), element<HTMLElement>('.controls'), element<HTMLElement>('.keys-help')],
     fps: debugFpsEnabled(window.location.search) ? element<HTMLElement>('#fps-readout') : undefined,
+    drawTime: debugDrawTimeEnabled(window.location.search) ? element<HTMLElement>('#drawtime-readout') : undefined,
     controls: {
       group: element<HTMLElement>('#training-controls'),
       pause: element<HTMLButtonElement>('#speed-pause'),
@@ -445,6 +447,19 @@ function startDrivingPage(track: Track): () => void {
     changed: () => draw(viewport.current()),
   });
   const viewport = createViewport(canvas, browserViewportEnvironment(canvas), draw);
+  // Optional camera draw-time readout (P4-07, `?debug=drawtime`): opt in only; it reads the clock and writes its own element, nothing else.
+  const drawTime = debugDrawTimeEnabled(window.location.search)
+    ? createDrawTimeProbe({
+        element: element<HTMLElement>('#drawtime-readout'),
+        now: () => performance.now(),
+        longTasks: browserLongTasks(),
+        dataset: canvas.dataset,
+        context: () => {
+          const size = viewport.current();
+          return `zoom ${camera.camera().zoom.toFixed(2)}x ${camera.following() ? 'following' : 'free'} · driving page · ${track.id} · canvas ${Math.round(size.cssWidth)}x${Math.round(size.cssHeight)} css px at ${size.pixelRatio}x · build ${__CODE_VERSION__}`;
+        },
+      })
+    : undefined;
 
   const loop = startFrameLoop(browserFrameEnvironment(), createFixedStepClock(config), {
     // One simulation path: every tick applies a pending restart, asks the driver, then steps the world.
@@ -457,13 +472,17 @@ function startDrivingPage(track: Track): () => void {
       world = stepWorld(world, driver.decide({ car: world.racer.car }), config);
     },
     render: () => {
+      const renderStarted = drawTime ? performance.now() : 0;
       camera.frame(world.racer.car.vehicle.position);
-      draw(viewport.current());
+      if (drawTime) drawTime.measure(() => draw(viewport.current()));
+      else draw(viewport.current());
       cameraPage.refresh();
       showState();
+      if (drawTime) drawTime.endFrame(performance.now(), performance.now() - renderStarted);
     },
   });
   return () => {
+    drawTime?.stop();
     loop.stop();
     cameraPage.stop();
     viewport.stop();
