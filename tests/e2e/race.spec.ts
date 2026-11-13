@@ -215,6 +215,8 @@ test('the touch controls are at least 44 px and the page does not scroll sideway
 
 test('the driving keys work while racing and are released when the race ends', async ({ page }, testInfo) => {
   test.skip(!!testInfo.project.use.hasTouch, 'Keyboard test: desktop projects.');
+  // The race runs on render time, so a slow runner needs more than Playwright's 30 s default: the polls below allow up to 15 + 10 + 60 s.
+  test.setTimeout(120_000);
   await open(page);
   await startOneLap(page);
   await expect.poll(() => phase(page), { timeout: 15_000 }).toBe('racing');
