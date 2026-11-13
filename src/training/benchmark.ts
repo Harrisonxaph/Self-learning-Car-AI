@@ -193,6 +193,9 @@ export function createCarTickBenchmarkJob(options: CarTickBenchmarkOptions): Car
           if (warmDone >= warmup) {
             phase = 'measuring';
             timedFrom = options.clock();
+            // The slice ends at the boundary, so a caller (the profile script) can act exactly between the warm-up and the measured work. Only the slicing
+            // changes: the work and the car-tick counts are the same however the job is sliced.
+            break;
           }
         } else {
           carTicks += running;

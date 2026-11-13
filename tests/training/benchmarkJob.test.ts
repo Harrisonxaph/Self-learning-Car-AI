@@ -65,6 +65,15 @@ describe('only the measured time inside slices counts', () => {
     expect(r.carTicks).toBeGreaterThanOrEqual(800);
   });
 
+  it('a slice ends at the warm-up boundary, even with a huge budget, so nothing measured runs before the caller can act (Codex, #185)', () => {
+    const job = createCarTickBenchmarkJob({ environment: environment('stadium-oval'), config: configFor('stadium-oval', 3, 6), warmupCarTicks: 400, measureCarTicks: 50, clock: oneMsClock() });
+    expect(job.progress().phase).toBe('warm-up');
+    expect(job.advance(1e9)).toBe(false);
+    expect(job.progress()).toEqual({ phase: 'measuring', carTicks: 0, target: 50 });
+    expect(job.result()).toBeNull();
+    expect(job.advance(1e9)).toBe(true);
+    expect(job.result()!.carTicks).toBeGreaterThanOrEqual(50);
+  });
   it('the pauses between slices are not counted: a clock that jumps a long way between slices adds nothing', () => {
     let t = 0;
     let inSlice = false;
