@@ -51,8 +51,8 @@ const width = (track: Track): number => Math.hypot(track.gates[0]!.a.x - track.g
 const FROZEN: FrozenModel = freezeModel([0.1, 0.2, 0.3], { agent: 'test' });
 
 describe('the track sets', () => {
-  it('have exactly 2 training, 2 validation and 3 held-out circuits', () => {
-    expect(ids('training')).toEqual(['stadium-oval', 'kidney-loop']);
+  it('have exactly 3 training, 2 validation and 3 held-out circuits', () => {
+    expect(ids('training')).toEqual(['stadium-oval', 'kidney-loop', 'silverstone']); // P4-06 adds Silverstone, a training circuit
     expect(ids('validation')).toEqual(['rounded-rectangle', 's-sweepers']);
     expect(ids('held-out')).toEqual(['hairpin-chicane', 'long-sweepers', 'technical-narrow']);
   });
@@ -65,7 +65,7 @@ describe('the track sets', () => {
   });
   it('IDs, content hashes and geometry hashes are all distinct (no circuit is a copy of another); shared version strings are fine', () => {
     for (const key of ['id', 'contentHash', 'geometryHash'] as const) expect(new Set(entries.map((e) => e[key])).size).toBe(entries.length);
-    expect(new Set(entries.map((e) => e.version))).toEqual(new Set(['1']));
+    expect(new Set(entries.map((e) => e.version))).toEqual(new Set(['1', 'e59595d-27c51454e817'])); // the synthetic circuits are version 1; Silverstone's is its source commit and file hash
   });
   it('the NEW circuits meet the design bounds (8 to 14 m wide, 400 to 650 m lap); the existing ones are exempt and unchanged', () => {
     for (const id of NEW_IDS) {
@@ -234,7 +234,7 @@ describe('source scan: which modules may reach restricted accessors (test enforc
 
 describe('split-manifest epochs', () => {
   it('are an append-only registry: epoch 1 is the three P2-10 circuits, each later epoch extends the one before it', () => {
-    expect(SPLIT_EPOCHS.map((e) => e.epoch)).toEqual([1, 2]);
+    expect(SPLIT_EPOCHS.map((e) => e.epoch)).toEqual([1, 2, 3]);
     expect([...epochIds(1)]).toEqual(['stadium-oval', 'rounded-rectangle', 'hairpin-chicane']);
     expect(epochIds(LATEST_SPLIT_EPOCH).length).toBe(entries.length);
     for (let i = 1; i < SPLIT_EPOCHS.length; i += 1) expect([...SPLIT_EPOCHS[i]!.ids.slice(0, SPLIT_EPOCHS[i - 1]!.ids.length)]).toEqual([...SPLIT_EPOCHS[i - 1]!.ids]);
@@ -244,7 +244,10 @@ describe('split-manifest epochs', () => {
     expect(manifestRecord(BUILT_IN_TRACK_SPLITS, 1).hash).toBe('sha256:3cb594e2cdf4ed07728a8a50a54d558fc20f3d8e01628acd376eb9ff940772c3');
     expect(manifestRecord().hash).not.toBe(manifestRecord(BUILT_IN_TRACK_SPLITS, 1).hash);
     expect(manifestEpochOf(manifestRecord(BUILT_IN_TRACK_SPLITS, 1).hash)).toBe(1);
-    expect(manifestEpochOf(manifestRecord().hash)).toBe(2);
+    expect(manifestEpochOf(manifestRecord().hash)).toBe(3);
+    // Epoch 2's record is exactly the one the unchanged P4-04 to P5-03 code recorded (the hash in tests/fixtures/pre-p4-06): registering Silverstone changed no earlier epoch.
+    expect(manifestRecord(BUILT_IN_TRACK_SPLITS, 2).hash).toBe('sha256:4a56521e1e89b6cf58409181a7c6d3bcb1675dff8076a9df87aa675b9e2df91e');
+    expect(manifestEpochOf(manifestRecord(BUILT_IN_TRACK_SPLITS, 2).hash)).toBe(2);
     expect(manifestEpochOf(`sha256:${'0'.repeat(64)}`)).toBeNull();
     expect(() => manifestRecord({ tracks: [] } as never, 1)).toThrow(TrackSplitError);
   });

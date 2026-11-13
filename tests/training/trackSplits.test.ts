@@ -160,9 +160,10 @@ const BUILT_IN = [
 
 describe('the built-in circuits', () => {
   it('are one per split, with stable IDs and versions, and the manifest hashes match the files', () => {
-    expect(BUILT_IN_TRACK_SPLITS.tracks.map(({ id, version, split }) => ({ id, version, split }))).toEqual(
-      BUILT_IN.map(({ id, split }) => ({ id, version: '1', split })),
-    );
+    expect(BUILT_IN_TRACK_SPLITS.tracks.map(({ id, version, split }) => ({ id, version, split }))).toEqual([
+      ...BUILT_IN.map(({ id, split }) => ({ id, version: '1', split })),
+      { id: 'silverstone', version: 'e59595d-27c51454e817', split: 'training' }, // P4-06: the source commit and file hash
+    ]);
     for (const entry of BUILT_IN_TRACK_SPLITS.tracks) {
       expect(entry.contentHash).toBe(trackContentHash(entry.track));
       expect(entry.contentHash).toMatch(/^sha256:[0-9a-f]{64}$/);
@@ -295,7 +296,7 @@ describe('loadTrackSplits', () => {
 
 describe('split boundaries', () => {
   it('lists each split and gives each accessor only its own split', () => {
-    expect(tracksIn('training').map((t) => t.id)).toEqual(['stadium-oval', 'kidney-loop']);
+    expect(tracksIn('training').map((t) => t.id)).toEqual(['stadium-oval', 'kidney-loop', 'silverstone']);
     expect(tracksIn('validation').map((t) => t.id)).toEqual(['rounded-rectangle', 's-sweepers']);
     expect(tracksIn('held-out').map((t) => t.id)).toEqual(['hairpin-chicane', 'long-sweepers', 'technical-narrow']);
     expect(() => tracksIn('test' as never)).toThrow(TrackLeakageError);
@@ -303,7 +304,7 @@ describe('split boundaries', () => {
     expect(validationTrack('rounded-rectangle').id).toBe('rounded-rectangle');
     for (const id of ['rounded-rectangle', 'hairpin-chicane']) expect(() => trainingTrack(id)).toThrow(TrackLeakageError);
     for (const id of ['stadium-oval', 'hairpin-chicane']) expect(() => validationTrack(id)).toThrow(/may only use validation tracks/);
-    expect(() => trainingTrack('silverstone')).toThrow(/No built-in track "silverstone"/);
+    expect(() => trainingTrack('nurburgring')).toThrow(/No built-in track "nurburgring"/);
   });
 
   describe('training uses training tracks only', () => {

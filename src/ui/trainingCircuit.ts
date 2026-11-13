@@ -4,6 +4,18 @@
 // address is ignored, so the page can never be pointed at one. Evolving across several circuits is the approval-gated R-06.
 export const DEFAULT_TRAINING_CIRCUIT = 'stadium-oval';
 
+/**
+ * Built-in circuits that are registered (P4-06 step 2b) but not yet OFFERED in any page list or accepted from the address: Silverstone's episode limits
+ * (420 s, 10 s, one lap) are not read by the pages yet, so training on it with the 60 s default would only time out. Step 3 (selection, scaled limits, the
+ * credit line) empties this list. Nothing else changes: the circuit is registered, hashed and recognised by every split check.
+ */
+export const NOT_YET_OFFERED: readonly string[] = Object.freeze(['silverstone']);
+
+/** The tracks a page may list: every one except those not yet offered. */
+export function offered<T extends { readonly id: string }>(tracks: readonly T[]): T[] {
+  return tracks.filter((t) => !NOT_YET_OFFERED.includes(t.id));
+}
+
 /** The circuit named by the query string's last `circuit` parameter if it is one of `available`, otherwise the default. */
 export function circuitFromSearch(search: string, available: readonly string[]): string {
   const values = new URLSearchParams(search).getAll('circuit');
