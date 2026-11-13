@@ -1,6 +1,10 @@
 // Command line for the headless throughput benchmark (P4-06 step 4, the P2-11 budget's headless figure). Headless; nothing is deployed or served.
 //
 //   npm run bench -- [--circuit <id>]... [--generations <n>] [--warmup <n>] [--population <n>] [--seed <n>] [--out <file.json>]
+//   npm run bench -- --car-ticks <n> [--warmup-car-ticks <n>] [--circuit <id>]... [--population <n>] [--seed <n>] [--out <file.json>]
+//
+// With --car-ticks the work is the fixed-work job the in-page benchmark (`?mode=bench`) runs on the owner's phone: that many car-ticks after an untimed warm-up
+// (default 5,000), timed in slices, so a desktop figure and a phone figure are for exactly the same simulated work. Without it, the work is whole generations.
 //
 // It runs the real trainer on each named training circuit (default: stadium-oval, for comparison, and silverstone) with a seeded population and prints how fast
 // the simulation ran, with the machine it ran on. This file only handles the outside world (arguments, the clock, the machine, git and the output file); the
@@ -18,7 +22,8 @@ import { fileURLToPath } from 'node:url';
 import { runnerImport } from 'vite';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const USAGE = 'Usage:\n  npm run bench -- [--circuit <id>]... [--generations <n>] [--warmup <n>] [--population <n>] [--seed <n>] [--out <file.json>]';
+const USAGE =
+  'Usage:\n  npm run bench -- [--circuit <id>]... [--generations <n>] [--warmup <n>] [--population <n>] [--seed <n>] [--out <file.json>]\n  npm run bench -- --car-ticks <n> [--warmup-car-ticks <n>] [--circuit <id>]... [--population <n>] [--seed <n>] [--out <file.json>]';
 
 class UsageError extends Error {}
 
@@ -30,7 +35,7 @@ function wholeArg(name, value, low, high) {
 }
 
 function parseArgs(argv) {
-  const options = { circuits: [], generations: 5, warmup: 1, population: 50, seed: 1, out: null };
+  const options = { circuits: [], generations: 5, warmup: 1, population: 50, seed: 1, out: null, carTicks: null, warmupCarTicks: 5000 };
   const seen = new Set();
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
@@ -41,13 +46,15 @@ function parseArgs(argv) {
       i += 1;
       continue;
     }
-    if (!['--generations', '--warmup', '--population', '--seed', '--out'].includes(arg ?? '')) throw new UsageError(`Unknown argument ${arg}.`);
+    if (!['--generations', '--warmup', '--population', '--seed', '--out', '--car-ticks', '--warmup-car-ticks'].includes(arg ?? '')) throw new UsageError(`Unknown argument ${arg}.`);
     if (seen.has(arg)) throw new UsageError(`${arg} is given more than once.`);
     seen.add(arg);
     if (arg === '--generations') options.generations = wholeArg(arg, value, 1, 1000);
     if (arg === '--warmup') options.warmup = wholeArg(arg, value, 0, 100);
     if (arg === '--population') options.population = wholeArg(arg, value, 2, 1000);
     if (arg === '--seed') options.seed = wholeArg(arg, value, 0, 2 ** 31 - 1);
+    if (arg === '--car-ticks') options.carTicks = wholeArg(arg, value, 1, 10_000_000);
+    if (arg === '--warmup-car-ticks') options.warmupCarTicks = wholeArg(arg, value, 0, 10_000_000);
     if (arg === '--out') {
       if (value === undefined || value.startsWith('--')) throw new UsageError('--out needs a file name.');
       options.out = value;
@@ -55,6 +62,8 @@ function parseArgs(argv) {
     i += 1;
   }
   if (options.circuits.length === 0) options.circuits = ['stadium-oval', 'silverstone'];
+  if (options.carTicks === null && seen.has('--warmup-car-ticks')) throw new UsageError('--warmup-car-ticks needs --car-ticks.');
+  if (options.carTicks !== null && (seen.has('--generations') || seen.has('--warmup'))) throw new UsageError('--car-ticks replaces --generations and --warmup; give one kind of work.');
   return options;
 }
 
@@ -80,6 +89,33 @@ function machine() {
 
 const fixed = (value, digits) => (value === null ? 'n/a' : value.toFixed(digits));
 
+/** The fixed-work variant: the same job and the same definitions as the in-page benchmark. */
+function runCarTicks(options, bench, training, circuit, sim, where, clock) {
+  const results = [];
+  for (const id of options.circuits) {
+    const entry = training.find((t) => t.id === id);
+    const config = { ...circuit.trainingConfigFor(entry.limits), seed: options.seed, populationSize: options.population };
+    const environment = { track: entry.track, physics: sim.DEFAULT_VEHICLE_PHYSICS, timestepSeconds: sim.DEFAULT_SIM_CONFIG.timestepSeconds };
+    results.push(bench.runCarTickBenchmark({ environment, config, warmupCarTicks: options.warmupCarTicks, measureCarTicks: options.carTicks, clock }));
+  }
+  console.log(`Fixed-work headless benchmark (the in-page ?mode=bench job): ${options.carTicks} car-ticks timed after ${options.warmupCarTicks} warm-up, population ${options.population}, seed ${options.seed}.`);
+  console.log(`Machine: ${where.cpu} (${where.logicalCores} logical cores), ${where.platform}, Node ${where.node}, commit ${where.commit ?? 'unknown'}${where.dirty ? ' (uncommitted changes)' : ''}.`);
+  console.log('');
+  console.log('| circuit | boundary segments | mean running cars | car-ticks measured | compute (s) | car-ticks/s | ticks/s at the full population | budget |');
+  console.log('| --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |');
+  for (const r of results) {
+    const full = r.ticksPerSecondFullPopulation;
+    const verdict = full === null ? 'n/a' : full >= bench.HEADLESS_BUDGET_TICKS_PER_SECOND ? `at least ${bench.HEADLESS_BUDGET_TICKS_PER_SECOND} (this machine only)` : `below ${bench.HEADLESS_BUDGET_TICKS_PER_SECOND} (this machine only)`;
+    console.log(`| ${r.trackId} | ${r.boundarySegments} | ${fixed(r.meanRunningCars, 1)} | ${r.carTicks} | ${fixed(r.computeMs / 1000, 2)} | ${fixed(r.carTicksPerSecond, 0)} | ${fixed(full, 1)} | ${verdict} |`);
+  }
+  console.log('');
+  console.log('The car-tick counts must equal the in-page benchmark\'s for the same circuit, population and seed; only the timing differs. This machine is not the owner\'s reference phone and the figures say nothing about learning.');
+  if (options.out !== null) {
+    writeFileSync(resolve(options.out), `${JSON.stringify({ format: 'self-driving-ai-evolution/headless-benchmark', version: 2, machine: where, options: { carTicks: options.carTicks, warmupCarTicks: options.warmupCarTicks, population: options.population, seed: options.seed }, results }, null, 2)}\n`);
+    console.log(`Wrote ${resolve(options.out)}.`);
+  }
+}
+
 async function main() {
   let options;
   try {
@@ -104,6 +140,10 @@ async function main() {
   const where = machine();
   if (where.dirty) console.warn('Note: the worktree has uncommitted changes; the output says so (machine.dirty).');
   const clock = () => Number(process.hrtime.bigint()) / 1e6;
+  if (options.carTicks !== null) {
+    runCarTicks(options, bench, training, circuit, sim, where, clock);
+    return;
+  }
   const results = [];
   for (const id of options.circuits) {
     const entry = training.find((t) => t.id === id);

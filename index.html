@@ -221,6 +221,26 @@
           <button type="button" id="rr-back" class="tc-button">Choose another</button>
         </div>
       </section>
+      <section id="bench-panel" class="editor-panel evaluate-panel" aria-labelledby="bench-heading" hidden>
+        <h2 id="bench-heading" class="saved-heading">Headless benchmark</h2>
+        <p class="graph-summary">Runs the real training simulation on a circuit with no drawing (a population of 50 cars, seed 1, 7 rays plus collision per car per tick) for a fixed number of car-ticks, and reports how fast this phone, in this browser and build, ran it. It is a measurement of speed only: it saves nothing, trains nothing you keep, and says nothing about learning. Keep this page in front and the screen on while it runs; leaving the page stops the run, because a background page is slowed down and would not be a measurement.</p>
+        <div class="replay-controls">
+          <label class="replay-field" for="bench-circuit">Circuit</label>
+          <select id="bench-circuit" class="tc-cap tc-circuit"></select>
+        </div>
+        <div class="replay-controls">
+          <button type="button" id="bench-run" class="tc-button">Run</button>
+          <button type="button" id="bench-cancel" class="tc-button" disabled>Cancel</button>
+        </div>
+        <p id="bench-progress" class="graph-summary" aria-live="off"></p>
+        <p id="bench-message" class="graph-summary ev-message" role="status" aria-live="polite"></p>
+        <div class="ev-table-wrap">
+          <table id="bench-table" class="ev-table" hidden>
+            <caption>Result</caption>
+            <tbody id="bench-body"></tbody>
+          </table>
+        </div>
+      </section>
       <details id="training-graph" class="training-graph" hidden>
         <summary>Training graph</summary>
         <canvas

@@ -5,7 +5,7 @@ One sitting on your reference iPhone settles **both** remaining measurement item
 - **P2-11's performance budget** (the P4-06 step 4 baseline, [#56](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/56) and [#57](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/57)): Silverstone, a population of 50, 7 rays plus collision per car per tick. Rendered at 1×, a p95 **simulation update** of at most **8 ms** per frame at 60 ticks/s. Headless, at least **600 ticks/s**.
 - **P4-07's draw-time budget** ([#58](https://github.com/Harrisonxaph/Self-learning-Car-AI/issues/58), `docs/plans/p4-07-plan.md` section 6): the same phone and workload, the training page with its usual cars, camera at zoom 1.5, 4 and the maximum, in zoom and in follow mode, in portrait and landscape. A p95 **camera draw time** of at most **4 ms** over at least 600 frames, and no long task above 50 ms during a 10 s gesture.
 
-The overlap is **Session A** below: Silverstone, 50 cars, Normal (1×) speed. One readout, `?debug=drawtime`, reports the draw time (P4-07) and, since this step, the simulation update time per frame (P2-11) over the **same** 600-frame window, so one reading answers both. Everything else in this list is either only P4-07 (the zoom and follow grid) or only P2-11 (the update figure and, later, the in-page headless benchmark).
+The overlap is **Session A** below: Silverstone, 50 cars, Normal (1×) speed. One readout, `?debug=drawtime`, reports the draw time (P4-07) and, since this step, the simulation update time per frame (P2-11) over the **same** 600-frame window, so one reading answers both. Everything else in this list is either only P4-07 (the zoom and follow grid) or only P2-11 (the update figure in Session A and the headless benchmark in Session B2).
 
 Nothing here has been measured on a phone. The desktop figures at the end are from a development container and are for comparison only: the budget names your phone.
 
@@ -14,7 +14,7 @@ Nothing here has been measured on a phone. The desktop figures at the end are fr
 Relayed owner instruction (Claude Code, 2026-11-13), the owner's reply to the three decisions put to them, verbatim: "1. Approve the reasoning now / 2.approve small follow up / 3.waive it". Read against the numbered questions in the step 4 summary (the headless figure on a phone; whether the desktop result is already enough; input responsiveness): I will stop if this was not meant.
 
 1. **P2-11's trigger: the architectural reason is approved now** (from the desktop result: Silverstone with 50 cars at about 57 ticks/s against the 600 budget; see section 9). The phone's P2-11 figures are therefore **confirmatory**, not the trigger. P2-11 is triggered but is not implemented: it starts as a plan-only PR, and P4-06 stays In Progress and cannot be Complete until P2-11 is Complete and the budget is met (ROADMAP, P4-06 acceptance). Approving the reasoning is not approval to implement the index.
-2. **The headless figure on a phone: the small follow-up is approved.** An opt-in in-page headless benchmark (its own PR, to come after this one) will report the phone's headless ticks per second directly, so the Max-speed tick rate (Session B) is **not** the headless figure and is recorded as a context reading only. Until that PR merges, the headless budget has no phone figure and this checklist does not claim one.
+2. **The headless figure on a phone: the small follow-up is approved and built** (its own PR, after the one that added this checklist). The page `?mode=bench` runs the real trainer with no drawing and reports the phone's headless ticks per second directly (Session B2), so the Max-speed tick rate (Session B) is **not** the headless figure and is recorded as a context reading only.
 3. **Input responsiveness (the pinch-to-frame time in the P4-07 plan) is waived** by the owner and recorded as waived, not as passed or measured. It is not part of what P4-07's remaining measurement shows.
 
 ## 1. Before you start
@@ -47,6 +47,17 @@ Address: `/?mode=train&circuit=silverstone&debug=drawtime,fps`. Press **Max**.
 2. The draw readout at Max draws about ten cars (the cars-drawn cap at Max): record its p95 against 4 ms with `Frames 600/600`.
 3. Per decision 0.2, the ticks-per-second figure here is context only; the phone's headless figure comes from the approved in-page benchmark.
 
+## 3b. Session B2: the headless benchmark on the phone (P2-11's headless budget)
+
+Address: `/?mode=bench` (Silverstone by default; `&circuit=stadium-oval` or `&circuit=kidney-loop` for comparison). The page runs the real training simulation with **no drawing**, a population of 50, seed 1, for 60,000 measured car-ticks after 5,000 untimed warm-up car-ticks, in short slices so the page stays responsive, and shows a table when it finishes.
+
+1. **Check the work first (about 10 seconds):** open `/?mode=bench&carticks=1000`, press Run. The Work row must say **1,043 car-ticks measured** for Silverstone (**1,046** for the stadium oval) with 21 ticks. Those counts are the same on every machine; if they differ, tell me, because then the phone is not running the same work and the figure means nothing.
+2. Open `/?mode=bench`, press **Run**, keep the page **in front and the screen on** until it finishes (the page stops the run if it leaves the foreground, and says so; nothing is reported then). A slow phone may take a few minutes; **Cancel** reports nothing.
+3. Read the table: **Ticks per second at the full population of 50** (the headless budget is 600 and the row says at least or below), **Car-ticks per second**, **Compute time**, and the Build and Browser rows.
+4. Take it **twice** (reload between runs), and note whether the phone felt warm. Screenshot each table.
+
+The Node equivalent, for comparison on the same work: `npm run bench -- --car-ticks 60000` (section 9).
+
 ## 4. Session C: P4-07's zoom and follow grid (P4-07 only)
 
 Address: `/?mode=train&circuit=silverstone&debug=drawtime`. For **each** of zoom about **1.5**, about **4** and the **maximum**, in **zoom** mode and **follow** mode, in **portrait** and **landscape**, **reload, then**:
@@ -68,19 +79,21 @@ Paste a table like this into #56, #57 and #58 (one table, three comments, so eac
 | Session | Orientation | Zoom (as shown) | Mode | Frames | Draw p50 / p95 / max (ms) | Update p50 / p95 / max (ms) | Ticks/s (fps readout) | Frame gaps >50 ms | Draws >50 ms | Verdicts shown |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 
+and, for Session B2, a second table: circuit, car-ticks measured, compute time, car-ticks per second, **ticks per second at the full population**, the budget wording shown, run 1 or 2, build, browser.
+
 plus the device block from section 1 and your decision from section 0. Attach the screenshots.
 
 ## 7. What each result means (stated now so it cannot be bent later)
 
 - **P4-07:** draw p95 at most 4 ms in every reading you took, and no draw or gap over 50 ms during the 10 s gesture, passes the plan's criterion for the readings taken. A p95 over 4 ms means the plan's fallback (the transformed cache, then culling) is measured next. It is your decision to call P4-07 Complete; waived readings are recorded as waived.
-- **P2-11:** it is **already triggered** by the approved architectural reason (decision 0.1). The phone's update p95 (at most 8 ms at Normal speed) and, once the in-page benchmark exists, headless rate (at least 600) are the baseline the index is later measured against, before and after, under the same workload; P4-06 stays In Progress until P2-11 is Complete and the budget is met (ROADMAP, P4-06 acceptance).
+- **P2-11:** it is **already triggered** by the approved architectural reason (decision 0.1). The phone's update p95 (at most 8 ms at Normal speed, Session A) and headless rate (at least 600, Session B2) are the baseline the index is later measured against, before and after, under the same workload; P4-06 stays In Progress until P2-11 is Complete and the budget is met (ROADMAP, P4-06 acceptance).
 - A pass on a phone is a statement about one phone, one build and one workload on the day, nothing more.
 
 ## 8. What this checklist cannot measure (so nobody reads more into it)
 
 - **Input responsiveness** (the time from a pinch to the frame that shows it) is in the P4-07 plan's measures but is not instrumented; the owner **waived** it (decision 0.3), so it is recorded as waived.
 - **Long tasks:** Safari has no Long Tasks API; the frame-gap and slow-draw counts are proxies that catch the same stalls, not the same numbers.
-- **The headless budget on a phone** has no figure yet: the in-page benchmark the owner approved (decision 0.2) is a separate PR. The Node benchmark (`npm run bench`) runs headless but on a computer, not on the phone.
+- **The headless budget on a phone** is the Session B2 page's figure: the real simulation with no drawing, but inside a browser tab, in slices, with the page's own timer scheduling between them (only time inside slices counts). It is a browser figure, not a bare-engine figure, and one reading is not a distribution. The Node benchmark (`npm run bench`) runs headless on a computer, not on the phone.
 - **Heat and battery state** change timings; one reading is not a distribution. The two-minutes-later reading in Session A is the only repeat asked for.
 - Nothing here says anything about learning. The cars are a seeded training run; no model is saved or judged.
 
@@ -96,3 +109,12 @@ Measured with `npm run bench` (`scripts/bench.mjs`, `src/training/benchmark.ts`)
 How to read it: "ticks/s at the full population" is the car-tick rate divided by 50, the rate if every car stayed running, which is conservative (see `src/training/benchmark.ts`). Per car-tick, Silverstone costs about 21 times the oval here (45 times the boundary segments), as brute-force collision and ray queries would predict. **This is a desktop container figure, not your phone's, and it is not by itself the P2-11 trigger** (section 0.2). It also means a 50-car Silverstone generation takes about 30 seconds of one core here, so training on Silverstone on a phone will be far slower than on the oval.
 
 Reproduce it: `npm run bench -- --generations 10 --warmup 2 --out bench.json` (about five minutes for Silverstone). The car-tick counts must match the table exactly; the timings will differ on another machine.
+
+**The same work as the phone page (Session B2)**, `npm run bench -- --car-ticks 60000` (population 50, seed 1, 5,000 warm-up car-ticks), three runs on the same container:
+
+| Circuit | Car-ticks measured (deterministic) | Mean running cars | Compute time (s) | Car-ticks/s | Ticks/s at the full population (budget: 600) |
+| --- | ---: | ---: | --- | --- | --- |
+| stadium-oval | 60,046 | 29.8 | 0.96, 1.00, 0.93 | 62,409; 60,064; 64,282 | 1,248.2; 1,201.3; 1,285.6 |
+| silverstone | 60,014 | 31.7 | 22.27, 21.09, 21.55 | 2,695; 2,846; 2,785 | **53.9; 56.9; 55.7** |
+
+This fixed-work run starts from generation 0 (so more cars are still running early on) and so reads slightly differently from the generation-based figures above; both say Silverstone is about ten times short of the budget on this machine.

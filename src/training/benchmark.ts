@@ -102,3 +102,142 @@ export function runBenchmark(options: BenchmarkOptions): BenchmarkResult {
 
 /** The headless budget of the P2-11 entry: at least this many ticks per second with a population of 50 (10 times real time). */
 export const HEADLESS_BUDGET_TICKS_PER_SECOND = 600;
+
+// ---------------------------------------------------------------------------------------------------------------------------------------------------------
+// The sliced, fixed-work benchmark job (the in-page headless benchmark, `?mode=bench`; approved by the owner on 2026-11-13). The same trainer and the same
+// definitions as `runBenchmark`, but the work is a fixed number of CAR-TICKS (one running car stepped once) instead of whole generations, and it advances in
+// slices of a wall-clock budget so a page stays responsive while it runs. A phone and `npm run bench --car-ticks` therefore do exactly the same simulated work
+// (bit-identical), and only the time differs. Only time spent INSIDE slices counts: the pauses between slices (a page yielding to the browser) never do.
+// Warm-up car-ticks run first and are not counted, so one-off start-up costs stay out of the figure.
+
+export interface CarTickBenchmarkOptions {
+  readonly environment: TrainingEnvironment;
+  readonly config: TrainingConfig;
+  /** Car-ticks run before timing starts, 0 to 10,000,000. */
+  readonly warmupCarTicks: number;
+  /** Car-ticks timed, 1 to 10,000,000. The job stops at the tick that reaches this many, so the count run can exceed it by at most one tick's cars. */
+  readonly measureCarTicks: number;
+  readonly clock: () => number;
+}
+
+export type BenchmarkPhase = 'warm-up' | 'measuring' | 'done';
+
+export interface CarTickBenchmarkProgress {
+  readonly phase: BenchmarkPhase;
+  /** Car-ticks done in the current phase (the measured count once done). */
+  readonly carTicks: number;
+  /** The current phase's target (the measured target once done). */
+  readonly target: number;
+}
+
+export interface CarTickBenchmarkResult {
+  readonly trackId: string;
+  readonly trackVersion: string;
+  readonly boundarySegments: number;
+  readonly populationSize: number;
+  readonly seed: number;
+  readonly warmupCarTicks: number;
+  readonly measureCarTicks: number;
+  /** Car-ticks actually measured: at least `measureCarTicks`. Deterministic for the same inputs. */
+  readonly carTicks: number;
+  readonly ticks: number;
+  readonly meanRunningCars: number | null;
+  /** Time spent inside the measured slices only. */
+  readonly computeMs: number;
+  readonly carTicksPerSecond: number | null;
+  /** carTicksPerSecond / populationSize, as in `BenchmarkResult`. Compared with the headless budget of 600. */
+  readonly ticksPerSecondFullPopulation: number | null;
+}
+
+export interface CarTickBenchmarkJob {
+  /** Runs for about `budgetMs` of clock time (always at least one tick, so it always progresses). Returns true once the job is done. */
+  advance(budgetMs: number): boolean;
+  progress(): CarTickBenchmarkProgress;
+  /** The result once done, otherwise null. */
+  result(): CarTickBenchmarkResult | null;
+}
+
+export function createCarTickBenchmarkJob(options: CarTickBenchmarkOptions): CarTickBenchmarkJob {
+  if (options === null || typeof options !== 'object') throw new RangeError('The benchmark needs an options object.');
+  const warmup = whole(options.warmupCarTicks, 0, 10_000_000, 'warmupCarTicks');
+  const target = whole(options.measureCarTicks, 1, 10_000_000, 'measureCarTicks');
+  if (typeof options.clock !== 'function') throw new RangeError('The benchmark needs a clock function.');
+  const trainer = createTrainer(options.config, options.environment);
+  const { track } = options.environment;
+  const record = trainer.record();
+  let phase: BenchmarkPhase = warmup === 0 ? 'measuring' : 'warm-up';
+  let warmDone = 0;
+  let carTicks = 0;
+  let ticks = 0;
+  let computeMs = 0;
+
+  const tickOnce = (): number => {
+    let running = 0;
+    for (const car of trainer.generation().cars) if (car.episode.outcome === null) running += 1;
+    trainer.step();
+    return running;
+  };
+
+  const rate = (count: number): number | null => (computeMs > 0 && Number.isFinite(count / (computeMs / 1000)) ? count / (computeMs / 1000) : null);
+
+  return {
+    advance(budgetMs) {
+      if (typeof budgetMs !== 'number' || !Number.isFinite(budgetMs) || budgetMs <= 0) throw new RangeError('The slice budget must be a finite number of milliseconds above 0.');
+      if (phase === 'done') return true;
+      const sliceStart = options.clock();
+      let timedFrom: number | null = phase === 'measuring' ? sliceStart : null;
+      for (;;) {
+        const running = tickOnce();
+        if (phase === 'warm-up') {
+          warmDone += running;
+          if (warmDone >= warmup) {
+            phase = 'measuring';
+            timedFrom = options.clock();
+          }
+        } else {
+          carTicks += running;
+          ticks += 1;
+          if (carTicks >= target) {
+            phase = 'done';
+            break;
+          }
+        }
+        if (options.clock() - sliceStart >= budgetMs) break;
+      }
+      if (timedFrom !== null) computeMs += Math.max(0, options.clock() - timedFrom);
+      return phase === 'done';
+    },
+    progress: () => ({
+      phase,
+      carTicks: phase === 'warm-up' ? warmDone : carTicks,
+      target: phase === 'warm-up' ? warmup : target,
+    }),
+    result: () =>
+      phase !== 'done'
+        ? null
+        : {
+            trackId: track.id,
+            trackVersion: track.version,
+            boundarySegments: track.outer.length + track.inner.length,
+            populationSize: record.config.populationSize,
+            seed: record.config.seed,
+            warmupCarTicks: warmup,
+            measureCarTicks: target,
+            carTicks,
+            ticks,
+            meanRunningCars: ticks > 0 ? carTicks / ticks : null,
+            computeMs,
+            carTicksPerSecond: rate(carTicks),
+            ticksPerSecondFullPopulation: rate(carTicks) === null ? null : rate(carTicks)! / record.config.populationSize,
+          },
+  };
+}
+
+/** Runs a fixed-work job to completion in slices of `sliceMs`. For Node and the tests; a page advances the job itself between yields. */
+export function runCarTickBenchmark(options: CarTickBenchmarkOptions, sliceMs = 50): CarTickBenchmarkResult {
+  const job = createCarTickBenchmarkJob(options);
+  while (!job.advance(sliceMs)) {
+    // The job is advanced until done.
+  }
+  return job.result()!;
+}
