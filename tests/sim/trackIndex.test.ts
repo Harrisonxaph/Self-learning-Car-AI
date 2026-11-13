@@ -225,6 +225,41 @@ describe('building the index', () => {
     }
   });
 
+  it('rejects a cell-edge factor that is not a finite number above 0, promptly, instead of looping (Codex, #187)', () => {
+    const { track } = circuits.find((c) => c.id === 'stadium-oval')!;
+    const started = Date.now();
+    for (const factor of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY, 0, -0, -1, -1e-300]) {
+      expect(() => buildTrackIndex(track, factor), `factor ${factor}`).toThrow(RangeError);
+    }
+    expect(() => buildTrackIndex(track, '2' as unknown as number)).toThrow(RangeError);
+    expect(() => buildTrackIndex(track, undefined as unknown as number)).not.toThrow(); // undefined takes the default
+    expect(Date.now() - started, 'rejected without searching').toBeLessThan(2000);
+  });
+
+  it('accepts every finite positive factor and always ends: tiny, huge and the largest float give a valid index with the same answers', () => {
+    const { track } = circuits.find((c) => c.id === 'kidney-loop')!;
+    const rng = createRng(17);
+    const probes = Array.from({ length: 200 }, () => ({ origin: anywhere(track, rng), angle: rng.range(-3, 3), range: rng.range(1, 150) }));
+    for (const factor of [Number.MIN_VALUE, 1e-300, 1e-6, 0.5, 1, 7, 1e3, 1e100, 1e300, Number.MAX_VALUE]) {
+      const index = buildTrackIndex(track, factor);
+      const stats = trackIndexStats(index);
+      expect(stats.cells, `factor ${factor}`).toBeLessThanOrEqual(MAX_CELLS);
+      expect(stats.registrations, `factor ${factor}`).toBeLessThanOrEqual(MAX_REGISTRATIONS);
+      for (const p of probes) {
+        expect(rayDifference(track, index, p.origin, p.angle, p.range), `factor ${factor}`).toBeNull();
+        expect(pointOnRoadIndexed(p.origin, index), `factor ${factor}`).toBe(pointOnRoad(p.origin, track));
+      }
+    }
+  });
+
+  it('rejects a track whose extent cannot be measured, instead of looping', () => {
+    const big = Number.MAX_VALUE;
+    const overflowing = smallTrack([{ x: -big, y: 0 }, { x: big, y: 0 }, { x: 0, y: big }], square(5), 'overflow');
+    expect(() => buildTrackIndex(overflowing)).toThrow(RangeError);
+    const longSides = smallTrack([{ x: 0, y: 0 }, { x: big, y: 0 }, { x: big, y: big }], square(5), 'long');
+    expect(() => buildTrackIndex(longSides)).toThrow(RangeError);
+  });
+
   it('refuses a boundary point that is not finite, and builds a cached index once per track object', () => {
     const bad: Track = { ...smalls[0]!.track, outer: [{ x: 0, y: 0 }, { x: Number.NaN, y: 1 }, { x: 5, y: 5 }] };
     expect(() => buildTrackIndex(bad)).toThrow(RangeError);

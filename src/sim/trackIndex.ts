@@ -31,6 +31,8 @@ export const MIN_CELL_EDGE = 1;
 export const MAX_CELLS = 262_144;
 /** The most (segment, cell) registrations a grid may hold: bounds the build time and memory whatever the geometry. */
 export const MAX_REGISTRATIONS = 4_000_000;
+/** The most times the cell edge is doubled while sizing the grid. A finite edge reaches a single cell long before this (the doubles overflow a float after about 1,100). */
+const MAX_COARSENINGS = 2048;
 
 /** An immutable grid over a track's boundary segments. Built by `buildTrackIndex`, never changed. */
 export interface TrackIndex {
@@ -69,10 +71,14 @@ const cellOf = (v: number, min: number, edge: number, count: number): number => 
 };
 
 /**
- * Builds the grid for a track. Deterministic: it depends only on the geometry (and the factor, which only the measurement script varies). Throws RangeError for a boundary point that is not finite (track data is
+ * Builds the grid for a track. Deterministic: it depends only on the geometry (and the factor, which only the measurement script varies). Throws RangeError for a
+ * `cellEdgeFactor` that is not a finite number above 0, for a track whose extent or total segment length is too large to measure in floating point, and for a boundary point that is not finite (track data is
  * validated before it gets here; `loadTrack` already refuses such points).
  */
 export function buildTrackIndex(track: Track, cellEdgeFactor: number = CELL_EDGE_FACTOR): TrackIndex {
+  if (typeof cellEdgeFactor !== 'number' || !Number.isFinite(cellEdgeFactor) || !(cellEdgeFactor > 0)) {
+    throw new RangeError(`The index's "cellEdgeFactor" must be a finite number above 0, got ${String(cellEdgeFactor)}.`);
+  }
   const segA: Vec2[] = [];
   const segB: Vec2[] = [];
   for (const loop of [track.outer, track.inner]) {
@@ -107,10 +113,13 @@ export function buildTrackIndex(track: Track, cellEdgeFactor: number = CELL_EDGE
     }
     totalLength += Math.hypot(b.x - a.x, b.y - a.y);
   }
-  const meanLength = segCount > 0 ? totalLength / segCount : 0;
-  let cellEdge = Math.max(MIN_CELL_EDGE, cellEdgeFactor * meanLength);
   const width = maxX - minX;
   const height = maxY - minY;
+  if (!Number.isFinite(width) || !Number.isFinite(height) || !Number.isFinite(totalLength)) {
+    throw new RangeError(`Cannot index a track whose extent is too large to measure (track "${track.id}").`);
+  }
+  const meanLength = segCount > 0 ? totalLength / segCount : 0;
+  let cellEdge = Math.max(MIN_CELL_EDGE, cellEdgeFactor * meanLength);
   const registrationsFor = (edge: number, columns: number, rowCount: number): number => {
     let total = 0;
     for (let k = 0; k < segCount; k += 1) {
@@ -124,8 +133,14 @@ export function buildTrackIndex(track: Track, cellEdgeFactor: number = CELL_EDGE
     }
     return total;
   };
-  // Coarsen (double the edge) until both caps hold; always ends, because one cell holds every segment once.
-  while (!((Math.floor(width / cellEdge) + 1) * (Math.floor(height / cellEdge) + 1) <= MAX_CELLS && registrationsFor(cellEdge, Math.floor(width / cellEdge) + 1, Math.floor(height / cellEdge) + 1) <= MAX_REGISTRATIONS)) {
+  // Coarsen (double the edge) until both caps hold. Bounded by construction: it stops as soon as the grid is a single cell (nothing is coarser, and one cell
+  // holds every segment once, so the registration cap cannot be met by going on), and a finite edge doubles to a single cell well inside the attempt limit.
+  for (let attempt = 0; ; attempt += 1) {
+    const columns = Math.floor(width / cellEdge) + 1;
+    const rowCount = Math.floor(height / cellEdge) + 1;
+    if (columns === 1 && rowCount === 1) break;
+    if (columns * rowCount <= MAX_CELLS && registrationsFor(cellEdge, columns, rowCount) <= MAX_REGISTRATIONS) break;
+    if (attempt >= MAX_COARSENINGS) throw new RangeError(`Cannot size an index grid for track "${track.id}".`);
     cellEdge *= 2;
   }
   const cols = Math.floor(width / cellEdge) + 1;
