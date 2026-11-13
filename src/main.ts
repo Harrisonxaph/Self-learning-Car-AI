@@ -28,6 +28,8 @@ import { RESERVED_CIRCUIT_IDS, customRegistryLookup, customSourceFromStore, entr
 import { startEvaluatePage } from './ui/evaluatePage';
 import { createRaceController } from './ui/raceController';
 import { startRacePage } from './ui/racePage';
+import { benchSettingsFromSearch, createBenchController } from './ui/benchController';
+import { startBenchPage } from './ui/benchPage';
 import { createWorld, elapsedSeconds, restartWorld, stepWorld, type World } from './sim/world';
 import {
   attachHoldButton,
@@ -230,8 +232,36 @@ if (pageMode(window.location.search) === 'train') {
   startEvaluating();
 } else if (pageMode(window.location.search) === 'race') {
   startRacing();
+} else if (pageMode(window.location.search) === 'bench') {
+  startBenchmark();
 } else {
   startDrivingPage(track);
+}
+
+/**
+ * The in-page headless benchmark (`?mode=bench`, the follow-up the owner approved on 2026-11-13): the real trainer on a training circuit with no drawing, in slices,
+ * reporting car-ticks and ticks per second for this phone, browser and build. Training circuits only (every one is offered, Silverstone by default); nothing is stored.
+ */
+function startBenchmark(): void {
+  for (const panel of [element<HTMLElement>('.hud'), element<HTMLElement>('.controls'), element<HTMLElement>('.keys-help')]) panel.hidden = true;
+  const training = tracksIn('training');
+  const settings = benchSettingsFromSearch(
+    window.location.search,
+    training.map((t) => t.id),
+  );
+  const controller = createBenchController({
+    circuits: training.map((t) => ({ id: t.id, name: t.track.name, track: t.track, limits: t.limits })),
+    settings,
+    physics: DEFAULT_VEHICLE_PHYSICS,
+    timestepSeconds: DEFAULT_SIM_CONFIG.timestepSeconds,
+    clock: () => performance.now(),
+    defer: (callback) => {
+      const handle = window.setTimeout(callback, 0);
+      return () => window.clearTimeout(handle);
+    },
+    context: { build: __CODE_VERSION__, browser: navigator.userAgent },
+  });
+  startBenchPage(controller);
 }
 
 /**
