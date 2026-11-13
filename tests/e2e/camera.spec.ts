@@ -183,6 +183,31 @@ test('controls are at least 44 px and nothing scrolls sideways at 320 px', async
   expect(scroll.x).toBeLessThanOrEqual(scroll.w);
 });
 
+test('the camera toolbar sits under the canvas and never overlaps it (owner-reported on Silverstone, 2026-11-13)', async ({ page }) => {
+  for (const size of [
+    { width: 320, height: 568 },
+    { width: 390, height: 844 },
+    { width: 768, height: 1024 },
+  ]) {
+    await page.setViewportSize(size);
+    await page.goto('/?mode=train');
+    await expect(page.locator('#camera-controls')).toBeVisible();
+    const canvasBox = (await canvas(page).boundingBox())!;
+    const label = `${size.width}x${size.height}`;
+    // the page's own promise to the track (tests/e2e/training.spec.ts): at least 80 px and a fifth of the screen
+    expect(canvasBox.height, `${label}: the canvas keeps a usable height`).toBeGreaterThanOrEqual(Math.max(80, 0.2 * size.height));
+    for (const id of ['#cam-fit', '#cam-out', '#cam-in', '#cam-follow']) {
+      const box = (await page.locator(id).boundingBox())!;
+      expect(box.y, `${label} ${id} is not over the canvas`).toBeGreaterThanOrEqual(canvasBox.y + canvasBox.height - 0.5);
+    }
+  }
+  // A short landscape screen keeps the toolbar over the corner (a row would take about 40% of its canvas): the canvas must stay usable there.
+  await page.setViewportSize({ width: 844, height: 390 });
+  await page.goto('/?mode=train');
+  await expect(page.locator('#camera-controls')).toBeVisible();
+  expect((await canvas(page).boundingBox())!.height, '844x390: the canvas keeps its height').toBeGreaterThan(110);
+});
+
 test('the editor and the evaluate page show no camera controls', async ({ page }) => {
   await page.goto('/?mode=edit');
   await expect(page.locator('#editor-panel')).toBeVisible();
