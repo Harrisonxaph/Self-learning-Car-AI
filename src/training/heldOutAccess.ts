@@ -192,8 +192,11 @@ export interface HeldOutOpening {
 
 export interface HeldOutSession {
   readonly opening: HeldOutOpening;
-  /** Evaluates one listed frozen agent on one listed held-out track, once. */
-  evaluate(model: FrozenModel, trackId: string, config?: unknown): DriverEvaluation;
+  /**
+   * Evaluates one listed frozen agent on one listed held-out track, once. `observe` may wrap the driver the gate builds
+   * (for example to count brake ticks); the wrapper sees only what the driver sees and must not change its controls.
+   */
+  evaluate(model: FrozenModel, trackId: string, config?: unknown, observe?: (driver: EpisodeDriver) => EpisodeDriver): DriverEvaluation;
   /** The pairs evaluated so far, in order. */
   evaluated(): readonly { readonly modelId: string; readonly trackId: string }[];
 }
@@ -258,7 +261,7 @@ export function createHeldOutGate(protocol: HeldOutProtocol, ledger: OpeningLedg
       const seen: { modelId: string; trackId: string }[] = [];
       return Object.freeze({
         opening,
-        evaluate(model: FrozenModel, trackId: string, config: unknown = {}): DriverEvaluation {
+        evaluate(model: FrozenModel, trackId: string, config: unknown = {}, observe?: (driver: EpisodeDriver) => EpisodeDriver): DriverEvaluation {
           if (!isFrozenModel(model)) throw new TrackLeakageError('Held-out tracks are only for frozen models (freezeModel).');
           if (!frozenProtocol.agentIds.includes(model.id)) throw new HeldOutAccessError(`Agent ${model.id} is not listed in the protocol.`);
           if (!frozenProtocol.trackIds.includes(trackId)) throw new HeldOutAccessError(`Track "${trackId}" is not listed in the protocol.`);
@@ -266,7 +269,8 @@ export function createHeldOutGate(protocol: HeldOutProtocol, ledger: OpeningLedg
             throw new HeldOutAccessError(`Agent ${model.id} has already been evaluated on "${trackId}"; each pair is evaluated once.`);
           }
           const track = heldOutTrack(trackId, model, splits);
-          const driver = driverForFrozenAgent(model);
+          const built = driverForFrozenAgent(model);
+          const driver = observe === undefined ? built : observe(built);
           // The track comes from heldOutTrack, so it is the registered held-out track of that ID by construction.
           const setup = buildEvaluationSetup(config, { track, physics: DEFAULT_VEHICLE_PHYSICS, timestepSeconds: DEFAULT_SIM_CONFIG.timestepSeconds }, () => 'held-out');
           // Recorded before the episode runs: a pair that started counts as looked at, even if the run were interrupted.
