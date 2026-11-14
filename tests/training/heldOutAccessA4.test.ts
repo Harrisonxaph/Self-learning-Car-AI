@@ -121,4 +121,25 @@ describe('the gate evaluates an A4 once, on a synthetic held-out track', () => {
     expect(() => session.evaluate(other, 'synthetic-held-out')).toThrow(HeldOutAccessError);
     expect(session.evaluated().map((e) => e.modelId)).toEqual([a4.id, a5.id]);
   });
+
+  it('an observing wrapper sees every tick of the gate-built driver and leaves the episode unchanged', () => {
+    const a5 = freezeNetworkAgent(parameters(5), { seed: 5 });
+    const open = () => createHeldOutGate(protocol([a5.id]), createMemoryLedger(), SPLITS).open('issue-34#comment-1');
+    const plain = open().evaluate(a5, 'synthetic-held-out');
+    let decisions = 0;
+    let resets = 0;
+    const watched = open().evaluate(a5, 'synthetic-held-out', {}, (driver) => ({
+      decide(observation) {
+        decisions += 1;
+        return driver.decide(observation);
+      },
+      reset() {
+        resets += 1;
+        driver.reset();
+      },
+    }));
+    expect(resets).toBeGreaterThanOrEqual(1);
+    expect(decisions).toBeGreaterThan(0);
+    expect(watched.episode).toEqual(plain.episode);
+  });
 });
