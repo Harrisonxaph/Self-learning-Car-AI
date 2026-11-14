@@ -610,6 +610,19 @@ export interface E5EndpointResult {
   readonly harmExcludedForA4: boolean;
 }
 
+/**
+ * Whether an endpoint's interval EXCLUDES a meaningful harm to the named agent (plan 0.2): the whole interval must lie STRICTLY
+ * inside the harm margin. The difference is A5 minus A4, so harm to A5 is a positive difference and the upper bound must be
+ * strictly below +delta; harm to A4 is a negative one and the lower bound must be strictly above -delta. Touching the margin does
+ * not exclude harm. Because a bound that mathematically equals the margin can round to just inside it (a crash-rate bound of 0.2
+ * is 0.19999999999999996 in floating point), the comparison is CONSERVATIVE at the 1e-9 level: a bound within the tolerance of
+ * the margin counts as touching it, so harm is not declared excluded. No interval (an undecided endpoint) excludes nothing.
+ */
+export function e5HarmExcluded(stats: { readonly lower: number; readonly upper: number } | null, delta: number, forAgent: 'a5' | 'a4'): boolean {
+  if (stats === null) return false;
+  return forAgent === 'a5' ? stats.upper < delta - THRESHOLD_TOLERANCE : stats.lower > -delta + THRESHOLD_TOLERANCE;
+}
+
 export type E5Headline = 'a5-net-benefit' | 'a4-net-benefit' | 'a5-partial' | 'a4-partial' | 'mixed' | 'no-clear-difference' | 'inconclusive';
 
 const ENDPOINT_WORDS = { collision: { a5: 'A5 has fewer collisions', a4: 'A4 has fewer collisions', name: 'collision' }, lapTime: { a5: 'A5 is faster on matched starts', a4: 'A4 is faster on matched starts', name: 'lap-time' } } as const;
@@ -748,8 +761,8 @@ export function analyseE5Circuit(pairs: readonly E5PairRows[], settings: Setting
     label: lapLabel,
   };
   const harm = (stats: { lower: number; upper: number } | null, delta: number) => ({
-    forA5: stats !== null && stats.upper < delta,
-    forA4: stats !== null && stats.lower > -delta,
+    forA5: e5HarmExcluded(stats, delta, 'a5'),
+    forA4: e5HarmExcluded(stats, delta, 'a4'),
   });
   const ch = harm(c, settings.collisionDelta);
   const lh = harm(lapStats, settings.lapTimeDeltaSeconds);

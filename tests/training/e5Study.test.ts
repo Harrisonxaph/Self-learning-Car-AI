@@ -21,6 +21,7 @@ import {
   classifyE5Endpoint,
   e5AnalysisJson,
   e5Headline,
+  e5HarmExcluded,
   e5HeldOutProtocol,
   e5LedgerFromRecords,
   e5ManifestHash,
@@ -559,6 +560,72 @@ describe('the descriptive measures and the floor wording (no cause inferred from
     const report = renderE5Report({ ...fullAnalysis(), tracks: [{ trackId: 't', ...r }] });
     expect(report).toMatch(/floor effect is a possibility that has not been tested here; the cause of a weak result is not established/);
     expect(report).not.toMatch(/likeliest/);
+  });
+});
+
+describe('the harm bound is strict at the margin, whatever floating-point does (review 5906601582)', () => {
+  it.each<[string, { lower: number; upper: number } | null, number, 'a5' | 'a4', boolean]>([
+    ['a bound exactly at +delta (it is 0.19999999999999996 in floating point) does not exclude harm to A5', { lower: 0, upper: 0.19999999999999996 }, 0.2, 'a5', false],
+    ['a bound exactly at +delta in exact arithmetic does not exclude harm to A5', { lower: 0, upper: 0.2 }, 0.2, 'a5', false],
+    ['a bound safely inside +delta excludes harm to A5', { lower: -0.1, upper: 0.19 }, 0.2, 'a5', true],
+    ['a bound safely outside +delta does not exclude harm to A5', { lower: -0.1, upper: 0.4 }, 0.2, 'a5', false],
+    ['a bound exactly at -delta (floating point) does not exclude harm to A4', { lower: -0.19999999999999996, upper: 0 }, 0.2, 'a4', false],
+    ['a bound exactly at -delta in exact arithmetic does not exclude harm to A4', { lower: -0.2, upper: 0 }, 0.2, 'a4', false],
+    ['a bound safely inside -delta excludes harm to A4', { lower: -0.19, upper: 0.1 }, 0.2, 'a4', true],
+    ['a bound safely outside -delta does not exclude harm to A4', { lower: -0.4, upper: 0.1 }, 0.2, 'a4', false],
+    ['an interval on the other side never excludes harm to the other agent only by accident (A5 interval wholly negative)', { lower: -0.5, upper: -0.3 }, 0.2, 'a5', true],
+    ['no interval excludes nothing', null, 0.2, 'a5', false],
+    ['no interval excludes nothing for A4', null, 0.2, 'a4', false],
+    ['lap-time margins work the same way: +1.0 s touches, 0.99 s excludes', { lower: 0, upper: 1.0 }, 1.0, 'a5', false],
+    ['lap-time: 0.99 s excludes harm to A5', { lower: 0, upper: 0.99 }, 1.0, 'a5', true],
+  ])('%s', (_name, stats, delta, agent, expected) => {
+    expect(e5HarmExcluded(stats, delta, agent)).toBe(expected);
+  });
+
+  /** The reviewer's rows: eight pairs where A4 crashes on 4 of 5 starts and A5 on 5 of 5, two with the counts reversed; A5 laps 2 s faster on every matched start. */
+  const boundaryRows = (swap: boolean): E5PairRows[] =>
+    Array.from({ length: 10 }, (_, i) => {
+      const flip = i >= 8;
+      const harmed = five(5, 58);
+      const spared = five(4, 60);
+      const a5 = flip ? spared : harmed;
+      const a4 = flip ? harmed : spared;
+      // A5 laps 2 s faster than A4 on the matched start for every pair.
+      const withLaps = (rows: E5StartRow[], lap: number) => rows.map((r, j) => (j === 0 ? { ...r, firstLapSeconds: lap } : r));
+      return swap
+        ? { seed: 2001 + i, a4: withLaps(a5, 58), a5: withLaps(a4, 60) }
+        : { seed: 2001 + i, a4: withLaps(a4, 60), a5: withLaps(a5, 58) };
+    });
+  it('A5 direction: the collision bound touches +0.20, so harm to A5 is NOT excluded and the headline is partial, not a net benefit', () => {
+    const r = analyseE5Circuit(boundaryRows(false), SETTINGS) as Json;
+    expect(r.collision.label).toBe('no-clear-difference');
+    expect(r.collision.interval[1]).toBeGreaterThan(0.19999);
+    expect(r.collision.interval[1]).toBeLessThanOrEqual(0.2);
+    expect(r.lapTime.label).toBe('favours-a5');
+    expect(r.harm.collisionForA5Excluded).toBe(false);
+    expect(r.headline).toBe('a5-partial');
+    expect(r.statement).toMatch(/faster on matched starts; the collision effect is unresolved/);
+  });
+  it('A4 mirror: swapping the agents gives a4-partial, not a4-net-benefit', () => {
+    const r = analyseE5Circuit(boundaryRows(true), SETTINGS) as Json;
+    expect(r.collision.label).toBe('no-clear-difference');
+    expect(r.collision.interval[0]).toBeLessThan(-0.19999);
+    expect(r.collision.interval[0]).toBeGreaterThanOrEqual(-0.2);
+    expect(r.lapTime.label).toBe('favours-a4');
+    expect(r.harm.collisionForA4Excluded).toBe(false);
+    expect(r.headline).toBe('a4-partial');
+  });
+  it('safely inside the margin the same shape IS a net benefit (the guard is not simply always off)', () => {
+    // Collisions within one pair-start of zero on average: diffs 0 and +/-0.2 in a balance whose upper bound is well below +0.2.
+    const rows: E5PairRows[] = Array.from({ length: 10 }, (_, i) => ({
+      seed: 2001 + i,
+      a4: [0, 1, 2, 3, 4].map((j) => sr({ crashed: true, firstLapSeconds: j === 0 ? 60 : null })),
+      a5: [0, 1, 2, 3, 4].map((j) => sr({ crashed: true, firstLapSeconds: j === 0 ? 58 : null })),
+    }));
+    const r = analyseE5Circuit(rows, SETTINGS) as Json;
+    expect(r.harm.collisionForA5Excluded).toBe(true);
+    expect(r.lapTime.label).toBe('favours-a5');
+    expect(r.headline).toBe('a5-net-benefit');
   });
 });
 
