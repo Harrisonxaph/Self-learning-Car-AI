@@ -358,6 +358,13 @@ describe('A5 network dimensions are checked before anything is accepted or opene
       expect(() => parseE3SeedRecord(withParameters(parameters), manifest, ENGINE, SPLITS)).toThrow(/not a usable A5 network/);
     },
   );
+  it('an A4 (brake-masked) champion in the A5 slot is refused: E3 accepts exactly an A5 with the brake on, whatever the gate can now build', () => {
+    const bad = clone(seed1) as Json;
+    bad.a5.model.provenance = { ...bad.a5.model.provenance, agent: 'A4', brakeEnabled: false };
+    bad.a5.model.id = freezeModel(bad.a5.model.parameters, bad.a5.model.provenance).id;
+    bad.resultsHash = hashOf(bad.a5);
+    expect(() => parseE3SeedRecord(bad, manifest, ENGINE, SPLITS)).toThrow(/provenance/);
+  });
   it('the held-out run refuses it before the opening is claimed', () => {
     const shared = createMemoryLedger();
     const gate = newGate(shared);

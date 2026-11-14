@@ -12,6 +12,7 @@
 //    claiming anything. There is deliberately NO hidden module-level state: persistence is the caller's, and the E3
 //    runner must pass a ledger restored from the record's recorded openings;
 //  - an opened session evaluates each listed (agent, track) pair at most once, and nothing outside the lists.
+// Evolved networks are frozen as A5 (the brake output on) or, for E5 (docs/plans/p5-02-plan.md), A4 (the brake output masked); an agent's brake binding is part of its identity and is checked before a driver is built.
 // The rule-based drivers are frozen the same way as networks: their five constants become a FrozenModel's parameters,
 // with the agent name, algorithm and brake setting in its provenance, so their identity is a content hash too.
 import { createNetworkDriver, type EpisodeDriver } from '../ai/drivers';
@@ -40,6 +41,10 @@ export const RULE_AGENTS = Object.freeze(['A3', 'A3-nb', 'A3-nb-same'] as const)
 export type RuleAgent = (typeof RULE_AGENTS)[number];
 /** The evolved agent. Its frozen models carry `provenance.agent = 'A5'` and `provenance.brakeEnabled = true`. */
 export const NETWORK_AGENT = 'A5';
+/** The evolved no-brake agent of E4 and E5. Its frozen models carry `provenance.agent = 'A4'` and `provenance.brakeEnabled = false`. */
+export const NO_BRAKE_NETWORK_AGENT = 'A4';
+/** Every agent name a frozen model may record. */
+export type FrozenAgentName = RuleAgent | typeof NETWORK_AGENT | typeof NO_BRAKE_NETWORK_AGENT;
 
 const RULE_SETTINGS: Readonly<Record<RuleAgent, { readonly params: RuleParams; readonly brakeEnabled: boolean }>> = Object.freeze({
   A3: Object.freeze({ params: RULE_A3_PARAMS, brakeEnabled: true }),
@@ -64,12 +69,17 @@ export function freezeNetworkAgent(parameters: ArrayLike<number>, provenance: Re
   return freezeModel(parameters, { ...provenance, agent: NETWORK_AGENT, brakeEnabled: true });
 }
 
+/** An evolved no-brake champion as a frozen model, recorded as A4 with the brake masked (E4's and E5's no-brake agent). */
+export function freezeNoBrakeNetworkAgent(parameters: ArrayLike<number>, provenance: Readonly<Record<string, string | number | boolean>> = {}): FrozenModel {
+  return freezeModel(parameters, { ...provenance, agent: NO_BRAKE_NETWORK_AGENT, brakeEnabled: false });
+}
+
 /** The agent a frozen model records (`provenance.agent`), or throws RangeError for a model that records none. */
-export function frozenAgentName(model: FrozenModel): RuleAgent | typeof NETWORK_AGENT {
+export function frozenAgentName(model: FrozenModel): FrozenAgentName {
   if (!isFrozenModel(model)) throw new RangeError('model must be an unchanged frozen model (freezeModel).');
   const agent: unknown = model.provenance.agent;
-  if (agent === NETWORK_AGENT || (RULE_AGENTS as readonly unknown[]).includes(agent)) return agent as RuleAgent | typeof NETWORK_AGENT;
-  throw new RangeError(`model.provenance.agent must be ${[NETWORK_AGENT, ...RULE_AGENTS].join(', ')}, got ${String(agent)}.`);
+  if (agent === NETWORK_AGENT || agent === NO_BRAKE_NETWORK_AGENT || (RULE_AGENTS as readonly unknown[]).includes(agent)) return agent as FrozenAgentName;
+  throw new RangeError(`model.provenance.agent must be ${[NETWORK_AGENT, NO_BRAKE_NETWORK_AGENT, ...RULE_AGENTS].join(', ')}, got ${String(agent)}.`);
 }
 
 /**
@@ -81,6 +91,11 @@ export function driverForFrozenAgent(model: FrozenModel): EpisodeDriver {
   const brakeEnabled = modelBrakeEnabled(model);
   if (agent === NETWORK_AGENT) {
     if (!brakeEnabled) throw new RangeError('An A5 model must record brakeEnabled = true.');
+    return createNetworkDriver(model.parameters, { brakeEnabled });
+  }
+  if (agent === NO_BRAKE_NETWORK_AGENT) {
+    // The brake binding is part of an agent's identity: an A4 model that records the brake on is not the agent it names.
+    if (brakeEnabled) throw new RangeError('An A4 model must record brakeEnabled = false.');
     return createNetworkDriver(model.parameters, { brakeEnabled });
   }
   checkRuleModel(agent as RuleAgent, model, brakeEnabled);
