@@ -62,7 +62,7 @@ import {
   type Json,
   type StudyContext,
 } from './study';
-import { BUILT_IN_TRACK_SPLITS, epochIds, freezeModel, LATEST_SPLIT_EPOCH, trackContentHash, trainingTrack, validationTrack, type FrozenModel, type TrackSplits } from './trackSplits';
+import { BUILT_IN_TRACK_SPLITS, epochIds, isBuiltInRegistry, freezeModel, latestEpochOf, splitsAsOf, trackContentHash, trainingTrack, validationTrack, type FrozenModel, type TrackSplits } from './trackSplits';
 import { DEFAULT_SIM_CONFIG, DEFAULT_VEHICLE_PHYSICS } from '../sim/config';
 
 export const E3_MANIFEST_FORMAT = 'self-driving-ai-evolution/p5-01-e3-manifest';
@@ -131,7 +131,7 @@ export function parseE3Manifest(input: unknown, splits: TrackSplits = BUILT_IN_T
   if (!E3_LABELS.includes(m.label as E3Label)) fail(`manifest.label must be one of ${E3_LABELS.join(', ')}.`);
   const label = m.label as E3Label;
   if (str(m.description, 'manifest.description', fail).length > 1000) fail('manifest.description must be at most 1000 characters.');
-  const builtIn = splits === BUILT_IN_TRACK_SPLITS;
+  const builtIn = isBuiltInRegistry(splits); // the built-in registry or a later version of it (never a synthetic one)
 
   const seedList = dense(m.seeds, 'manifest.seeds', fail);
   if (seedList.length === 0) fail('manifest.seeds must be a non-empty array.');
@@ -153,17 +153,19 @@ export function parseE3Manifest(input: unknown, splits: TrackSplits = BUILT_IN_T
   if (!(typeof training.eliteCount === 'number' && training.eliteCount >= 1)) fail('manifest.configuration.training.eliteCount must be at least 1.');
 
   const t = exact(m.tracks, 'manifest.tracks', ['training', 'validation', 'heldOut', 'splitManifestHash'], fail);
+  // The manifest names a split epoch by its hash. Its circuits are checked against the registry AS OF that epoch (frozen history),
+  // so a circuit reclassified in a later epoch (P5-02 step 2b) does not invalidate a study recorded earlier.
+  const epoch = splits.epochs !== undefined ? manifestEpochOf(t.splitManifestHash, splits) ?? latestEpochOf(splits.epochs) : undefined;
+  const view = epoch !== undefined ? splitsAsOf(splits, epoch) : splits;
   const trainingRef = exact(t.training, 'manifest.tracks.training', ['id', 'contentHash'], fail);
   const validationRef = exact(t.validation, 'manifest.tracks.validation', ['id', 'contentHash'], fail);
   // trainingTrack / validationTrack throw TrackLeakageError for a circuit outside its split, held-out included.
-  same(trainingRef, { id: str(trainingRef.id, 'manifest.tracks.training.id', fail), contentHash: trackContentHash(trainingTrack(trainingRef.id as string, splits)) }, 'manifest.tracks.training', fail);
-  same(validationRef, { id: str(validationRef.id, 'manifest.tracks.validation.id', fail), contentHash: trackContentHash(validationTrack(validationRef.id as string, splits)) }, 'manifest.tracks.validation', fail);
-  // The built-in registry: the manifest names a split epoch by its hash, and every circuit it lists must belong to that epoch.
-  const epoch = splits === BUILT_IN_TRACK_SPLITS ? manifestEpochOf(t.splitManifestHash) ?? LATEST_SPLIT_EPOCH : undefined;
+  same(trainingRef, { id: str(trainingRef.id, 'manifest.tracks.training.id', fail), contentHash: trackContentHash(trainingTrack(trainingRef.id as string, view)) }, 'manifest.tracks.training', fail);
+  same(validationRef, { id: str(validationRef.id, 'manifest.tracks.validation.id', fail), contentHash: trackContentHash(validationTrack(validationRef.id as string, view)) }, 'manifest.tracks.validation', fail);
   same(t.splitManifestHash, manifestRecord(splits, epoch).hash, 'manifest.tracks.splitManifestHash', fail);
   const heldList = dense(t.heldOut, 'manifest.tracks.heldOut', fail).map((h, i) => {
     const ref = exact(h, `manifest.tracks.heldOut[${i}]`, ['id', 'contentHash'], fail);
-    const entry = splits.tracks.find((x) => x.id === ref.id);
+    const entry = view.tracks.find((x) => x.id === ref.id);
     if (entry === undefined || entry.split !== 'held-out') fail(`manifest.tracks.heldOut[${i}] ("${String(ref.id)}") is not a registered held-out circuit.`);
     if (ref.contentHash !== entry!.contentHash) fail(`manifest.tracks.heldOut[${i}].contentHash does not match the registered circuit.`);
     return { id: ref.id as string, contentHash: ref.contentHash as string };
@@ -172,7 +174,7 @@ export function parseE3Manifest(input: unknown, splits: TrackSplits = BUILT_IN_T
   // Every listed circuit must belong to the split epoch the manifest names (checked after the held-out entries are validated).
   if (epoch !== undefined) {
     for (const id of [trainingRef.id as string, validationRef.id as string, ...heldList.map((h) => h.id)]) {
-      if (!epochIds(epoch).includes(id)) fail(`manifest.tracks lists "${id}", which is not part of the track set (split epoch ${epoch}) the manifest names.`);
+      if (!epochIds(epoch, splits.epochs).includes(id)) fail(`manifest.tracks lists "${id}", which is not part of the track set (split epoch ${epoch}) the manifest names.`);
     }
   }
 
@@ -216,6 +218,23 @@ export function parseE3Manifest(input: unknown, splits: TrackSplits = BUILT_IN_T
   return input as E3Manifest;
 }
 
+/**
+ * The registry AS OF the epoch an E3 manifest names (frozen split history), for everything that looks circuits up by split after the
+ * manifest is parsed: E3 opened three circuits that were held-out in epoch 2, and must keep verifying and replaying against that
+ * registry even after those circuits are reclassified in a later epoch. For a registry without an epoch history, or the latest
+ * epoch, it is the registry itself.
+ */
+function registryFor(manifest: E3Manifest, splits: TrackSplits): TrackSplits {
+  if (splits.epochs === undefined) return splits;
+  const epoch = manifestEpochOf(manifest.tracks.splitManifestHash, splits);
+  return epoch === null ? splits : splitsAsOf(splits, epoch);
+}
+
+/** The registry an E3 manifest's study was recorded against (for building a held-out gate that matches its protocol, e.g. for a replay). */
+export function e3RegistryFor(manifestInput: unknown, splits: TrackSplits = BUILT_IN_TRACK_SPLITS): TrackSplits {
+  return registryFor(parseE3Manifest(manifestInput, splits), splits);
+}
+
 /** The agent configuration a manifest describes (A5's evolutionary run). */
 export function e3AgentConfig(manifest: E3Manifest): E4AgentConfig {
   return {
@@ -238,7 +257,7 @@ function limitsOf(manifest: E3Manifest) {
 
 function validationSetup(manifest: E3Manifest, splits: TrackSplits): EvaluationSetup {
   return createEvaluationSetup(limitsOf(manifest), {
-    track: validationTrack(manifest.tracks.validation.id, splits),
+    track: validationTrack(manifest.tracks.validation.id, registryFor(manifest, splits)),
     physics: DEFAULT_VEHICLE_PHYSICS,
     timestepSeconds: DEFAULT_SIM_CONFIG.timestepSeconds,
   });
@@ -247,7 +266,7 @@ function validationSetup(manifest: E3Manifest, splits: TrackSplits): EvaluationS
 /** What checking an episode on a circuit needs. Held-out circuits use the validation setup's limits and scoring (the same limits). */
 function episodeCheck(manifest: E3Manifest, trackId: string, splits: TrackSplits): EpisodeCheck {
   const setup = validationSetup(manifest, splits);
-  const entry = splits.tracks.find((t) => t.id === trackId)!;
+  const entry = registryFor(manifest, splits).tracks.find((t) => t.id === trackId)!;
   return { maxTicks: setup.rules.maxEpisodeTicks, gates: entry.track.gates.length, fitness: setup.config.fitness, rules: setup.rules };
 }
 
@@ -656,7 +675,7 @@ export function replayE3HeldOutRecord(
   const record = parseE3HeldOutRecord(input, manifestInput, seedRecords, engine, splits);
   const manifest = manifestInput as E3Manifest;
   const seeds = seedRecords.map((r) => r as E3SeedRecord);
-  const gate = createHeldOutGate(e3HeldOutProtocol(manifest, seeds, splits), createMemoryLedger(), splits);
+  const gate = createHeldOutGate(e3HeldOutProtocol(manifest, seeds, splits), createMemoryLedger(), registryFor(manifest, splits));
   const fresh = runE3HeldOut(manifest, seedRecords, makeRulesPlaceholder(manifest, { engine, source: record.source, recordedAt: record.recordedAt }, splits), gate, {
     engine,
     source: record.source,

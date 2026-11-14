@@ -57,7 +57,7 @@ import {
   type Json,
   type StudyContext,
 } from './study';
-import { BUILT_IN_TRACK_SPLITS, epochIds, freezeModel, LATEST_SPLIT_EPOCH, type FrozenModel, type TrackSplits } from './trackSplits';
+import { BUILT_IN_TRACK_SPLITS, epochIds, isBuiltInRegistry, freezeModel, latestEpochOf, splitsAsOf, type FrozenModel, type TrackSplits } from './trackSplits';
 import { DEFAULT_SIM_CONFIG, DEFAULT_VEHICLE_PHYSICS } from '../sim/config';
 import { createEvaluationSetup, type EvaluationSetup } from './evaluation';
 
@@ -159,7 +159,7 @@ export function parseE5Manifest(input: unknown, splits: TrackSplits = BUILT_IN_T
   if (!E5_LABELS.includes(m.label as E5Label)) fail(`manifest.label must be one of ${E5_LABELS.join(', ')}.`);
   const label = m.label as E5Label;
   if (str(m.description, 'manifest.description', fail).length > 1000) fail('manifest.description must be at most 1000 characters.');
-  const builtIn = splits === BUILT_IN_TRACK_SPLITS;
+  const builtIn = isBuiltInRegistry(splits); // the built-in registry or a later version of it (never a synthetic one)
 
   const e4 = exact(m.e4, 'manifest.e4', ['manifestHash'], fail);
   if (typeof e4.manifestHash !== 'string' || !HASH.test(e4.manifestHash)) fail('manifest.e4.manifestHash must be a sha256: hash.');
@@ -199,11 +199,12 @@ export function parseE5Manifest(input: unknown, splits: TrackSplits = BUILT_IN_T
   }
 
   const t = exact(m.tracks, 'manifest.tracks', ['heldOut', 'splitManifestHash'], fail);
-  const epoch = builtIn ? manifestEpochOf(t.splitManifestHash) ?? LATEST_SPLIT_EPOCH : undefined;
+  const epoch = splits.epochs !== undefined ? manifestEpochOf(t.splitManifestHash, splits) ?? latestEpochOf(splits.epochs) : undefined;
+  const view = epoch !== undefined ? splitsAsOf(splits, epoch) : splits; // the registry as of the epoch the manifest names
   same(t.splitManifestHash, manifestRecord(splits, epoch).hash, 'manifest.tracks.splitManifestHash', fail);
   const heldList = dense(t.heldOut, 'manifest.tracks.heldOut', fail).map((h, i) => {
     const ref = exact(h, `manifest.tracks.heldOut[${i}]`, ['id', 'contentHash'], fail);
-    const entry = splits.tracks.find((x) => x.id === ref.id);
+    const entry = view.tracks.find((x) => x.id === ref.id);
     if (entry === undefined || entry.split !== 'held-out') fail(`manifest.tracks.heldOut[${i}] ("${String(ref.id)}") is not a registered held-out circuit.`);
     if (ref.contentHash !== entry!.contentHash) fail(`manifest.tracks.heldOut[${i}].contentHash does not match the registered circuit.`);
     return { ref, entry: entry! };
@@ -223,7 +224,7 @@ export function parseE5Manifest(input: unknown, splits: TrackSplits = BUILT_IN_T
   if (new Set(heldList.map((h) => h.id)).size !== heldList.length) fail('manifest.tracks.heldOut must be distinct.');
   if (epoch !== undefined) {
     for (const h of heldList) {
-      if (!epochIds(epoch).includes(h.id)) fail(`manifest.tracks lists "${h.id}", which is not part of the track set (split epoch ${epoch}) the manifest names.`);
+      if (!epochIds(epoch, splits.epochs).includes(h.id)) fail(`manifest.tracks lists "${h.id}", which is not part of the track set (split epoch ${epoch}) the manifest names.`);
     }
   }
 

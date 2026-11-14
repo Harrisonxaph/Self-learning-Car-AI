@@ -234,7 +234,9 @@ async function main() {
     const rulesRecord = readJson(rulesPath, 'E3 rules record');
     const { module: access } = await runnerImport(resolve(ROOT, 'src/training/heldOutAccess.ts'));
     const ledger = createFileLedger(ledgerPath, access.createMemoryLedger);
-    const gate = access.createHeldOutGate(study.e3HeldOutProtocol(manifestInput, study.parseE3SeedRecords(manifestInput, seedRecords, ctx.engine)), ledger);
+    // The gate is built on the registry as of the epoch the manifest names (frozen split history), so this study keeps its meaning even if
+    // a circuit it lists is reclassified in a later epoch.
+    const gate = access.createHeldOutGate(study.e3HeldOutProtocol(manifestInput, study.parseE3SeedRecords(manifestInput, seedRecords, ctx.engine)), ledger, study.e3RegistryFor(manifestInput));
     let record;
     try {
       record = study.runE3HeldOut(manifestInput, seedRecords, rulesRecord, gate, ctx);
