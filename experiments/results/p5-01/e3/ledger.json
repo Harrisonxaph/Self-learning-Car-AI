@@ -1,0 +1,26 @@
+[
+  {
+    "protocolHash": "sha256:d72a73317a59f251aa86e804fe6f988340279c502a95ecd0cbf9e5d6f399c429",
+    "authorisationId": "issue-33#issuecomment-6801667981",
+    "trackIds": [
+      "hairpin-chicane",
+      "long-sweepers",
+      "technical-narrow"
+    ],
+    "agentIds": [
+      "sha256:05d35f0aea31c3fb4a5c8d969f509437d3ef1a2234874fd67caf52c3b254ea2d",
+      "sha256:f85b1b499ee39d6472ddd1061e68e05574b764f011ee4568f11746fb9dc0b81f",
+      "sha256:8ecdaff808ac55309cb5aa14090abcb697ffab823bb3a474e87bd11df48733d2",
+      "sha256:696ea1133bfae0b5a853bcd47b0b7f3440d0001b4983d9878973b00df4c80652",
+      "sha256:ed0bbdfcc0fa1635e4c404c54c3474230423c1370317adc19ccefffa6aa33971",
+      "sha256:6228392731be228ffbbfd08d49d4bf5ee42a4e5606cc1bd055105c616789fb6c",
+      "sha256:dc316c194ee318bde8fa5a9e7a92e01f1ff2907d2fb77fc4e36f405d1f5af623",
+      "sha256:5ef0196164b5f0901af3e1e42b544a9805c1df98dd9c330fe4149b0756a1a490",
+      "sha256:ccec34e9dec4da2a35cd2a59be90f522e05e6ce6120fc4745ed6051e833613fe",
+      "sha256:af02ff4a5e3bdf6e4bfdf0889dd30bcfb24f571aa0d63b8b65a9f5c4631a0392",
+      "sha256:76b52c87521ee557240bf2a9d817e43764a4bdee84e46c888fde937cf9f2617e",
+      "sha256:4fea22ca3532c2d195b7dede7186ad632f3541ca4a1d19169b99395336939d9f",
+      "sha256:94de7feded56d6399d6b9cf956594978d7add687d211602594902da7eabf25cc"
+    ]
+  }
+]

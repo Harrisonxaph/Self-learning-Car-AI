@@ -1,0 +1,7 @@
+=== opening 2026-11-14T09:49:35Z node v24.22.1
+
+> self-driving-ai-evolution@0.0.0 e3
+> node scripts/e3.mjs run-held-out /home/user/e3-run/work/p5-01-e3.json --rules /home/user/e3-run/work/rules.json --ledger /home/user/e3-run/work/ledger.json --out /home/user/e3-run/work/held-out.json --open-held-out /home/user/e3-run/work/seed-3001.json /home/user/e3-run/work/seed-3002.json /home/user/e3-run/work/seed-3003.json /home/user/e3-run/work/seed-3004.json /home/user/e3-run/work/seed-3005.json /home/user/e3-run/work/seed-3006.json /home/user/e3-run/work/seed-3007.json /home/user/e3-run/work/seed-3008.json /home/user/e3-run/work/seed-3009.json /home/user/e3-run/work/seed-3010.json
+
+E3 study p5-01-e3 (confirmatory): the held-out boundary was opened ONCE (39 evaluations on hairpin-chicane, long-sweepers, technical-narrow).
+Claimed in the ledger /home/user/e3-run/work/ledger.json; recorded /home/user/e3-run/work/held-out.json (results sha256:523658f891eb…).
