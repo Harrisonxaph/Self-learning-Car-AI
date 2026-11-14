@@ -1,0 +1,991 @@
+{
+  "format": "self-driving-ai-evolution/p5-01-e3-heldout-record",
+  "version": 1,
+  "manifestHash": "sha256:d72a73317a59f251aa86e804fe6f988340279c502a95ecd0cbf9e5d6f399c429",
+  "recordedAt": "2026-11-14T09:49:41.651Z",
+  "source": {
+    "revision": "e82aa8bf9c5397a5dae4ebf31d5c6b59c1d7d0b8",
+    "dirty": false,
+    "unavailableReason": null,
+    "appVersion": "0.0.0"
+  },
+  "engine": {
+    "name": "node",
+    "version": "v24.22.1",
+    "v8": "13.6.233.17-node.58"
+  },
+  "contracts": {
+    "simulationVersion": 1,
+    "rngAlgorithm": "sfc32-splitmix32-v1",
+    "rngStreams": "trainer-run-initial-then-3-per-transition-v1",
+    "evolutionOperators": "tournament-uniform-gaussian-v1",
+    "initialisation": "uniform-pm1-v1",
+    "parameterOrder": "layer-major; per layer: weights[out][in] row-major, then biases[out]",
+    "parameterCount": 159,
+    "inputContract": "seven-rays-speed-heading-v1",
+    "outputContract": "steering-throttle-brake-v1",
+    "fitnessVersion": 1,
+    "timestepSeconds": 0.016666666666666666,
+    "physics": {
+      "wheelbase": 2.5,
+      "engineAcceleration": 8,
+      "brakeDeceleration": 12,
+      "quadraticDrag": 0.01,
+      "rollingResistance": 0.1,
+      "maxSteerRadians": 0.5,
+      "maxLateralAcceleration": 8,
+      "stopSpeed": 0.05,
+      "vehicleLength": 4,
+      "vehicleWidth": 2,
+      "maxSpeed": 23.722813232690147
+    },
+    "sensors": {
+      "origin": "body-centre",
+      "anglesDegrees": [
+        -90,
+        -60,
+        -30,
+        0,
+        30,
+        60,
+        90
+      ],
+      "maxDistance": 50
+    },
+    "randomAction": "uniform-steer-throttle-brake-v1",
+    "evaluation": {
+      "fitnessVersion": 1
+    }
+  },
+  "opening": {
+    "protocolHash": "sha256:d72a73317a59f251aa86e804fe6f988340279c502a95ecd0cbf9e5d6f399c429",
+    "authorisationId": "issue-33#issuecomment-6801667981",
+    "trackIds": [
+      "hairpin-chicane",
+      "long-sweepers",
+      "technical-narrow"
+    ],
+    "agentIds": [
+      "sha256:05d35f0aea31c3fb4a5c8d969f509437d3ef1a2234874fd67caf52c3b254ea2d",
+      "sha256:f85b1b499ee39d6472ddd1061e68e05574b764f011ee4568f11746fb9dc0b81f",
+      "sha256:8ecdaff808ac55309cb5aa14090abcb697ffab823bb3a474e87bd11df48733d2",
+      "sha256:696ea1133bfae0b5a853bcd47b0b7f3440d0001b4983d9878973b00df4c80652",
+      "sha256:ed0bbdfcc0fa1635e4c404c54c3474230423c1370317adc19ccefffa6aa33971",
+      "sha256:6228392731be228ffbbfd08d49d4bf5ee42a4e5606cc1bd055105c616789fb6c",
+      "sha256:dc316c194ee318bde8fa5a9e7a92e01f1ff2907d2fb77fc4e36f405d1f5af623",
+      "sha256:5ef0196164b5f0901af3e1e42b544a9805c1df98dd9c330fe4149b0756a1a490",
+      "sha256:ccec34e9dec4da2a35cd2a59be90f522e05e6ce6120fc4745ed6051e833613fe",
+      "sha256:af02ff4a5e3bdf6e4bfdf0889dd30bcfb24f571aa0d63b8b65a9f5c4631a0392",
+      "sha256:76b52c87521ee557240bf2a9d817e43764a4bdee84e46c888fde937cf9f2617e",
+      "sha256:4fea22ca3532c2d195b7dede7186ad632f3541ca4a1d19169b99395336939d9f",
+      "sha256:94de7feded56d6399d6b9cf956594978d7add687d211602594902da7eabf25cc"
+    ]
+  },
+  "evaluations": [
+    {
+      "agent": "A5",
+      "seed": 3001,
+      "modelId": "sha256:05d35f0aea31c3fb4a5c8d969f509437d3ef1a2234874fd67caf52c3b254ea2d",
+      "trackId": "hairpin-chicane",
+      "episode": {
+        "outcome": "crashed",
+        "ticks": 353,
+        "gatesPassed": 3,
+        "lapTicks": [],
+        "crashed": true,
+        "partialProgress": 0.942233654389309,
+        "fitness": {
+          "checkpoints": 3000,
+          "partialProgress": 942.233654389309,
+          "laps": 0,
+          "lapTimeBonus": 0,
+          "collisionPenalty": 500,
+          "total": 3442.233654389309
+        },
+        "orderedProgress": 0.16666666666666666
+      }
+    },
+    {
+      "agent": "A5",
+      "seed": 3002,
+      "modelId": "sha256:f85b1b499ee39d6472ddd1061e68e05574b764f011ee4568f11746fb9dc0b81f",
+      "trackId": "hairpin-chicane",
+      "episode": {
+        "outcome": "crashed",
+        "ticks": 184,
+        "gatesPassed": 1,
+        "lapTicks": [],
+        "crashed": true,
+        "partialProgress": 0.9208359276878585,
+        "fitness": {
+          "checkpoints": 1000,
+          "partialProgress": 920.8359276878585,
+          "laps": 0,
+          "lapTimeBonus": 0,
+          "collisionPenalty": 500,
+          "total": 1420.8359276878587
+        },
+        "orderedProgress": 0.05555555555555555
+      }
+    },
+    {
+      "agent": "A5",
+      "seed": 3003,
+      "modelId": "sha256:8ecdaff808ac55309cb5aa14090abcb697ffab823bb3a474e87bd11df48733d2",
+      "trackId": "hairpin-chicane",
+      "episode": {
+        "outcome": "crashed",
+        "ticks": 145,
+        "gatesPassed": 1,
+        "lapTicks": [],
+        "crashed": true,
+        "partialProgress": 0.5211013209123478,
+        "fitness": {
+          "checkpoints": 1000,
+          "partialProgress": 521.1013209123479,
+          "laps": 0,
+          "lapTimeBonus": 0,
+          "collisionPenalty": 500,
+          "total": 1021.101320912348
+        },
+        "orderedProgress": 0.05555555555555555
+      }
+    },
+    {
+      "agent": "A5",
+      "seed": 3004,
+      "modelId": "sha256:696ea1133bfae0b5a853bcd47b0b7f3440d0001b4983d9878973b00df4c80652",
+      "trackId": "hairpin-chicane",
+      "episode": {
+        "outcome": "crashed",
+        "ticks": 77,
+        "gatesPassed": 0,
+        "lapTicks": [],
+        "crashed": true,
+        "partialProgress": 0.888437686653384,
+        "fitness": {
+          "checkpoints": 0,
+          "partialProgress": 888.4376866533839,
+          "laps": 0,
+          "lapTimeBonus": 0,
+          "collisionPenalty": 500,
+          "total": 388.43768665338393
+        },
+        "orderedProgress": 0
+      }
+    },
+    {
+      "agent": "A5",
+      "seed": 3005,
+      "modelId": "sha256:ed0bbdfcc0fa1635e4c404c54c3474230423c1370317adc19ccefffa6aa33971",
+      "trackId": "hairpin-chicane",
+      "episode": {
+        "outcome": "crashed",
+        "ticks": 154,
+        "gatesPassed": 1,
+        "lapTicks": [],
+        "crashed": true,
+        "partialProgress": 0.6096426702264321,
+        "fitness": {
+          "checkpoints": 1000,
+          "partialProgress": 609.6426702264322,
+          "laps": 0,
+          "lapTimeBonus": 0,
+          "collisionPenalty": 500,
+          "total": 1109.642670226432
+        },
+        "orderedProgress": 0.05555555555555555
+      }
+    },
+    {
+      "agent": "A5",
+      "seed": 3006,
+      "modelId": "sha256:6228392731be228ffbbfd08d49d4bf5ee42a4e5606cc1bd055105c616789fb6c",
+      "trackId": "hairpin-chicane",
+      "episode": {
+        "outcome": "crashed",
+        "ticks": 147,
+        "gatesPassed": 1,
+        "lapTicks": [],
+        "crashed": true,
+        "partialProgress": 0.5293885550033836,
+        "fitness": {
+          "checkpoints": 1000,
+          "partialProgress": 529.3885550033835,
+          "laps": 0,
+          "lapTimeBonus": 0,
+          "collisionPenalty": 500,
+          "total": 1029.3885550033835
+        },
+        "orderedProgress": 0.05555555555555555
+      }
+    },
+    {
+      "agent": "A5",
+      "seed": 3007,
+      "modelId": "sha256:dc316c194ee318bde8fa5a9e7a92e01f1ff2907d2fb77fc4e36f405d1f5af623",
+      "trackId": "hairpin-chicane",
+      "episode": {
+        "outcome": "crashed",
+        "ticks": 150,
+        "gatesPassed": 1,
+        "lapTicks": [],
+        "crashed": true,
+        "partialProgress": 0.5193026593648766,
+        "fitness": {
+          "checkpoints": 1000,
+          "partialProgress": 519.3026593648766,
+          "laps": 0,
+          "lapTimeBonus": 0,
+          "collisionPenalty": 500,
+          "total": 1019.3026593648765
+        },
+        "orderedProgress": 0.05555555555555555
+      }
+    },
+    {
+      "agent": "A5",
+      "seed": 3008,
+      "modelId": "sha256:5ef0196164b5f0901af3e1e42b544a9805c1df98dd9c330fe4149b0756a1a490",
+      "trackId": "hairpin-chicane",
+      "episode": {
+        "outcome": "crashed",
+        "ticks": 359,
+        "gatesPassed": 3,
+        "lapTicks": [],
+        "crashed": true,
+        "partialProgress": 0.941444584003322,
+        "fitness": {
+          "checkpoints": 3000,
+          "partialProgress": 941.444584003322,
+          "laps": 0,
+          "lapTimeBonus": 0,
+          "collisionPenalty": 500,
+          "total": 3441.4445840033222
+        },
+        "orderedProgress": 0.16666666666666666
+      }
+    },
+    {
+      "agent": "A5",
+      "seed": 3009,
+      "modelId": "sha256:ccec34e9dec4da2a35cd2a59be90f522e05e6ce6120fc4745ed6051e833613fe",
+      "trackId": "hairpin-chicane",
+      "episode": {
+        "outcome": "crashed",
+        "ticks": 147,
+        "gatesPassed": 1,
+        "lapTicks": [],
+        "crashed": true,
+        "partialProgress": 0.5238312743395961,
+        "fitness": {
+          "checkpoints": 1000,
+          "partialProgress": 523.8312743395961,
+          "laps": 0,
+          "lapTimeBonus": 0,
+          "collisionPenalty": 500,
+          "total": 1023.8312743395961
+        },
+        "orderedProgress": 0.05555555555555555
+      }
+    },
+    {
+      "agent": "A5",
+      "seed": 3010,
+      "modelId": "sha256:af02ff4a5e3bdf6e4bfdf0889dd30bcfb24f571aa0d63b8b65a9f5c4631a0392",
+      "trackId": "hairpin-chicane",
+      "episode": {
+        "outcome": "crashed",
+        "ticks": 151,
+        "gatesPassed": 1,
+        "lapTicks": [],
+        "crashed": true,
+        "partialProgress": 0.5627449473192051,
+        "fitness": {
+          "checkpoints": 1000,
+          "partialProgress": 562.7449473192052,
+          "laps": 0,
+          "lapTimeBonus": 0,
+          "collisionPenalty": 500,
+          "total": 1062.744947319205
+        },
+        "orderedProgress": 0.05555555555555555
+      }
+    },
+    {
+      "agent": "A3",
+      "seed": null,
+      "modelId": "sha256:76b52c87521ee557240bf2a9d817e43764a4bdee84e46c888fde937cf9f2617e",
+      "trackId": "hairpin-chicane",
+      "episode": {
+        "outcome": "crashed",
+        "ticks": 358,
+        "gatesPassed": 3,
+        "lapTicks": [],
+        "crashed": true,
+        "partialProgress": 0.8378419470107361,
+        "fitness": {
+          "checkpoints": 3000,
+          "partialProgress": 837.8419470107361,
+          "laps": 0,
+          "lapTimeBonus": 0,
+          "collisionPenalty": 500,
+          "total": 3337.841947010736
+        },
+        "orderedProgress": 0.16666666666666666
+      }
+    },
+    {
+      "agent": "A3-nb",
+      "seed": null,
+      "modelId": "sha256:4fea22ca3532c2d195b7dede7186ad632f3541ca4a1d19169b99395336939d9f",
+      "trackId": "hairpin-chicane",
+      "episode": {
+        "outcome": "crashed",
+        "ticks": 366,
+        "gatesPassed": 3,
+        "lapTicks": [],
+        "crashed": true,
+        "partialProgress": 0.8684159773842416,
+        "fitness": {
+          "checkpoints": 3000,
+          "partialProgress": 868.4159773842416,
+          "laps": 0,
+          "lapTimeBonus": 0,
+          "collisionPenalty": 500,
+          "total": 3368.4159773842416
+        },
+        "orderedProgress": 0.16666666666666666
+      }
+    },
+    {
+      "agent": "A3-nb-same",
+      "seed": null,
+      "modelId": "sha256:94de7feded56d6399d6b9cf956594978d7add687d211602594902da7eabf25cc",
+      "trackId": "hairpin-chicane",
+      "episode": {
+        "outcome": "crashed",
+        "ticks": 332,
+        "gatesPassed": 3,
+        "lapTicks": [],
+        "crashed": true,
+        "partialProgress": 0.6841025282515963,
+        "fitness": {
+          "checkpoints": 3000,
+          "partialProgress": 684.1025282515964,
+          "laps": 0,
+          "lapTimeBonus": 0,
+          "collisionPenalty": 500,
+          "total": 3184.1025282515966
+        },
+        "orderedProgress": 0.16666666666666666
+      }
+    },
+    {
+      "agent": "A5",
+      "seed": 3001,
+      "modelId": "sha256:05d35f0aea31c3fb4a5c8d969f509437d3ef1a2234874fd67caf52c3b254ea2d",
+      "trackId": "long-sweepers",
+      "episode": {
+        "outcome": "crashed",
+        "ticks": 1761,
+        "gatesPassed": 24,
+        "lapTicks": [],
+        "crashed": true,
+        "partialProgress": 0.1279593877559402,
+        "fitness": {
+          "checkpoints": 24000,
+          "partialProgress": 127.95938775594021,
+          "laps": 0,
+          "lapTimeBonus": 0,
+          "collisionPenalty": 500,
+          "total": 23627.959387755942
+        },
+        "orderedProgress": 1
+      }
+    },
+    {
+      "agent": "A5",
+      "seed": 3002,
+      "modelId": "sha256:f85b1b499ee39d6472ddd1061e68e05574b764f011ee4568f11746fb9dc0b81f",
+      "trackId": "long-sweepers",
+      "episode": {
+        "outcome": "crashed",
+        "ticks": 1831,
+        "gatesPassed": 25,
+        "lapTicks": [
+          1742
+        ],
+        "crashed": true,
+        "partialProgress": 0.16655199530584058,
+        "fitness": {
+          "checkpoints": 25000,
+          "partialProgress": 166.5519953058406,
+          "laps": 5000,
+          "lapTimeBonus": 2066.590126291619,
+          "collisionPenalty": 500,
+          "total": 31733.14212159746
+        },
+        "orderedProgress": 1.0416666666666667
+      }
+    },
+    {
+      "agent": "A5",
+      "seed": 3003,
+      "modelId": "sha256:8ecdaff808ac55309cb5aa14090abcb697ffab823bb3a474e87bd11df48733d2",
+      "trackId": "long-sweepers",
+      "episode": {
+        "outcome": "crashed",
+        "ticks": 1801,
+        "gatesPassed": 24,
+        "lapTicks": [],
+        "crashed": true,
+        "partialProgress": 0.4185466178567077,
+        "fitness": {
+          "checkpoints": 24000,
+          "partialProgress": 418.5466178567077,
+          "laps": 0,
+          "lapTimeBonus": 0,
+          "collisionPenalty": 500,
+          "total": 23918.546617856708
+        },
+        "orderedProgress": 1
+      }
+    },
+    {
+      "agent": "A5",
+      "seed": 3004,
+      "modelId": "sha256:696ea1133bfae0b5a853bcd47b0b7f3440d0001b4983d9878973b00df4c80652",
+      "trackId": "long-sweepers",
+      "episode": {
+        "outcome": "crashed",
+        "ticks": 333,
+        "gatesPassed": 3,
+        "lapTicks": [],
+        "crashed": true,
+        "partialProgress": 0.7927440474459077,
+        "fitness": {
+          "checkpoints": 3000,
+          "partialProgress": 792.7440474459077,
+          "laps": 0,
+          "lapTimeBonus": 0,
+          "collisionPenalty": 500,
+          "total": 3292.7440474459077
+        },
+        "orderedProgress": 0.125
+      }
+    },
+    {
+      "agent": "A5",
+      "seed": 3005,
+      "modelId": "sha256:ed0bbdfcc0fa1635e4c404c54c3474230423c1370317adc19ccefffa6aa33971",
+      "trackId": "long-sweepers",
+      "episode": {
+        "outcome": "crashed",
+        "ticks": 1808,
+        "gatesPassed": 24,
+        "lapTicks": [],
+        "crashed": true,
+        "partialProgress": 0.27629319567689015,
+        "fitness": {
+          "checkpoints": 24000,
+          "partialProgress": 276.29319567689015,
+          "laps": 0,
+          "lapTimeBonus": 0,
+          "collisionPenalty": 500,
+          "total": 23776.29319567689
+        },
+        "orderedProgress": 1
+      }
+    },
+    {
+      "agent": "A5",
+      "seed": 3006,
+      "modelId": "sha256:6228392731be228ffbbfd08d49d4bf5ee42a4e5606cc1bd055105c616789fb6c",
+      "trackId": "long-sweepers",
+      "episode": {
+        "outcome": "crashed",
+        "ticks": 1831,
+        "gatesPassed": 24,
+        "lapTicks": [],
+        "crashed": true,
+        "partialProgress": 0.9613341971629121,
+        "fitness": {
+          "checkpoints": 24000,
+          "partialProgress": 961.3341971629121,
+          "laps": 0,
+          "lapTimeBonus": 0,
+          "collisionPenalty": 500,
+          "total": 24461.334197162912
+        },
+        "orderedProgress": 1
+      }
+    },
+    {
+      "agent": "A5",
+      "seed": 3007,
+      "modelId": "sha256:dc316c194ee318bde8fa5a9e7a92e01f1ff2907d2fb77fc4e36f405d1f5af623",
+      "trackId": "long-sweepers",
+      "episode": {
+        "outcome": "crashed",
+        "ticks": 381,
+        "gatesPassed": 4,
+        "lapTicks": [],
+        "crashed": true,
+        "partialProgress": 0.727798357681865,
+        "fitness": {
+          "checkpoints": 4000,
+          "partialProgress": 727.798357681865,
+          "laps": 0,
+          "lapTimeBonus": 0,
+          "collisionPenalty": 500,
+          "total": 4227.798357681865
+        },
+        "orderedProgress": 0.16666666666666666
+      }
+    },
+    {
+      "agent": "A5",
+      "seed": 3008,
+      "modelId": "sha256:5ef0196164b5f0901af3e1e42b544a9805c1df98dd9c330fe4149b0756a1a490",
+      "trackId": "long-sweepers",
+      "episode": {
+        "outcome": "crashed",
+        "ticks": 1819,
+        "gatesPassed": 24,
+        "lapTicks": [],
+        "crashed": true,
+        "partialProgress": 0.33712211960217736,
+        "fitness": {
+          "checkpoints": 24000,
+          "partialProgress": 337.12211960217735,
+          "laps": 0,
+          "lapTimeBonus": 0,
+          "collisionPenalty": 500,
+          "total": 23837.122119602176
+        },
+        "orderedProgress": 1
+      }
+    },
+    {
+      "agent": "A5",
+      "seed": 3009,
+      "modelId": "sha256:ccec34e9dec4da2a35cd2a59be90f522e05e6ce6120fc4745ed6051e833613fe",
+      "trackId": "long-sweepers",
+      "episode": {
+        "outcome": "crashed",
+        "ticks": 331,
+        "gatesPassed": 3,
+        "lapTicks": [],
+        "crashed": true,
+        "partialProgress": 0.7646120356587589,
+        "fitness": {
+          "checkpoints": 3000,
+          "partialProgress": 764.6120356587589,
+          "laps": 0,
+          "lapTimeBonus": 0,
+          "collisionPenalty": 500,
+          "total": 3264.612035658759
+        },
+        "orderedProgress": 0.125
+      }
+    },
+    {
+      "agent": "A5",
+      "seed": 3010,
+      "modelId": "sha256:af02ff4a5e3bdf6e4bfdf0889dd30bcfb24f571aa0d63b8b65a9f5c4631a0392",
+      "trackId": "long-sweepers",
+      "episode": {
+        "outcome": "crashed",
+        "ticks": 347,
+        "gatesPassed": 3,
+        "lapTicks": [],
+        "crashed": true,
+        "partialProgress": 0.9274130185910423,
+        "fitness": {
+          "checkpoints": 3000,
+          "partialProgress": 927.4130185910423,
+          "laps": 0,
+          "lapTimeBonus": 0,
+          "collisionPenalty": 500,
+          "total": 3427.413018591042
+        },
+        "orderedProgress": 0.125
+      }
+    },
+    {
+      "agent": "A3",
+      "seed": null,
+      "modelId": "sha256:76b52c87521ee557240bf2a9d817e43764a4bdee84e46c888fde937cf9f2617e",
+      "trackId": "long-sweepers",
+      "episode": {
+        "outcome": "timeout",
+        "ticks": 3600,
+        "gatesPassed": 49,
+        "lapTicks": [
+          1780,
+          1726
+        ],
+        "crashed": false,
+        "partialProgress": 0.23486659567491616,
+        "fitness": {
+          "checkpoints": 49000,
+          "partialProgress": 234.86659567491617,
+          "laps": 10000,
+          "lapTimeBonus": 4108.219302928119,
+          "collisionPenalty": 0,
+          "total": 63343.085898603036
+        },
+        "orderedProgress": 2.0416666666666665
+      }
+    },
+    {
+      "agent": "A3-nb",
+      "seed": null,
+      "modelId": "sha256:4fea22ca3532c2d195b7dede7186ad632f3541ca4a1d19169b99395336939d9f",
+      "trackId": "long-sweepers",
+      "episode": {
+        "outcome": "timeout",
+        "ticks": 3600,
+        "gatesPassed": 39,
+        "lapTicks": [
+          2186
+        ],
+        "crashed": false,
+        "partialProgress": 0.6370104613737112,
+        "fitness": {
+          "checkpoints": 39000,
+          "partialProgress": 637.0104613737112,
+          "laps": 5000,
+          "lapTimeBonus": 1646.8435498627632,
+          "collisionPenalty": 0,
+          "total": 46283.85401123648
+        },
+        "orderedProgress": 1.625
+      }
+    },
+    {
+      "agent": "A3-nb-same",
+      "seed": null,
+      "modelId": "sha256:94de7feded56d6399d6b9cf956594978d7add687d211602594902da7eabf25cc",
+      "trackId": "long-sweepers",
+      "episode": {
+        "outcome": "crashed",
+        "ticks": 439,
+        "gatesPassed": 5,
+        "lapTicks": [],
+        "crashed": true,
+        "partialProgress": 0.4683334951078495,
+        "fitness": {
+          "checkpoints": 5000,
+          "partialProgress": 468.3334951078495,
+          "laps": 0,
+          "lapTimeBonus": 0,
+          "collisionPenalty": 500,
+          "total": 4968.33349510785
+        },
+        "orderedProgress": 0.20833333333333334
+      }
+    },
+    {
+      "agent": "A5",
+      "seed": 3001,
+      "modelId": "sha256:05d35f0aea31c3fb4a5c8d969f509437d3ef1a2234874fd67caf52c3b254ea2d",
+      "trackId": "technical-narrow",
+      "episode": {
+        "outcome": "crashed",
+        "ticks": 103,
+        "gatesPassed": 1,
+        "lapTicks": [],
+        "crashed": true,
+        "partialProgress": 0.1498042003240202,
+        "fitness": {
+          "checkpoints": 1000,
+          "partialProgress": 149.8042003240202,
+          "laps": 0,
+          "lapTimeBonus": 0,
+          "collisionPenalty": 500,
+          "total": 649.8042003240203
+        },
+        "orderedProgress": 0.043478260869565216
+      }
+    },
+    {
+      "agent": "A5",
+      "seed": 3002,
+      "modelId": "sha256:f85b1b499ee39d6472ddd1061e68e05574b764f011ee4568f11746fb9dc0b81f",
+      "trackId": "technical-narrow",
+      "episode": {
+        "outcome": "crashed",
+        "ticks": 94,
+        "gatesPassed": 1,
+        "lapTicks": [],
+        "crashed": true,
+        "partialProgress": 0.09329449759873851,
+        "fitness": {
+          "checkpoints": 1000,
+          "partialProgress": 93.2944975987385,
+          "laps": 0,
+          "lapTimeBonus": 0,
+          "collisionPenalty": 500,
+          "total": 593.2944975987384
+        },
+        "orderedProgress": 0.043478260869565216
+      }
+    },
+    {
+      "agent": "A5",
+      "seed": 3003,
+      "modelId": "sha256:8ecdaff808ac55309cb5aa14090abcb697ffab823bb3a474e87bd11df48733d2",
+      "trackId": "technical-narrow",
+      "episode": {
+        "outcome": "crashed",
+        "ticks": 135,
+        "gatesPassed": 1,
+        "lapTicks": [],
+        "crashed": true,
+        "partialProgress": 0.4161658856611323,
+        "fitness": {
+          "checkpoints": 1000,
+          "partialProgress": 416.1658856611323,
+          "laps": 0,
+          "lapTimeBonus": 0,
+          "collisionPenalty": 500,
+          "total": 916.1658856611323
+        },
+        "orderedProgress": 0.043478260869565216
+      }
+    },
+    {
+      "agent": "A5",
+      "seed": 3004,
+      "modelId": "sha256:696ea1133bfae0b5a853bcd47b0b7f3440d0001b4983d9878973b00df4c80652",
+      "trackId": "technical-narrow",
+      "episode": {
+        "outcome": "crashed",
+        "ticks": 58,
+        "gatesPassed": 0,
+        "lapTicks": [],
+        "crashed": true,
+        "partialProgress": 0.5418382312960862,
+        "fitness": {
+          "checkpoints": 0,
+          "partialProgress": 541.8382312960862,
+          "laps": 0,
+          "lapTimeBonus": 0,
+          "collisionPenalty": 500,
+          "total": 41.83823129608618
+        },
+        "orderedProgress": 0
+      }
+    },
+    {
+      "agent": "A5",
+      "seed": 3005,
+      "modelId": "sha256:ed0bbdfcc0fa1635e4c404c54c3474230423c1370317adc19ccefffa6aa33971",
+      "trackId": "technical-narrow",
+      "episode": {
+        "outcome": "crashed",
+        "ticks": 136,
+        "gatesPassed": 1,
+        "lapTicks": [],
+        "crashed": true,
+        "partialProgress": 0.425104258512999,
+        "fitness": {
+          "checkpoints": 1000,
+          "partialProgress": 425.10425851299897,
+          "laps": 0,
+          "lapTimeBonus": 0,
+          "collisionPenalty": 500,
+          "total": 925.104258512999
+        },
+        "orderedProgress": 0.043478260869565216
+      }
+    },
+    {
+      "agent": "A5",
+      "seed": 3006,
+      "modelId": "sha256:6228392731be228ffbbfd08d49d4bf5ee42a4e5606cc1bd055105c616789fb6c",
+      "trackId": "technical-narrow",
+      "episode": {
+        "outcome": "crashed",
+        "ticks": 137,
+        "gatesPassed": 1,
+        "lapTicks": [],
+        "crashed": true,
+        "partialProgress": 0.4213055362234509,
+        "fitness": {
+          "checkpoints": 1000,
+          "partialProgress": 421.30553622345093,
+          "laps": 0,
+          "lapTimeBonus": 0,
+          "collisionPenalty": 500,
+          "total": 921.3055362234509
+        },
+        "orderedProgress": 0.043478260869565216
+      }
+    },
+    {
+      "agent": "A5",
+      "seed": 3007,
+      "modelId": "sha256:dc316c194ee318bde8fa5a9e7a92e01f1ff2907d2fb77fc4e36f405d1f5af623",
+      "trackId": "technical-narrow",
+      "episode": {
+        "outcome": "crashed",
+        "ticks": 139,
+        "gatesPassed": 1,
+        "lapTicks": [],
+        "crashed": true,
+        "partialProgress": 0.4199538837810747,
+        "fitness": {
+          "checkpoints": 1000,
+          "partialProgress": 419.9538837810747,
+          "laps": 0,
+          "lapTimeBonus": 0,
+          "collisionPenalty": 500,
+          "total": 919.9538837810746
+        },
+        "orderedProgress": 0.043478260869565216
+      }
+    },
+    {
+      "agent": "A5",
+      "seed": 3008,
+      "modelId": "sha256:5ef0196164b5f0901af3e1e42b544a9805c1df98dd9c330fe4149b0756a1a490",
+      "trackId": "technical-narrow",
+      "episode": {
+        "outcome": "crashed",
+        "ticks": 150,
+        "gatesPassed": 1,
+        "lapTicks": [],
+        "crashed": true,
+        "partialProgress": 0.5402115721777808,
+        "fitness": {
+          "checkpoints": 1000,
+          "partialProgress": 540.2115721777808,
+          "laps": 0,
+          "lapTimeBonus": 0,
+          "collisionPenalty": 500,
+          "total": 1040.211572177781
+        },
+        "orderedProgress": 0.043478260869565216
+      }
+    },
+    {
+      "agent": "A5",
+      "seed": 3009,
+      "modelId": "sha256:ccec34e9dec4da2a35cd2a59be90f522e05e6ce6120fc4745ed6051e833613fe",
+      "trackId": "technical-narrow",
+      "episode": {
+        "outcome": "crashed",
+        "ticks": 137,
+        "gatesPassed": 1,
+        "lapTicks": [],
+        "crashed": true,
+        "partialProgress": 0.42668792175671744,
+        "fitness": {
+          "checkpoints": 1000,
+          "partialProgress": 426.68792175671746,
+          "laps": 0,
+          "lapTimeBonus": 0,
+          "collisionPenalty": 500,
+          "total": 926.6879217567175
+        },
+        "orderedProgress": 0.043478260869565216
+      }
+    },
+    {
+      "agent": "A5",
+      "seed": 3010,
+      "modelId": "sha256:af02ff4a5e3bdf6e4bfdf0889dd30bcfb24f571aa0d63b8b65a9f5c4631a0392",
+      "trackId": "technical-narrow",
+      "episode": {
+        "outcome": "crashed",
+        "ticks": 140,
+        "gatesPassed": 1,
+        "lapTicks": [],
+        "crashed": true,
+        "partialProgress": 0.4386095682109963,
+        "fitness": {
+          "checkpoints": 1000,
+          "partialProgress": 438.60956821099626,
+          "laps": 0,
+          "lapTimeBonus": 0,
+          "collisionPenalty": 500,
+          "total": 938.6095682109963
+        },
+        "orderedProgress": 0.043478260869565216
+      }
+    },
+    {
+      "agent": "A3",
+      "seed": null,
+      "modelId": "sha256:76b52c87521ee557240bf2a9d817e43764a4bdee84e46c888fde937cf9f2617e",
+      "trackId": "technical-narrow",
+      "episode": {
+        "outcome": "crashed",
+        "ticks": 465,
+        "gatesPassed": 5,
+        "lapTicks": [],
+        "crashed": true,
+        "partialProgress": 0.6368539615381992,
+        "fitness": {
+          "checkpoints": 5000,
+          "partialProgress": 636.8539615381992,
+          "laps": 0,
+          "lapTimeBonus": 0,
+          "collisionPenalty": 500,
+          "total": 5136.8539615382
+        },
+        "orderedProgress": 0.21739130434782608
+      }
+    },
+    {
+      "agent": "A3-nb",
+      "seed": null,
+      "modelId": "sha256:4fea22ca3532c2d195b7dede7186ad632f3541ca4a1d19169b99395336939d9f",
+      "trackId": "technical-narrow",
+      "episode": {
+        "outcome": "crashed",
+        "ticks": 489,
+        "gatesPassed": 5,
+        "lapTicks": [],
+        "crashed": true,
+        "partialProgress": 0.6730334817926874,
+        "fitness": {
+          "checkpoints": 5000,
+          "partialProgress": 673.0334817926874,
+          "laps": 0,
+          "lapTimeBonus": 0,
+          "collisionPenalty": 500,
+          "total": 5173.033481792688
+        },
+        "orderedProgress": 0.21739130434782608
+      }
+    },
+    {
+      "agent": "A3-nb-same",
+      "seed": null,
+      "modelId": "sha256:94de7feded56d6399d6b9cf956594978d7add687d211602594902da7eabf25cc",
+      "trackId": "technical-narrow",
+      "episode": {
+        "outcome": "crashed",
+        "ticks": 433,
+        "gatesPassed": 5,
+        "lapTicks": [],
+        "crashed": true,
+        "partialProgress": 0.5548550595503497,
+        "fitness": {
+          "checkpoints": 5000,
+          "partialProgress": 554.8550595503498,
+          "laps": 0,
+          "lapTimeBonus": 0,
+          "collisionPenalty": 500,
+          "total": 5054.855059550349
+        },
+        "orderedProgress": 0.21739130434782608
+      }
+    }
+  ],
+  "resultsHash": "sha256:523658f891eb667b901351995492a047edd2dcd539f232f6bcab5c15a9511949"
+}

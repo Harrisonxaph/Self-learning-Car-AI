@@ -1,0 +1,123 @@
+{
+  "format": "self-driving-ai-evolution/p5-01-e3-rules-record",
+  "version": 1,
+  "manifestHash": "sha256:d72a73317a59f251aa86e804fe6f988340279c502a95ecd0cbf9e5d6f399c429",
+  "recordedAt": "2026-11-14T09:35:32.667Z",
+  "source": {
+    "revision": "e82aa8bf9c5397a5dae4ebf31d5c6b59c1d7d0b8",
+    "dirty": false,
+    "unavailableReason": null,
+    "appVersion": "0.0.0"
+  },
+  "engine": {
+    "name": "node",
+    "version": "v24.22.1",
+    "v8": "13.6.233.17-node.58"
+  },
+  "contracts": {
+    "simulationVersion": 1,
+    "rngAlgorithm": "sfc32-splitmix32-v1",
+    "rngStreams": "trainer-run-initial-then-3-per-transition-v1",
+    "evolutionOperators": "tournament-uniform-gaussian-v1",
+    "initialisation": "uniform-pm1-v1",
+    "parameterOrder": "layer-major; per layer: weights[out][in] row-major, then biases[out]",
+    "parameterCount": 159,
+    "inputContract": "seven-rays-speed-heading-v1",
+    "outputContract": "steering-throttle-brake-v1",
+    "fitnessVersion": 1,
+    "timestepSeconds": 0.016666666666666666,
+    "physics": {
+      "wheelbase": 2.5,
+      "engineAcceleration": 8,
+      "brakeDeceleration": 12,
+      "quadraticDrag": 0.01,
+      "rollingResistance": 0.1,
+      "maxSteerRadians": 0.5,
+      "maxLateralAcceleration": 8,
+      "stopSpeed": 0.05,
+      "vehicleLength": 4,
+      "vehicleWidth": 2,
+      "maxSpeed": 23.722813232690147
+    },
+    "sensors": {
+      "origin": "body-centre",
+      "anglesDegrees": [
+        -90,
+        -60,
+        -30,
+        0,
+        30,
+        60,
+        90
+      ],
+      "maxDistance": 50
+    },
+    "randomAction": "uniform-steer-throttle-brake-v1",
+    "evaluation": {
+      "fitnessVersion": 1
+    }
+  },
+  "agents": {
+    "A3": {
+      "modelId": "sha256:76b52c87521ee557240bf2a9d817e43764a4bdee84e46c888fde937cf9f2617e",
+      "validation": {
+        "outcome": "crashed",
+        "ticks": 400,
+        "gatesPassed": 4,
+        "lapTicks": [],
+        "crashed": true,
+        "partialProgress": 0.16378726127563503,
+        "fitness": {
+          "checkpoints": 4000,
+          "partialProgress": 163.78726127563505,
+          "laps": 0,
+          "lapTimeBonus": 0,
+          "collisionPenalty": 500,
+          "total": 3663.7872612756346
+        },
+        "orderedProgress": 0.2857142857142857
+      }
+    },
+    "A3-nb": {
+      "modelId": "sha256:4fea22ca3532c2d195b7dede7186ad632f3541ca4a1d19169b99395336939d9f",
+      "validation": {
+        "outcome": "crashed",
+        "ticks": 424,
+        "gatesPassed": 4,
+        "lapTicks": [],
+        "crashed": true,
+        "partialProgress": 0.20242513974324158,
+        "fitness": {
+          "checkpoints": 4000,
+          "partialProgress": 202.42513974324157,
+          "laps": 0,
+          "lapTimeBonus": 0,
+          "collisionPenalty": 500,
+          "total": 3702.4251397432417
+        },
+        "orderedProgress": 0.2857142857142857
+      }
+    },
+    "A3-nb-same": {
+      "modelId": "sha256:94de7feded56d6399d6b9cf956594978d7add687d211602594902da7eabf25cc",
+      "validation": {
+        "outcome": "crashed",
+        "ticks": 382,
+        "gatesPassed": 4,
+        "lapTicks": [],
+        "crashed": true,
+        "partialProgress": 0.08591381104035661,
+        "fitness": {
+          "checkpoints": 4000,
+          "partialProgress": 85.91381104035662,
+          "laps": 0,
+          "lapTimeBonus": 0,
+          "collisionPenalty": 500,
+          "total": 3585.9138110403564
+        },
+        "orderedProgress": 0.2857142857142857
+      }
+    }
+  },
+  "resultsHash": "sha256:f7cd8f7f9463c9f335818b0d51a18cc88ed0e4305acedba61210c1aa243a198b"
+}

@@ -1,0 +1,182 @@
+=== phase 1 start 2026-11-14T08:21:32Z node v24.22.1 commit e82aa8bf9c5397a5dae4ebf31d5c6b59c1d7d0b8 manifest fa537fb912d869b42c7e61a52a7583c4054f28de0c08e15c075dde0d2b257753
+--- seed 3001 run 2026-11-14T08:21:32Z
+
+> self-driving-ai-evolution@0.0.0 e3
+> node scripts/e3.mjs run-seed /home/user/e3-run/work/p5-01-e3.json --seed 3001 --out /home/user/e3-run/work/seed-3001.json
+
+E3 study p5-01-e3 (confirmatory), seed 3001: A5 evolved, frozen and evaluated on the validation circuit only.
+Recorded /home/user/e3-run/work/seed-3001.json (results sha256:7b63f6302fc0…).
+Raw record only: no analysis was run, no held-out circuit was used, and nothing here is evidence of learning.
+--- seed 3001 run done in 218s
+--- seed 3001 replay 2026-11-14T08:25:10Z
+
+> self-driving-ai-evolution@0.0.0 e3
+> node scripts/e3.mjs replay /home/user/e3-run/work/p5-01-e3.json /home/user/e3-run/work/seed-3001.json
+
+Replay identical: p5-01-e3-seed-record (sha256:7b63f6302fc0…).
+--- seed 3001 replay done in 218s (exit 0)
+--- seed 3002 run 2026-11-14T08:28:48Z
+
+> self-driving-ai-evolution@0.0.0 e3
+> node scripts/e3.mjs run-seed /home/user/e3-run/work/p5-01-e3.json --seed 3002 --out /home/user/e3-run/work/seed-3002.json
+
+E3 study p5-01-e3 (confirmatory), seed 3002: A5 evolved, frozen and evaluated on the validation circuit only.
+Recorded /home/user/e3-run/work/seed-3002.json (results sha256:67b40f71a12e…).
+Raw record only: no analysis was run, no held-out circuit was used, and nothing here is evidence of learning.
+--- seed 3002 run done in 229s
+--- seed 3002 replay 2026-11-14T08:32:37Z
+
+> self-driving-ai-evolution@0.0.0 e3
+> node scripts/e3.mjs replay /home/user/e3-run/work/p5-01-e3.json /home/user/e3-run/work/seed-3002.json
+
+Replay identical: p5-01-e3-seed-record (sha256:67b40f71a12e…).
+--- seed 3002 replay done in 246s (exit 0)
+--- seed 3003 run 2026-11-14T08:36:43Z
+
+> self-driving-ai-evolution@0.0.0 e3
+> node scripts/e3.mjs run-seed /home/user/e3-run/work/p5-01-e3.json --seed 3003 --out /home/user/e3-run/work/seed-3003.json
+
+E3 study p5-01-e3 (confirmatory), seed 3003: A5 evolved, frozen and evaluated on the validation circuit only.
+Recorded /home/user/e3-run/work/seed-3003.json (results sha256:a5e24a6869e6…).
+Raw record only: no analysis was run, no held-out circuit was used, and nothing here is evidence of learning.
+--- seed 3003 run done in 236s
+--- seed 3003 replay 2026-11-14T08:40:39Z
+
+> self-driving-ai-evolution@0.0.0 e3
+> node scripts/e3.mjs replay /home/user/e3-run/work/p5-01-e3.json /home/user/e3-run/work/seed-3003.json
+
+Replay identical: p5-01-e3-seed-record (sha256:a5e24a6869e6…).
+--- seed 3003 replay done in 235s (exit 0)
+--- seed 3004 run 2026-11-14T08:44:34Z
+
+> self-driving-ai-evolution@0.0.0 e3
+> node scripts/e3.mjs run-seed /home/user/e3-run/work/p5-01-e3.json --seed 3004 --out /home/user/e3-run/work/seed-3004.json
+
+E3 study p5-01-e3 (confirmatory), seed 3004: A5 evolved, frozen and evaluated on the validation circuit only.
+Recorded /home/user/e3-run/work/seed-3004.json (results sha256:77431fafc7e9…).
+Raw record only: no analysis was run, no held-out circuit was used, and nothing here is evidence of learning.
+--- seed 3004 run done in 231s
+--- seed 3004 replay 2026-11-14T08:48:25Z
+
+> self-driving-ai-evolution@0.0.0 e3
+> node scripts/e3.mjs replay /home/user/e3-run/work/p5-01-e3.json /home/user/e3-run/work/seed-3004.json
+
+Replay identical: p5-01-e3-seed-record (sha256:77431fafc7e9…).
+--- seed 3004 replay done in 227s (exit 0)
+--- seed 3005 run 2026-11-14T08:52:12Z
+
+> self-driving-ai-evolution@0.0.0 e3
+> node scripts/e3.mjs run-seed /home/user/e3-run/work/p5-01-e3.json --seed 3005 --out /home/user/e3-run/work/seed-3005.json
+
+E3 study p5-01-e3 (confirmatory), seed 3005: A5 evolved, frozen and evaluated on the validation circuit only.
+Recorded /home/user/e3-run/work/seed-3005.json (results sha256:9b7f55f68ee1…).
+Raw record only: no analysis was run, no held-out circuit was used, and nothing here is evidence of learning.
+--- seed 3005 run done in 207s
+--- seed 3005 replay 2026-11-14T08:55:39Z
+
+> self-driving-ai-evolution@0.0.0 e3
+> node scripts/e3.mjs replay /home/user/e3-run/work/p5-01-e3.json /home/user/e3-run/work/seed-3005.json
+
+Replay identical: p5-01-e3-seed-record (sha256:9b7f55f68ee1…).
+--- seed 3005 replay done in 212s (exit 0)
+--- seed 3006 run 2026-11-14T08:59:11Z
+
+> self-driving-ai-evolution@0.0.0 e3
+> node scripts/e3.mjs run-seed /home/user/e3-run/work/p5-01-e3.json --seed 3006 --out /home/user/e3-run/work/seed-3006.json
+
+E3 study p5-01-e3 (confirmatory), seed 3006: A5 evolved, frozen and evaluated on the validation circuit only.
+Recorded /home/user/e3-run/work/seed-3006.json (results sha256:334990204849…).
+Raw record only: no analysis was run, no held-out circuit was used, and nothing here is evidence of learning.
+--- seed 3006 run done in 195s
+--- seed 3006 replay 2026-11-14T09:02:26Z
+
+> self-driving-ai-evolution@0.0.0 e3
+> node scripts/e3.mjs replay /home/user/e3-run/work/p5-01-e3.json /home/user/e3-run/work/seed-3006.json
+
+Replay identical: p5-01-e3-seed-record (sha256:334990204849…).
+--- seed 3006 replay done in 187s (exit 0)
+--- seed 3007 run 2026-11-14T09:05:33Z
+
+> self-driving-ai-evolution@0.0.0 e3
+> node scripts/e3.mjs run-seed /home/user/e3-run/work/p5-01-e3.json --seed 3007 --out /home/user/e3-run/work/seed-3007.json
+
+E3 study p5-01-e3 (confirmatory), seed 3007: A5 evolved, frozen and evaluated on the validation circuit only.
+Recorded /home/user/e3-run/work/seed-3007.json (results sha256:4b6ad39ede8f…).
+Raw record only: no analysis was run, no held-out circuit was used, and nothing here is evidence of learning.
+--- seed 3007 run done in 234s
+--- seed 3007 replay 2026-11-14T09:09:27Z
+
+> self-driving-ai-evolution@0.0.0 e3
+> node scripts/e3.mjs replay /home/user/e3-run/work/p5-01-e3.json /home/user/e3-run/work/seed-3007.json
+
+Replay identical: p5-01-e3-seed-record (sha256:4b6ad39ede8f…).
+--- seed 3007 replay done in 233s (exit 0)
+--- seed 3008 run 2026-11-14T09:13:20Z
+
+> self-driving-ai-evolution@0.0.0 e3
+> node scripts/e3.mjs run-seed /home/user/e3-run/work/p5-01-e3.json --seed 3008 --out /home/user/e3-run/work/seed-3008.json
+
+E3 study p5-01-e3 (confirmatory), seed 3008: A5 evolved, frozen and evaluated on the validation circuit only.
+Recorded /home/user/e3-run/work/seed-3008.json (results sha256:13f2c56d8105…).
+Raw record only: no analysis was run, no held-out circuit was used, and nothing here is evidence of learning.
+--- seed 3008 run done in 226s
+--- seed 3008 replay 2026-11-14T09:17:06Z
+
+> self-driving-ai-evolution@0.0.0 e3
+> node scripts/e3.mjs replay /home/user/e3-run/work/p5-01-e3.json /home/user/e3-run/work/seed-3008.json
+
+Replay identical: p5-01-e3-seed-record (sha256:13f2c56d8105…).
+--- seed 3008 replay done in 230s (exit 0)
+--- seed 3009 run 2026-11-14T09:20:56Z
+
+> self-driving-ai-evolution@0.0.0 e3
+> node scripts/e3.mjs run-seed /home/user/e3-run/work/p5-01-e3.json --seed 3009 --out /home/user/e3-run/work/seed-3009.json
+
+E3 study p5-01-e3 (confirmatory), seed 3009: A5 evolved, frozen and evaluated on the validation circuit only.
+Recorded /home/user/e3-run/work/seed-3009.json (results sha256:b0d899291378…).
+Raw record only: no analysis was run, no held-out circuit was used, and nothing here is evidence of learning.
+--- seed 3009 run done in 221s
+--- seed 3009 replay 2026-11-14T09:24:37Z
+
+> self-driving-ai-evolution@0.0.0 e3
+> node scripts/e3.mjs replay /home/user/e3-run/work/p5-01-e3.json /home/user/e3-run/work/seed-3009.json
+
+Replay identical: p5-01-e3-seed-record (sha256:b0d899291378…).
+--- seed 3009 replay done in 227s (exit 0)
+--- seed 3010 run 2026-11-14T09:28:24Z
+
+> self-driving-ai-evolution@0.0.0 e3
+> node scripts/e3.mjs run-seed /home/user/e3-run/work/p5-01-e3.json --seed 3010 --out /home/user/e3-run/work/seed-3010.json
+
+E3 study p5-01-e3 (confirmatory), seed 3010: A5 evolved, frozen and evaluated on the validation circuit only.
+Recorded /home/user/e3-run/work/seed-3010.json (results sha256:db1f6df0a235…).
+Raw record only: no analysis was run, no held-out circuit was used, and nothing here is evidence of learning.
+--- seed 3010 run done in 213s
+--- seed 3010 replay 2026-11-14T09:31:57Z
+
+> self-driving-ai-evolution@0.0.0 e3
+> node scripts/e3.mjs replay /home/user/e3-run/work/p5-01-e3.json /home/user/e3-run/work/seed-3010.json
+
+Replay identical: p5-01-e3-seed-record (sha256:db1f6df0a235…).
+--- seed 3010 replay done in 214s (exit 0)
+--- rules run 2026-11-14T09:35:31Z
+
+> self-driving-ai-evolution@0.0.0 e3
+> node scripts/e3.mjs run-rules /home/user/e3-run/work/p5-01-e3.json --out /home/user/e3-run/work/rules.json
+
+E3 study p5-01-e3 (confirmatory): A3, A3-nb and A3-nb-same evaluated on the validation circuit only.
+Recorded /home/user/e3-run/work/rules.json (results sha256:f7cd8f7f9463…).
+Raw record only: no analysis was run, no held-out circuit was used, and nothing here is evidence of learning.
+
+> self-driving-ai-evolution@0.0.0 e3
+> node scripts/e3.mjs replay /home/user/e3-run/work/p5-01-e3.json /home/user/e3-run/work/rules.json
+
+Replay identical: p5-01-e3-rules-record (sha256:f7cd8f7f9463…).
+--- validation-only analysis 2026-11-14T09:35:33Z
+
+> self-driving-ai-evolution@0.0.0 e3
+> node scripts/e3.mjs analyse /home/user/e3-run/work/p5-01-e3.json --rules /home/user/e3-run/work/rules.json --out-dir /home/user/e3-run/work/validation /home/user/e3-run/work/seed-3001.json /home/user/e3-run/work/seed-3002.json /home/user/e3-run/work/seed-3003.json /home/user/e3-run/work/seed-3004.json /home/user/e3-run/work/seed-3005.json /home/user/e3-run/work/seed-3006.json /home/user/e3-run/work/seed-3007.json /home/user/e3-run/work/seed-3008.json /home/user/e3-run/work/seed-3009.json /home/user/e3-run/work/seed-3010.json
+
+E3 analysis (confirmatory): 10 independent seed(s); held-out not included.
+Wrote /home/user/e3-run/work/validation/analysis.json and /home/user/e3-run/work/validation/report.md.
+=== phase 1 DONE 2026-11-14T09:35:34Z (held-out NOT opened)
