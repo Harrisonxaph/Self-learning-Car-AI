@@ -110,6 +110,14 @@ describe('the built-in epochs keep their own split labels (no data change)', () 
     expect(splitsAsOf(BUILT_IN_TRACK_SPLITS, 2)).toBe(view); // cached: one view per epoch
     expect(view.tracks.find((t) => t.id === 'long-sweepers')!.track).toBe(BUILT_IN_TRACK_SPLITS.tracks.find((t) => t.id === 'long-sweepers')!.track);
   });
+  it('the lineage test compares epochs by value, never by property order, and a changed label, id or introducer is not built-in', () => {
+    const reorder = (e: SplitEpoch): SplitEpoch =>
+      ({ splits: Object.fromEntries([...Object.entries(e.splits)].reverse()), ids: e.ids, introducedBy: e.introducedBy, epoch: e.epoch }) as SplitEpoch;
+    expect(isBuiltInRegistry(loadTrackSplits(manifestData, FILES, SPLIT_EPOCHS.map(reorder)))).toBe(true);
+    const relabelled = SPLIT_EPOCHS.map((e) => (e.epoch === 2 ? { ...e, splits: { ...e.splits, 'long-sweepers': 'validation' as Split } } : e));
+    expect(isBuiltInRegistry(loadTrackSplits(manifestData, FILES, relabelled.map((e, i) => (i === 2 ? { ...e, splits: { ...e.splits, 'long-sweepers': 'held-out' as Split } } : e))))).toBe(false);
+    expect(isBuiltInRegistry(loadTrackSplits(manifestData, FILES, SPLIT_EPOCHS.map((e) => (e.epoch === 1 ? { ...e, introducedBy: 'other' } : e))))).toBe(false);
+  });
   it('the built-in rules apply to the built-in registry and its later versions, never to a synthetic registry', () => {
     expect(isBuiltInRegistry(BUILT_IN_TRACK_SPLITS)).toBe(true);
     expect(isBuiltInRegistry(loadTrackSplits(manifestData, FILES))).toBe(false); // no epoch history
@@ -149,6 +157,8 @@ describe('an epoch history must be consistent with its registry', () => {
     ['a circuit with no label', [{ ...epoch(1, all), splits: { 'stadium-oval': 'training' } }], /labels circuits it does not list|no valid split label/],
     ['a circuit with an unknown label', [epoch(1, all.map(([id, s]) => (id === 'silverstone' ? [id, 'nonsense' as Split] : [id, s])))], /no valid split label/],
     ['a later epoch that is not an append-only extension', [epoch(1, all.slice(0, 3)), epoch(2, [all[1]!, all[0]!, ...all.slice(2)])], /append-only extension/],
+    ['a registered circuit that the latest epoch omits', [epoch(1, all.slice(0, 7))], /every registered circuit in manifest order/],
+    ['a latest epoch that lists the circuits in another order', [epoch(1, [all[1]!, all[0]!, ...all.slice(2)])], /every registered circuit in manifest order/],
     ['a latest epoch whose labels differ from the registry\'s current ones', [epoch(1, all.map(([id, s]) => (id === 'hairpin-chicane' ? [id, 'validation' as Split] : [id, s])))], /current split is held-out/],
   ])('refuses %s', (_name, epochs, pattern) => {
     expect(() => ok(epochs)).toThrow(pattern);

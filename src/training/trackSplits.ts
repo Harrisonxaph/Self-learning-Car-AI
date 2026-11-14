@@ -212,6 +212,11 @@ function checkEpochs(epochs: readonly SplitEpoch[], tracks: readonly SplitTrack[
     if (i > 0 && !epochs[i - 1]!.ids.every((id, j) => e.ids[j] === id)) fail(`epoch ${e.epoch} is not an append-only extension of epoch ${e.epoch - 1}.`);
   });
   const latest = epochs[epochs.length - 1]!;
+  // The latest epoch is the registry's own record: it must list EVERY registered circuit, in manifest order, so a circuit cannot be
+  // registered without being appended to the history (which would leave the recorded manifest hash unchanged).
+  if (latest.ids.length !== tracks.length || !tracks.every((t, i) => t.id === latest.ids[i])) {
+    fail(`the latest epoch must list every registered circuit in manifest order (${tracks.map((t) => t.id).join(', ')}), but lists ${latest.ids.join(', ')}.`);
+  }
   for (const id of latest.ids) {
     const current = tracks.find((t) => t.id === id)!.split;
     if (latest.splits[id] !== current) fail(`the latest epoch labels "${id}" ${String(latest.splits[id])}, but the registry's current split is ${current}.`);
@@ -290,6 +295,14 @@ export const latestEpochOf = (epochs: readonly SplitEpoch[]): number => epochs[e
 
 const lineageCache = new WeakMap<TrackSplits, boolean>();
 
+/** Two epochs are the same when their number, introducer, ordered circuit IDs and each circuit's label match: compared by value, never by property order. */
+function sameEpoch(a: SplitEpoch, b: SplitEpoch): boolean {
+  if (a.epoch !== b.epoch || a.introducedBy !== b.introducedBy || a.ids.length !== b.ids.length) return false;
+  if (!a.ids.every((id, i) => id === b.ids[i])) return false;
+  const keys = Object.keys(a.splits);
+  return keys.length === Object.keys(b.splits).length && a.ids.every((id) => a.splits[id] === b.splits[id]);
+}
+
 /**
  * Whether a registry is the built-in registry or a later version of it: it keeps an epoch history that begins with the built-in epochs
  * UNCHANGED (frozen history). The study rules that are about REAL data (a confirmatory study uses the built-in registry; a mechanics
@@ -301,8 +314,7 @@ export function isBuiltInRegistry(splits: TrackSplits): boolean {
   const cached = lineageCache.get(splits);
   if (cached !== undefined) return cached;
   const epochs = splits.epochs;
-  const result =
-    epochs !== undefined && epochs.length >= SPLIT_EPOCHS.length && SPLIT_EPOCHS.every((known, i) => JSON.stringify(epochs[i]) === JSON.stringify(known));
+  const result = epochs !== undefined && epochs.length >= SPLIT_EPOCHS.length && SPLIT_EPOCHS.every((known, i) => sameEpoch(epochs[i]!, known));
   lineageCache.set(splits, result);
   return result;
 }
