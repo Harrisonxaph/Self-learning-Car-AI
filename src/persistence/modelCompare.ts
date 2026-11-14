@@ -59,6 +59,11 @@ function differing(a: unknown, b: unknown, keys: readonly string[]): string[] {
   return keys.filter((key) => !same(left[key], right[key]));
 }
 
+/** The supported vehicle-physics fields whose recorded values differ between two models (P5-05 uses it: an evaluation entry records the timestep but not the physics). */
+export function physicsDifferences(a: ModelDocument, b: ModelDocument): readonly string[] {
+  return differing(a.training.configuration.physics, b.training.configuration.physics, PHYSICS_KEYS);
+}
+
 const evaluationText = (model: ModelDocument): { text: string; present: boolean } => {
   const list: unknown = model.evaluation;
   const count = Array.isArray(list) ? list.length : 0;
