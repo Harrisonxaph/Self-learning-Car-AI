@@ -2,9 +2,11 @@
 // split labels, so a circuit reclassified in a later epoch (the three E3 circuits becoming validation in step 2b-2) does not change any
 // earlier epoch's recorded hash and no recorded result is refused; `splitsAsOf` gives the registry as it was in an epoch; E3 parses,
 // verifies and replays through the registry of the epoch its manifest names.
-// NO DATA CHANGE: the built-in registry's circuits and labels are untouched here. The reclassification is only SIMULATED with synthetic
-// registries (a scaled oval relabelled), and the real committed E3 records are only READ and recomputed (no held-out circuit is
-// evaluated, no model is trained).
+// Epoch 4 (P5-02 step 2b-2) is REAL now: the three circuits E3 opened are validation circuits and three fresh circuits are held-out. The
+// tests below pin all four epoch hashes and check the real epoch 4. Where a test needs a registry that differs from the built-in one (an epoch
+// history consistency refusal, a registry with another reclassification, an E3 round trip whose records were made in epoch 1), it builds a
+// SYNTHETIC registry from a scaled oval; the real committed E3 records are only READ and recomputed read-only (no fresh or held-out circuit
+// is evaluated, no model is trained, no episode of the real study is run).
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';

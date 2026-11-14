@@ -24,6 +24,7 @@ import {
   trackGeometryHash,
   tracksIn,
 } from '../../src/training/trackSplits';
+import { layoutDistance, SIMILARITY_THRESHOLD } from '../../src/training/trackSimilarity';
 import { freezeNoBrakeNetworkAgent } from '../../src/training/heldOutAccess';
 import { PARAMETER_COUNT } from '../../src/ai/network';
 
@@ -144,11 +145,10 @@ describe('the fresh circuits are independent of every other registered circuit',
       expect(roadFingerprint(track)).not.toBe(roadFingerprint(other.track));
     }
   });
-  it('no fresh circuit is a mirror, a reversal or a uniform scaling of another registered circuit by its length, width and gate count signature', () => {
-    // A coarse, geometry-only guard; the exact-copy protection (ID, geometry hash, road fingerprint) is the classification above.
-    const signature = (id: string) => `${Math.round(centreLineLength(id))}/${roadWidth(id).toFixed(1)}/${entry(id).track.gates.length}`;
-    const all = BUILT_IN_TRACK_SPLITS.tracks.map((t) => signature(t.id));
-    expect(new Set(all).size).toBe(all.length);
+  it.each(FRESH)('%s: not the same centre-line shape as any other registered circuit (the turning-measure guard sees scaling, rotation, mirroring, reversal and another start; tests/training/trackSimilarity.test.ts holds the positive fixtures)', (id) => {
+    for (const other of BUILT_IN_TRACK_SPLITS.tracks.filter((t) => t.id !== id)) {
+      expect(layoutDistance(entry(id).track, other.track), `${id} vs ${other.id}`).toBeGreaterThan(SIMILARITY_THRESHOLD * 4);
+    }
   });
 });
 
