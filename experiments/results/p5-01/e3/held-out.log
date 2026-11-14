@@ -5,3 +5,16 @@
 
 E3 study p5-01-e3 (confirmatory): the held-out boundary was opened ONCE (39 evaluations on hairpin-chicane, long-sweepers, technical-narrow).
 Claimed in the ledger /home/user/e3-run/work/ledger.json; recorded /home/user/e3-run/work/held-out.json (results sha256:523658f891eb…).
+=== held-out replay 2026-11-14T09:49:54Z
+
+> self-driving-ai-evolution@0.0.0 e3
+> node scripts/e3.mjs replay /home/user/e3-run/work/p5-01-e3.json /home/user/e3-run/work/held-out.json /home/user/e3-run/work/seed-3001.json /home/user/e3-run/work/seed-3002.json /home/user/e3-run/work/seed-3003.json /home/user/e3-run/work/seed-3004.json /home/user/e3-run/work/seed-3005.json /home/user/e3-run/work/seed-3006.json /home/user/e3-run/work/seed-3007.json /home/user/e3-run/work/seed-3008.json /home/user/e3-run/work/seed-3009.json /home/user/e3-run/work/seed-3010.json
+
+Replay identical: p5-01-e3-heldout-record (sha256:523658f891eb…).
+=== final analysis 2026-11-14T09:49:58Z
+
+> self-driving-ai-evolution@0.0.0 e3
+> node scripts/e3.mjs analyse /home/user/e3-run/work/p5-01-e3.json --rules /home/user/e3-run/work/rules.json --held-out /home/user/e3-run/work/held-out.json --out-dir /home/user/e3-run/work/final /home/user/e3-run/work/seed-3001.json /home/user/e3-run/work/seed-3002.json /home/user/e3-run/work/seed-3003.json /home/user/e3-run/work/seed-3004.json /home/user/e3-run/work/seed-3005.json /home/user/e3-run/work/seed-3006.json /home/user/e3-run/work/seed-3007.json /home/user/e3-run/work/seed-3008.json /home/user/e3-run/work/seed-3009.json /home/user/e3-run/work/seed-3010.json
+
+E3 analysis (confirmatory): 10 independent seed(s); held-out included.
+Wrote /home/user/e3-run/work/final/analysis.json and /home/user/e3-run/work/final/report.md.
