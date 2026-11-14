@@ -72,7 +72,7 @@ const SPLITS = loadTrackSplits(
     tracks: [
       { id: 'stadium-oval', version: '1', split: 'training', file: 'stadium-oval.json', contentHash: trackContentHash(loadTrack(stadiumOval)), description: 'training' },
       { id: 'rounded-rectangle', version: '1', split: 'validation', file: 'rounded-rectangle.json', contentHash: trackContentHash(loadTrack(roundedRectangle)), description: 'validation' },
-      { id: 'synthetic-held-out', version: '1', split: 'held-out', file: 'synthetic.json', contentHash: trackContentHash(loadTrack(scaledOval)), description: 'held-out' },
+      { id: 'synthetic-held-out', version: '1', split: 'held-out', file: 'synthetic.json', contentHash: trackContentHash(loadTrack(scaledOval)), description: 'held-out', provenance: { introducedBy: 'P5-02 step 2b (test fixture)', designCriteria: 'docs/plans/p5-02-fresh-circuits-plan.md section 3.2', designedBeforeAnyEvaluation: true } },
     ],
   },
   { 'stadium-oval.json': stadiumOval, 'rounded-rectangle.json': roundedRectangle, 'synthetic.json': scaledOval },
@@ -186,7 +186,7 @@ describe('the manifest', () => {
             tracks: [
               { id: 'stadium-oval', version: '1', split: 'training', file: 'stadium-oval.json', contentHash: trackContentHash(loadTrack(stadiumOval)), description: 'training' },
               { id: 'rounded-rectangle', version: '1', split: 'validation', file: 'rounded-rectangle.json', contentHash: trackContentHash(loadTrack(roundedRectangle)), description: 'validation' },
-              { id, version: '1', split: 'held-out', file: 'x.json', contentHash: trackContentHash(loadTrack(track)), description: 'held-out' },
+              { id, version: '1', split: 'held-out', file: 'x.json', contentHash: trackContentHash(loadTrack(track)), description: 'held-out', provenance: { introducedBy: 'P5-02 step 2b (test fixture)', designCriteria: 'docs/plans/p5-02-fresh-circuits-plan.md section 3.2', designedBeforeAnyEvaluation: true } },
             ],
           },
           { 'stadium-oval.json': stadiumOval, 'rounded-rectangle.json': roundedRectangle, 'x.json': track },
@@ -211,6 +211,41 @@ describe('the manifest', () => {
       expect(heldOut.length).toBeGreaterThan(0);
       for (const id of heldOut) expect(E5_SPENT_CIRCUITS).toContain(id);
     });
+  });
+});
+
+describe('a held-out circuit must carry provenance showing it was designed for P5-02 before any evaluation', () => {
+  const registryWith = (provenance: object | undefined) => {
+    const track = { ...scaledOval, id: 'fresh-with-provenance' };
+    const entry = { id: 'fresh-with-provenance', version: '1', split: 'held-out', file: 'x.json', contentHash: trackContentHash(loadTrack(track)), description: 'held-out', ...(provenance === undefined ? {} : { provenance }) };
+    const splits = loadTrackSplits(
+      {
+        ...manifestData,
+        tracks: [
+          { id: 'stadium-oval', version: '1', split: 'training', file: 'stadium-oval.json', contentHash: trackContentHash(loadTrack(stadiumOval)), description: 'training' },
+          { id: 'rounded-rectangle', version: '1', split: 'validation', file: 'rounded-rectangle.json', contentHash: trackContentHash(loadTrack(roundedRectangle)), description: 'validation' },
+          entry,
+        ],
+      },
+      { 'stadium-oval.json': stadiumOval, 'rounded-rectangle.json': roundedRectangle, 'x.json': track },
+    );
+    const m = MANIFEST();
+    m.tracks = { heldOut: [{ id: 'fresh-with-provenance', contentHash: entry.contentHash }], splitManifestHash: manifestRecord(splits).hash };
+    return { splits, m };
+  };
+  const good = { introducedBy: 'P5-02 step 2b', designCriteria: 'docs/plans/p5-02-fresh-circuits-plan.md section 3.2', designedBeforeAnyEvaluation: true };
+  it('accepts a circuit introduced by P5-02 and designed before any evaluation', () => {
+    const { splits, m } = registryWith(good);
+    expect(parseE5Manifest(m, splits).tracks.heldOut[0]!.id).toBe('fresh-with-provenance');
+  });
+  it.each<[string, object | undefined]>([
+    ['no provenance at all', undefined],
+    ['provenance saying it was not designed before any evaluation', { ...good, designedBeforeAnyEvaluation: false }],
+    ['a circuit introduced by another step', { ...good, introducedBy: 'P4-04' }],
+  ])('refuses %s', (_name, provenance) => {
+    const { splits, m } = registryWith(provenance);
+    expect(() => parseE5Manifest(m, splits)).toThrow(/no registered provenance showing it was designed for P5-02 before any evaluation/);
+    expect(() => parseE5Manifest(m, splits)).toThrow(StudyManifestError);
   });
 });
 
