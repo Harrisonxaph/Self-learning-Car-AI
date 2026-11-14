@@ -50,7 +50,8 @@ describe('renderEvaluationComparison', () => {
     expect(text).toContain('13.75 s (4 of 5 starts)');
     expect(text).toContain('no lap completed'); // B: never "0 s"
     expect(text).toContain('unavailable (a lap time is missing)');
-    expect(text).toContain('10.00 s to 20.00 s, SD 4.15 s, 4 starts');
+    expect(text).toContain('10.00 s to 20.00 s, SD 4.15 s, 4 of 5 starts');
+    expect(text).toContain('unavailable (0 of 5 starts completed a lap)'); // B: n = 0 is stated, not dropped
     expect(text).toContain('Spread shows how one saved champion varies across its fixed start changes');
   });
 
@@ -76,13 +77,43 @@ describe('renderEvaluationComparison', () => {
     const c = render(a, b);
     const agg = c.find((n) => n.tag === 'table' && n.attributes['data-circuits'] === '3')[0]!;
     const text = textOf(agg);
-    expect(text).toContain('Across the 3 compared circuits (each circuit counts once): x, y, z');
+    expect(text).toContain('Across the 3 compared circuits (each circuit counts once, 5 starts each): x, y, z');
     expect(text).toContain('circuits where both completed a lap: x, y');
     expect(text).toContain('15.00 s (10 lap-time samples)');
     expect(text).toContain('22.50 s (10 lap-time samples)');
     expect(textOf(c)).toContain('Left out of the first-lap time because one champion, or both, completed no lap there: z.');
     const none = render([entry(A, 'x', five((s) => crash(s, 3))), entry(A, 'y', five((s) => crash(s, 3)))], [entry(B, 'x', five((s) => crash(s, 2))), entry(B, 'y', five((s) => crash(s, 2)))]);
     expect(textOf(none)).toContain('No circuit where both champions completed a lap');
+  });
+
+  it('names the circuits left out of the lap time in EVERY state: one eligible circuit, none, and several', () => {
+    // One eligible circuit (x), y left out because B completed no lap there.
+    const single = render([entry(A, 'x', five((s) => done(s, 600))), entry(A, 'y', five((s) => done(s, 600)))], [entry(B, 'x', five((s) => done(s, 900))), entry(B, 'y', five((s) => crash(s, 2)))]);
+    expect(textOf(single)).toContain('Only one circuit (x) where both completed a lap');
+    expect(textOf(single)).toContain('Left out of the first-lap time because one champion, or both, completed no lap there: y.');
+    // No eligible circuit: disjoint completions, so both are left out and named.
+    const none = render([entry(A, 'x', five((s) => done(s, 600))), entry(A, 'y', five((s) => crash(s, 3)))], [entry(B, 'x', five((s) => crash(s, 3))), entry(B, 'y', five((s) => done(s, 600)))]);
+    expect(textOf(none)).toContain('No circuit where both champions completed a lap');
+    expect(textOf(none)).toContain('Left out of the first-lap time because one champion, or both, completed no lap there: x, y.');
+    // Everyone completed a lap everywhere: nothing is left out, and no such sentence appears.
+    const all = render([entry(A, 'x', five((s) => done(s, 600))), entry(A, 'y', five((s) => done(s, 600)))], [entry(B, 'x', five((s) => done(s, 900))), entry(B, 'y', five((s) => done(s, 900)))]);
+    expect(textOf(all)).not.toContain('Left out of the first-lap time');
+  });
+
+  it('shows the starts per circuit in the aggregate caption, and says so when the counts differ between circuits', () => {
+    const same = render([entry(A, 'x', five((s) => done(s, 600))), entry(A, 'y', five((s) => done(s, 600)))], [entry(B, 'x', five((s) => done(s, 600))), entry(B, 'y', five((s) => done(s, 600)))]);
+    expect(textOf(same)).toContain('(each circuit counts once, 5 starts each)');
+    const three = (m: ModelDocument, id: string) => entry(m, id, [done(0, 600), done(1, 600), done(2, 600)]);
+    const differ = render([entry(A, 'x', five((s) => done(s, 600))), three(A, 'y')], [entry(B, 'x', five((s) => done(s, 600))), three(B, 'y')]);
+    expect(textOf(differ)).toContain('the number of starts differs between circuits');
+  });
+
+  it('spread: n = 0 is stated with its count, n = 1 says the standard deviation is unavailable, and progress always has all starts', () => {
+    const c = render([entry(A, 'x', [done(0, 900), crash(1, 2), crash(2, 2), crash(3, 2), crash(4, 2)])], [entry(B, 'x', five((s) => crash(s, 2)))]);
+    const text = textOf(c);
+    expect(text).toContain('15.00 s to 15.00 s, SD unavailable, 1 of 5 starts'); // A: one start completed a lap
+    expect(text).toContain('unavailable (0 of 5 starts completed a lap)'); // B: none did
+    expect(text).toContain('0.20 to 1.00, SD 0.32, 5 of 5 starts'); // A's progress over every start (population SD of 1, 0.2, 0.2, 0.2, 0.2)
   });
 
   it('never ranks or judges: no verdict, p-value, interval or "significant" anywhere, and no marker attribute', () => {

@@ -19,10 +19,11 @@ const pp = (difference: number): string => signed(difference * 100, 0, ' points'
 const laps = (value: number): string => `${value.toFixed(2)} laps`;
 const seconds = (value: number | null): string => (value === null ? 'no lap completed' : `${value.toFixed(2)} s`);
 const lapTimeCell = (side: CircuitSide): string => (side.meanFirstLapSeconds === null ? 'no lap completed' : `${side.meanFirstLapSeconds.toFixed(2)} s (${side.firstLapSamples} of ${side.episodes} starts)`);
-const spreadText = (spread: Spread | null, unit: (v: number) => string): string => {
-  if (spread === null) return 'unavailable (no start completed a lap)';
+const spreadText = (spread: Spread | null, episodes: number, unit: (v: number) => string): string => {
+  if (spread === null) return `unavailable (0 of ${episodes} starts completed a lap)`;
   const range = `${unit(spread.min)} to ${unit(spread.max)}`;
-  return spread.sd === null ? `${range}, ${spread.n} ${spread.n === 1 ? 'start' : 'starts'}` : `${range}, SD ${unit(spread.sd)}, ${spread.n} starts`;
+  // n is always shown; the standard deviation needs two values, so for one it says it is unavailable.
+  return spread.sd === null ? `${range}, SD unavailable, ${spread.n} of ${episodes} ${episodes === 1 ? 'start' : 'starts'}` : `${range}, SD ${unit(spread.sd)}, ${spread.n} of ${episodes} starts`;
 };
 const outcomesText = (side: CircuitSide): string => {
   const o = side.outcomes;
@@ -67,8 +68,8 @@ function circuitTable(ui: UiFactory, c: CircuitComparison): UiNode {
   body.append(dataRow(ui, 'Outcomes', [...both(outcomesText), '']));
   body.append(dataRow(ui, 'Mean ordered progress', [...both((s) => laps(s.meanOrderedProgress)), d ? signed(d.meanOrderedProgress, 2, ' laps') : 'not compared']));
   body.append(dataRow(ui, 'Mean first-lap time', [...both(lapTimeCell), d ? (d.meanFirstLapSeconds === null ? 'unavailable (a lap time is missing)' : signed(d.meanFirstLapSeconds, 2, ' s')) : 'not compared']));
-  body.append(dataRow(ui, 'Spread of first-lap time across starts', [...both((s) => spreadText(s.firstLapSpread, (v) => v.toFixed(2) + ' s')), '']));
-  body.append(dataRow(ui, 'Spread of progress across starts', [...both((s) => spreadText(s.progressSpread, (v) => v.toFixed(2))), '']));
+  body.append(dataRow(ui, 'Spread of first-lap time across starts', [...both((s) => spreadText(s.firstLapSpread, s.episodes, (v) => v.toFixed(2) + ' s')), '']));
+  body.append(dataRow(ui, 'Spread of progress across starts', [...both((s) => spreadText(s.progressSpread, s.episodes, (v) => v.toFixed(2))), '']));
   body.append(dataRow(ui, 'Brake output', [...both((s) => (s.brakeEnabled ? 'enabled' : 'masked to 0')), '']));
   table.append(body);
   return table;
@@ -78,7 +79,8 @@ function aggregateTable(ui: UiFactory, g: Aggregate): UiNode {
   const table = ui.create('table');
   table.setAttribute('class', 'compare-table eval-compare-aggregate');
   table.setAttribute('data-circuits', String(g.circuits.length));
-  table.append(text(ui, 'caption', `Across the ${g.circuits.length} compared circuits (each circuit counts once): ${g.circuits.join(', ')}`));
+  const per = g.episodesPerCircuit === null ? 'the number of starts differs between circuits' : `${g.episodesPerCircuit} starts each`;
+  table.append(text(ui, 'caption', `Across the ${g.circuits.length} compared circuits (each circuit counts once, ${per}): ${g.circuits.join(', ')}`));
   table.append(headRow(ui, ['Item', 'A', 'B', 'A minus B']));
   const body = ui.create('tbody');
   body.append(dataRow(ui, 'Mean laps completed', [pct(g.lapCompletion.a), pct(g.lapCompletion.b), pp(g.lapCompletion.difference)]));
@@ -119,8 +121,11 @@ export function renderEvaluationComparison(container: UiList, ui: UiFactory, res
   }
   if (result.aggregate !== null) {
     children.push(aggregateTable(ui, result.aggregate));
-    if (result.aggregate.lapTime.state !== 'values') children.push(text(ui, 'p', result.aggregate.lapTime.note, 'graph-summary'));
-    else if (result.aggregate.lapTime.excludedCircuits.length > 0) children.push(text(ui, 'p', `Left out of the first-lap time because one champion, or both, completed no lap there: ${result.aggregate.lapTime.excludedCircuits.join(', ')}.`, 'graph-summary'));
+    const lapTime = result.aggregate.lapTime;
+    if (lapTime.state !== 'values') children.push(text(ui, 'p', lapTime.note, 'graph-summary'));
+    // The circuits kept out of the first-lap time are named in every state (values, single, unavailable), so the figure is never read as
+    // covering more than it does.
+    if (lapTime.excludedCircuits.length > 0) children.push(text(ui, 'p', `Left out of the first-lap time because one champion, or both, completed no lap there: ${lapTime.excludedCircuits.join(', ')}.`, 'graph-summary'));
   }
   children.push(text(ui, 'p', SCENARIO_SPREAD_CAVEAT, 'graph-summary'));
   container.replaceChildren(...children);
