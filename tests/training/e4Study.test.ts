@@ -132,7 +132,7 @@ describe('E4 manifest', () => {
 
   it('refuses a held-out track as the training or validation track (TrackLeakageError)', () => {
     expect(() => parseE4Manifest(withManifest((m) => (m.tracks.training.id = 'hairpin-chicane')))).toThrow(TrackLeakageError);
-    expect(() => parseE4Manifest(withManifest((m) => (m.tracks.validation.id = 'hairpin-chicane')))).toThrow(TrackLeakageError);
+    expect(() => parseE4Manifest(withManifest((m) => (m.tracks.validation.id = 'hairpin-run')))).toThrow(TrackLeakageError);
     expect(() => parseE4Manifest(withManifest((m) => (m.tracks.validation.id = 'stadium-oval')))).toThrow(TrackLeakageError);
   });
 
@@ -285,7 +285,7 @@ describe('E4 agents and the paired integration test (T2)', () => {
   it('refuses a configuration with no elites, an unknown agent and a held-out track', () => {
     expect(() => generateE4Agent({ ...config, training: { ...config.training, eliteCount: 0 } }, 'A4', 7401)).toThrow(RangeError);
     expect(() => generateE4Agent(config, 'A8' as never, 7401)).toThrow(/A4 and A5/);
-    expect(() => generateE4Agent({ ...config, validationTrackId: 'hairpin-chicane' }, 'A4', 7401)).toThrow(TrackLeakageError);
+    expect(() => generateE4Agent({ ...config, validationTrackId: 'hairpin-run' }, 'A4', 7401)).toThrow(TrackLeakageError);
   });
 });
 

@@ -194,7 +194,7 @@ describe('manifest', () => {
   });
 
   it.each([
-    ['the held-out track as validation', (m: Json) => (m.tracks.validation.id = 'hairpin-chicane')],
+    ['the held-out track as validation', (m: Json) => (m.tracks.validation.id = 'hairpin-run')],
     ['the held-out track for training', (m: Json) => (m.tracks.training.id = 'hairpin-chicane')],
     ['the validation track for training', (m: Json) => (m.tracks.training.id = 'rounded-rectangle')],
     ['the training track as validation', (m: Json) => (m.tracks.validation.id = 'stadium-oval')],

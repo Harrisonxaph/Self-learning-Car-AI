@@ -82,7 +82,8 @@ test('only training and validation circuits are offered: no held-out circuit', a
   await open(page);
   await page.locator('#ev-model').selectOption(FIXTURE.id);
   const ids = await page.locator('#ev-circuit-list input').evaluateAll((nodes) => nodes.map((n) => (n as HTMLInputElement).dataset.circuit));
-  expect(ids).toEqual(['stadium-oval', 'kidney-loop', 'rounded-rectangle', 's-sweepers']);
+  // epoch 4 (P5-02 step 2b): the three circuits E3 opened are spent and are validation circuits now; the three fresh held-out circuits are never offered
+  expect(ids).toEqual(['stadium-oval', 'kidney-loop', 'rounded-rectangle', 'hairpin-chicane', 's-sweepers', 'long-sweepers', 'technical-narrow']);
   await expect(page.locator('#ev-circuit-list')).toContainText('(the training circuit)');
   // the built-in lists are the same as before; a third, empty group is for the person's own saved tracks (P4-03)
   await expect(page.locator('#ev-circuit-list [role="group"]')).toHaveCount(3);

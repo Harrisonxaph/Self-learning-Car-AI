@@ -151,16 +151,19 @@ describe('what a record contains', () => {
 
   it('records the whole split manifest with its hash, and the training track by content hash', () => {
     const { manifest, training } = RECORD.tracks;
-    // New records carry the LATEST split epoch (P4-06: epoch 3, the three P2-10 circuits, the four P4-04 ones and Silverstone).
+    // New records carry the LATEST split epoch (P5-02 step 2b: epoch 4, the eight earlier circuits, with the three circuits E3 opened now validation, and the three fresh held-out circuits).
     expect(manifest.entries.map((e) => [e.id, e.split])).toEqual([
       ['stadium-oval', 'training'],
       ['rounded-rectangle', 'validation'],
-      ['hairpin-chicane', 'held-out'],
+      ['hairpin-chicane', 'validation'],
       ['kidney-loop', 'training'],
       ['s-sweepers', 'validation'],
-      ['long-sweepers', 'held-out'],
-      ['technical-narrow', 'held-out'],
+      ['long-sweepers', 'validation'],
+      ['technical-narrow', 'validation'],
       ['silverstone', 'training'],
+      ['hairpin-run', 'held-out'],
+      ['sweep-hook', 'held-out'],
+      ['hook-chicane', 'held-out'],
     ]);
     expect(manifest.entries.map((e) => e.contentHash)).toEqual(BUILT_IN_TRACK_SPLITS.tracks.map((t) => t.contentHash));
     expect(manifest).toEqual(manifestRecord());

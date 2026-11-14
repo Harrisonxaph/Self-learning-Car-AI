@@ -1,0 +1,14 @@
+{
+  "id": "sweep-hook",
+  "version": "1",
+  "name": "Sweep hook",
+  "width": 12,
+  "half": [
+    { "type": "arc", "turn": "left", "radius": 100, "degrees": 60 },
+    { "type": "arc", "turn": "left", "radius": 80, "degrees": 60 },
+    { "type": "arc", "turn": "left", "radius": 26, "degrees": 100 },
+    { "type": "arc", "turn": "right", "radius": 40, "degrees": 40 },
+    { "type": "straight", "length": 30 }
+  ],
+  "solve": { "segment": 4, "field": "length", "range": [0, 400] }
+}

@@ -79,7 +79,8 @@ describe('choosing a race', () => {
       validationCircuits: [...names('validation'), { id: 'made-up', name: 'Made up' }],
     });
     const ids = controller.circuits().map((c) => c.id);
-    expect(ids).toEqual(['stadium-oval', 'kidney-loop', 'rounded-rectangle', 's-sweepers']);
+    // epoch 4: the three circuits E3 opened are validation circuits now; the three fresh held-out circuits are never offered
+    expect(ids).toEqual(['stadium-oval', 'kidney-loop', 'rounded-rectangle', 'hairpin-chicane', 's-sweepers', 'long-sweepers', 'technical-narrow']);
     for (const held of HELD_OUT) expect(ids).not.toContain(held);
     controller.select('rc-1');
     controller.selectCircuit(HELD_OUT[0]!);

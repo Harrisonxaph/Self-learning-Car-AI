@@ -58,7 +58,8 @@ describe('the circuits offered', () => {
   it('are the training and validation circuits only, never a held-out one, whatever is passed in', () => {
     const { controller } = setup();
     const ids = controller.circuits().map((c) => c.id);
-    expect(ids).toEqual(['stadium-oval', 'kidney-loop', 'rounded-rectangle', 's-sweepers']);
+    // epoch 4: the three circuits E3 opened are spent and are validation circuits now; the three fresh held-out circuits are never offered
+    expect(ids).toEqual(['stadium-oval', 'kidney-loop', 'rounded-rectangle', 'hairpin-chicane', 's-sweepers', 'long-sweepers', 'technical-narrow']);
     for (const held of HELD_OUT) expect(ids).not.toContain(held);
     const sneaky = createEvaluateController({
       store: createModelStore({ storage: () => new MemoryStorage(), registry: TRAINING_REGISTRY }),
@@ -66,7 +67,7 @@ describe('the circuits offered', () => {
       validationCircuits: names('validation'),
       now: () => '', appVersion: '', codeVersion: '', defer: () => () => undefined,
     });
-    expect(sneaky.circuits().map((c) => c.split)).toEqual(['training', 'training', 'validation', 'validation']);
+    expect(sneaky.circuits().map((c) => c.split)).toEqual(['training', 'training', 'validation', 'validation', 'validation', 'validation', 'validation']);
   });
   it('marks the circuit the selected model was trained on', () => {
     const { controller } = setup();

@@ -8,7 +8,7 @@ import { expect, test, type Page } from '@playwright/test';
 
 const read = (name: string): string => readFileSync(fileURLToPath(new URL(name, import.meta.url)), 'utf8');
 const FIXTURE = JSON.parse(read('../fixtures/champion-v1.json')) as { id: string };
-const HELD_OUT_FILE = JSON.parse(read('../../src/data/tracks/long-sweepers.json')) as Record<string, unknown>;
+const HELD_OUT_FILE = JSON.parse(read('../../src/data/tracks/hairpin-run.json')) as Record<string, unknown>;
 const RING = [[-60, -30], [0, -40], [60, -30], [70, 0], [60, 30], [0, 40], [-60, 30], [-70, 0]] as const;
 
 let errors: string[] = [];
@@ -140,7 +140,7 @@ test('a copy of a built-in study circuit is refused with one generic message tha
   await expect(status).toContainText('Nothing was imported');
   await expect(status).toContainText('built-in study circuit');
   const text = (await status.textContent()) ?? '';
-  for (const word of ['long-sweepers', 'technical-narrow', 'held-out', 'validation', 'training']) expect(text.toLowerCase()).not.toContain(word);
+  for (const word of ['hairpin-run', 'sweep-hook', 'hook-chicane', 'long-sweepers', 'technical-narrow', 'held-out', 'validation', 'training']) expect(text.toLowerCase()).not.toContain(word);
   await expect(savedRows(page)).toHaveCount(0);
   const stored = await page.evaluate(() => Object.keys(window.localStorage).filter((k) => k.startsWith('sdae:track:')));
   expect(stored).toEqual([]);
@@ -168,7 +168,7 @@ test('evaluate a saved champion on a saved custom track, keep the result after a
   await page.locator('#ev-model').selectOption(FIXTURE.id);
   await expect(page.locator('#ev-body tr')).toHaveCount(1);
   const ids = await page.locator('#ev-circuit-list input').evaluateAll((nodes) => nodes.map((n) => (n as HTMLInputElement).dataset.circuit));
-  for (const held of ['long-sweepers', 'technical-narrow']) expect(ids).not.toContain(held);
+  for (const held of ['hairpin-run', 'sweep-hook', 'hook-chicane']) expect(ids).not.toContain(held); // the fresh held-out circuits (the three E3 spent are validation circuits and are offered)
   // deleting the track in the editor leaves the result, labelled "no longer saved"
   await openEditor(page);
   await page.getByRole('button', { name: 'Delete Eval loop' }).click();

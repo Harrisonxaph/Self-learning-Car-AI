@@ -32,7 +32,7 @@ import { sha256Hex } from '../../src/utils/sha256';
 const builtIn = (id: string): Track => BUILT_IN_TRACK_SPLITS.tracks.find((t) => t.id === id)!.track;
 const OVAL = builtIn('stadium-oval');
 const VALIDATION = builtIn('rounded-rectangle');
-const HELD_OUT = builtIn('hairpin-chicane');
+const HELD_OUT = builtIn('hairpin-run');
 const env = (track: Track) => ({ track, physics: DEFAULT_VEHICLE_PHYSICS, timestepSeconds: DEFAULT_SIM_CONFIG.timestepSeconds });
 const ON_OVAL = createEvaluationSetup({}, env(OVAL));
 const ON_VALIDATION = createEvaluationSetup({}, env(VALIDATION));
@@ -296,9 +296,9 @@ describe('training versus evaluation boundaries', () => {
 
   it('refuses the held-out track, also renamed or under a training ID', () => {
     expect(() => createEvaluationSetup({}, env(HELD_OUT))).toThrow(TrackLeakageError);
-    expect(() => createEvaluationSetup({}, env({ ...HELD_OUT, id: 'my-copy' }))).toThrow(/copy of "hairpin-chicane"/);
+    expect(() => createEvaluationSetup({}, env({ ...HELD_OUT, id: 'my-copy' }))).toThrow(/copy of "hairpin-run"/);
     expect(() => createEvaluationSetup({}, env({ ...HELD_OUT, id: 'stadium-oval' }))).toThrow(TrackLeakageError);
-    expect(() => assertEvaluationTrack({ ...OVAL, id: 'hairpin-chicane' })).toThrow(TrackLeakageError);
+    expect(() => assertEvaluationTrack({ ...OVAL, id: 'hairpin-run' })).toThrow(TrackLeakageError);
   });
 
   it('classifies a renamed validation copy by its geometry and accepts an unregistered track', () => {

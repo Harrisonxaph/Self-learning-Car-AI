@@ -36,7 +36,7 @@ test('the circuit comes from the address, and a validation, held-out or unknown 
   await expect(page.locator('#training-circuit')).toHaveValue('kidney-loop');
   await expect(page.locator('#sim-canvas')).toHaveAttribute('aria-label', /Kidney loop/);
   await expect(page.locator('#sim-canvas')).toHaveAttribute('data-track-scale', /\d/);
-  for (const id of ['hairpin-chicane', 's-sweepers', 'long-sweepers', 'technical-narrow', 'rounded-rectangle', 'nonsense']) {
+  for (const id of ['hairpin-chicane', 's-sweepers', 'long-sweepers', 'technical-narrow', 'rounded-rectangle', 'hairpin-run', 'sweep-hook', 'hook-chicane', 'nonsense']) {
     await page.goto(`/?mode=train&circuit=${id}`);
     await expect(page.locator('#sim-canvas')).toHaveAttribute('data-track-id', 'stadium-oval');
   }

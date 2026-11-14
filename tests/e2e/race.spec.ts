@@ -100,7 +100,9 @@ test('the other pages show no race UI, and the race page offers training and val
   await page.locator('#rc-model').selectOption(FIXTURE.id);
   await expect(page.locator('#rc-note')).toContainText('Trained on stadium-oval');
   const values = await page.locator('#rc-circuit option').evaluateAll((options) => options.map((o) => (o as HTMLOptionElement).value));
-  expect(values).toEqual(['stadium-oval', 'kidney-loop', 'rounded-rectangle', 's-sweepers']);
+  // epoch 4: the three circuits E3 opened are validation circuits now; the three fresh held-out circuits are never offered
+  expect(values).toEqual(['stadium-oval', 'kidney-loop', 'rounded-rectangle', 'hairpin-chicane', 's-sweepers', 'long-sweepers', 'technical-narrow']);
+  for (const held of ['hairpin-run', 'sweep-hook', 'hook-chicane']) expect(values).not.toContain(held);
   expect(await page.locator('#rc-laps option').evaluateAll((options) => options.map((o) => (o as HTMLOptionElement).value))).toEqual(['1', '3']);
   await expect(page.locator('#rc-laps')).toHaveValue('3');
   // While choosing, the driving keys are not attached: the arrow keys change a focused select and nothing is prevented.

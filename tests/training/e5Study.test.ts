@@ -206,10 +206,15 @@ describe('the manifest', () => {
       m.tracks = { heldOut: [{ id: 'fresh-circuit-for-test', contentHash: hash }], splitManifestHash: manifestRecord(splits).hash };
       expect(parseE5Manifest(m, splits).tracks.heldOut[0]!.id).toBe('fresh-circuit-for-test');
     });
-    it('every held-out circuit on today\'s built-in registry is spent, so no confirmatory manifest can exist until fresh circuits are registered (step 2b)', () => {
-      const heldOut = BUILT_IN_TRACK_SPLITS.tracks.filter((t) => t.split === 'held-out').map((t) => t.id);
-      expect(heldOut.length).toBeGreaterThan(0);
-      for (const id of heldOut) expect(E5_SPENT_CIRCUITS).toContain(id);
+    it('today\'s held-out circuits are the three fresh P5-02 circuits (none spent, each with registered provenance); the spent ones are validation circuits (step 2b)', () => {
+      const heldOut = BUILT_IN_TRACK_SPLITS.tracks.filter((t) => t.split === 'held-out');
+      expect(heldOut.map((t) => t.id)).toEqual(['hairpin-run', 'sweep-hook', 'hook-chicane']);
+      for (const t of heldOut) {
+        expect(E5_SPENT_CIRCUITS).not.toContain(t.id);
+        expect(t.provenance?.introducedBy.startsWith('P5-02')).toBe(true);
+        expect(t.provenance?.designedBeforeAnyEvaluation).toBe(true);
+      }
+      for (const id of E5_SPENT_CIRCUITS) expect(BUILT_IN_TRACK_SPLITS.tracks.find((t) => t.id === id)!.split).toBe('validation');
     });
   });
 });
@@ -690,13 +695,21 @@ describe('the real committed E4 records can build the pins (Design A is feasible
     expect(loaded.every((p) => p.a4.provenance.agent === 'A4' && p.a5.provenance.agent === 'A5')).toBe(true);
     expect(loaded.map((p) => p.a4.id)).toEqual(pins.pairs.map((p) => p.a4));
   });
-  it('a confirmatory-shaped manifest that lists any of today\'s held-out circuits is refused as spent', () => {
-    const m = {
-      format: E5_MANIFEST_FORMAT, version: 1, id: 'p5-02-e5-shape-check', label: 'confirmatory', description: 'Shape check only: never frozen, never run.',
-      e4: { manifestHash: pins.e4ManifestHash }, pairs: clone(pins.pairs), configuration: clone((e4Manifest as Json).configuration),
-      tracks: { heldOut: [{ id: 'hairpin-chicane', contentHash: trackContentHash(loadTrack(hairpinChicane)) }], splitManifestHash: manifestRecord().hash },
-      analysis: ANALYSIS(), authorisation: 'issue-34#shape-check', code: { revision: 'a'.repeat(40) },
-    };
-    expect(() => parseE5Manifest(m)).toThrow(/already exposed.*spent/);
+  const shape = (heldOut: { id: string; contentHash: string }[], splitManifestHash: string) => ({
+    format: E5_MANIFEST_FORMAT, version: 1, id: 'p5-02-e5-shape-check', label: 'confirmatory', description: 'Shape check only: never frozen, never run.',
+    e4: { manifestHash: pins.e4ManifestHash }, pairs: clone(pins.pairs), configuration: clone((e4Manifest as Json).configuration),
+    tracks: { heldOut, splitManifestHash },
+    analysis: ANALYSIS(), authorisation: 'issue-34#shape-check', code: { revision: 'a'.repeat(40) },
+  });
+  it('a confirmatory-shaped manifest that lists a spent circuit is refused: as spent where it is still held-out (epoch 2), and as not held-out today', () => {
+    const spent = [{ id: 'hairpin-chicane', contentHash: trackContentHash(loadTrack(hairpinChicane)) }];
+    expect(() => parseE5Manifest(shape(spent, manifestRecord(BUILT_IN_TRACK_SPLITS, 2).hash))).toThrow(/already exposed.*spent/);
+    expect(() => parseE5Manifest(shape(spent, manifestRecord().hash))).toThrow(/not a registered held-out circuit/);
+  });
+  it('a confirmatory-shaped manifest listing the three fresh circuits is accepted by the parser on the real E4 pins (shape only: never frozen, no model evaluated)', () => {
+    const fresh = BUILT_IN_TRACK_SPLITS.tracks.filter((t) => t.split === 'held-out').map((t) => ({ id: t.id, contentHash: t.contentHash }));
+    const parsed = parseE5Manifest(shape(fresh, manifestRecord().hash));
+    expect(parsed.tracks.heldOut.map((h) => h.id)).toEqual(['hairpin-run', 'sweep-hook', 'hook-chicane']);
+    expect(parsed.pairs).toHaveLength(10);
   });
 });

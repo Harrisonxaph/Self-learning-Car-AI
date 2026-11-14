@@ -150,12 +150,12 @@ function driveOneLap(track: Track, speed: number) {
 const BUILT_IN = [
   { id: 'stadium-oval', split: 'training', width: 14, gates: 20, radius: [38, 42], rightTurns: false },
   { id: 'rounded-rectangle', split: 'validation', width: 12, gates: 14, radius: [14, 16], rightTurns: false },
-  { id: 'hairpin-chicane', split: 'held-out', width: 11, gates: 18, radius: [11, 13], rightTurns: true },
+  { id: 'hairpin-chicane', split: 'validation', width: 11, gates: 18, radius: [11, 13], rightTurns: true },
   // P4-04: radius is the tightest centre-line radius the corners() helper finds (a chord estimate, so a little below the true one).
   { id: 'kidney-loop', split: 'training', width: 12, gates: 17, radius: [20, 40], rightTurns: true },
   { id: 's-sweepers', split: 'validation', width: 13, gates: 23, radius: [50, 62], rightTurns: true },
-  { id: 'long-sweepers', split: 'held-out', width: 10, gates: 24, radius: [50, 62], rightTurns: false },
-  { id: 'technical-narrow', split: 'held-out', width: 8, gates: 23, radius: [15, 30], rightTurns: true },
+  { id: 'long-sweepers', split: 'validation', width: 10, gates: 24, radius: [50, 62], rightTurns: false },
+  { id: 'technical-narrow', split: 'validation', width: 8, gates: 23, radius: [15, 30], rightTurns: true },
 ] as const;
 
 describe('the built-in circuits', () => {
@@ -163,6 +163,10 @@ describe('the built-in circuits', () => {
     expect(BUILT_IN_TRACK_SPLITS.tracks.map(({ id, version, split }) => ({ id, version, split }))).toEqual([
       ...BUILT_IN.map(({ id, split }) => ({ id, version: '1', split })),
       { id: 'silverstone', version: 'e59595d-27c51454e817', split: 'training' }, // P4-06: the source commit and file hash
+      // P5-02 step 2b: the three fresh held-out circuits (the three E3 opened are validation circuits in the table above)
+      { id: 'hairpin-run', version: '1', split: 'held-out' },
+      { id: 'sweep-hook', version: '1', split: 'held-out' },
+      { id: 'hook-chicane', version: '1', split: 'held-out' },
     ]);
     for (const entry of BUILT_IN_TRACK_SPLITS.tracks) {
       expect(entry.contentHash).toBe(trackContentHash(entry.track));
@@ -297,13 +301,13 @@ describe('loadTrackSplits', () => {
 describe('split boundaries', () => {
   it('lists each split and gives each accessor only its own split', () => {
     expect(tracksIn('training').map((t) => t.id)).toEqual(['stadium-oval', 'kidney-loop', 'silverstone']);
-    expect(tracksIn('validation').map((t) => t.id)).toEqual(['rounded-rectangle', 's-sweepers']);
-    expect(tracksIn('held-out').map((t) => t.id)).toEqual(['hairpin-chicane', 'long-sweepers', 'technical-narrow']);
+    expect(tracksIn('validation').map((t) => t.id)).toEqual(['rounded-rectangle', 'hairpin-chicane', 's-sweepers', 'long-sweepers', 'technical-narrow']);
+    expect(tracksIn('held-out').map((t) => t.id)).toEqual(['hairpin-run', 'sweep-hook', 'hook-chicane']);
     expect(() => tracksIn('test' as never)).toThrow(TrackLeakageError);
     expect(trainingTrack('stadium-oval').id).toBe('stadium-oval');
     expect(validationTrack('rounded-rectangle').id).toBe('rounded-rectangle');
     for (const id of ['rounded-rectangle', 'hairpin-chicane']) expect(() => trainingTrack(id)).toThrow(TrackLeakageError);
-    for (const id of ['stadium-oval', 'hairpin-chicane']) expect(() => validationTrack(id)).toThrow(/may only use validation tracks/);
+    for (const id of ['stadium-oval', 'hairpin-run']) expect(() => validationTrack(id)).toThrow(/may only use validation tracks/);
     expect(() => trainingTrack('nurburgring')).toThrow(/No built-in track "nurburgring"/);
   });
 
@@ -355,7 +359,7 @@ describe('split boundaries', () => {
       expect(selectByValidation([{ modelId: 'x', trackId: 'rounded-rectangle', score: 5 }, { modelId: 'y', trackId: 'rounded-rectangle', score: 5 }])).toBe('x');
     });
 
-    it.each(['stadium-oval', 'hairpin-chicane'])('rejects any result on %s', (trackId) => {
+    it.each(['stadium-oval', 'hairpin-run'])('rejects any result on %s', (trackId) => {
       const results = [{ modelId: 'a', trackId: 'rounded-rectangle', score: 1 }, { modelId: 'b', trackId, score: 99 }];
       expect(() => selectByValidation(results)).toThrow(TrackLeakageError);
     });
@@ -393,7 +397,9 @@ describe('split boundaries', () => {
     });
 
     it('hands a held-out track to a frozen model, and only a held-out track', () => {
-      expect(heldOutTrack('hairpin-chicane', model).id).toBe('hairpin-chicane');
+      expect(heldOutTrack('hairpin-run', model).id).toBe('hairpin-run')
+      // the three circuits E3 opened are validation circuits from epoch 4: spent as held-out evidence, so a frozen model may not be handed one
+      for (const id of ['hairpin-chicane', 'long-sweepers', 'technical-narrow']) expect(() => heldOutTrack(id, model)).toThrow(/may only use held-out tracks/);
       for (const id of ['stadium-oval', 'rounded-rectangle']) expect(() => heldOutTrack(id, model)).toThrow(/may only use held-out tracks/);
     });
 
@@ -401,9 +407,9 @@ describe('split boundaries', () => {
       const plain = { id: model.id, parameters: [...model.parameters], provenance: { ...model.provenance } } as FrozenModel;
       const forged = Object.freeze({ ...model, id: `sha256:${'0'.repeat(64)}` });
       const altered = Object.freeze({ ...model, parameters: Object.freeze(model.parameters.map((p, i) => (i === 3 ? p + 1 : p))) });
-      const stolen = Object.freeze({ ...model, provenance: Object.freeze({ ...model.provenance, selectedOn: 'hairpin-chicane' }) });
+      const stolen = Object.freeze({ ...model, provenance: Object.freeze({ ...model.provenance, selectedOn: 'hairpin-run' }) });
       for (const bad of [plain, forged, altered, stolen, null as unknown as FrozenModel]) {
-        expect(() => heldOutTrack('hairpin-chicane', bad)).toThrow(TrackLeakageError);
+        expect(() => heldOutTrack('hairpin-run', bad)).toThrow(TrackLeakageError);
       }
     });
 
@@ -446,7 +452,7 @@ describe('split boundaries', () => {
       const strings = forge(['1', '2'], {});
       for (const bad of [sparse, forge(holed, {}), nested, listed, missing, nullish, strings]) {
         expect(isFrozenModel(bad)).toBe(false);
-        expect(() => heldOutTrack('hairpin-chicane', bad)).toThrow(TrackLeakageError);
+        expect(() => heldOutTrack('hairpin-run', bad)).toThrow(TrackLeakageError);
       }
     });
   });

@@ -10,7 +10,7 @@ import { c1Training, E4_DELTA } from '../../src/training/e4Study';
 import { E3_BOOTSTRAP, E3_DECISION_RULE, E3_MANIFEST_FORMAT, E3_SEEDS, e3ManifestHash, parseE3Manifest, ruleIds } from '../../src/training/e3Study';
 import { manifestEpochOf, manifestRecord } from '../../src/training/experiment';
 import { METRIC, StudyManifestError } from '../../src/training/study';
-import { BUILT_IN_TRACK_SPLITS, trackContentHash, tracksIn, trainingTrack, validationTrack } from '../../src/training/trackSplits';
+import { BUILT_IN_TRACK_SPLITS, splitsAsOf, trackContentHash, tracksIn, trainingTrack, validationTrack } from '../../src/training/trackSplits';
 
 type Json = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 const ROOT = join(__dirname, '../..');
@@ -33,7 +33,8 @@ const expected = (): Json => ({
   tracks: {
     training: { id: 'stadium-oval', contentHash: trackContentHash(trainingTrack('stadium-oval')) },
     validation: { id: 'rounded-rectangle', contentHash: trackContentHash(validationTrack('rounded-rectangle')) },
-    heldOut: HELD.map((id) => ({ id, contentHash: tracksIn('held-out').find((t) => t.id === id)!.contentHash })),
+    // The three circuits are held-out in EPOCH 2's view only (they are validation circuits from epoch 4, because E3 spent them).
+    heldOut: HELD.map((id) => ({ id, contentHash: tracksIn('held-out', splitsAsOf(BUILT_IN_TRACK_SPLITS, 2)).find((t) => t.id === id)!.contentHash })),
     // The preregistered manifest was written against epoch 2 and must never change: its recorded hash is epoch 2's, not the latest epoch's.
     splitManifestHash: manifestRecord(BUILT_IN_TRACK_SPLITS, 2).hash,
   },
@@ -73,7 +74,11 @@ describe('the committed E3 manifest', () => {
   });
   it('the held-out circuits are registered as held-out and the training and validation circuits are not among them', () => {
     const held = new Set<string>(load().tracks.heldOut.map((h: Json) => h.id));
-    for (const id of held) expect(BUILT_IN_TRACK_SPLITS.tracks.find((t) => t.id === id)!.split).toBe('held-out');
+    // held-out in the epoch the manifest names (epoch 2), and spent (validation) in the current registry
+    for (const id of held) {
+      expect(splitsAsOf(BUILT_IN_TRACK_SPLITS, 2).tracks.find((t) => t.id === id)!.split).toBe('held-out');
+      expect(BUILT_IN_TRACK_SPLITS.tracks.find((t) => t.id === id)!.split).toBe('validation');
+    }
     expect(held.has(load().tracks.training.id)).toBe(false);
     expect(held.has(load().tracks.validation.id)).toBe(false);
   });

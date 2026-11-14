@@ -97,7 +97,7 @@ describe('experiment command line', () => {
   });
 
   it.each([
-    ['a held-out track', { trackId: 'hairpin-chicane' }, /hairpin-chicane" is a held-out track/],
+    ['a held-out track', { trackId: 'hairpin-run' }, /hairpin-run" is a held-out track/],
     ['a validation track', { trackId: 'rounded-rectangle' }, /rounded-rectangle" is a validation track/],
     ['an invalid setting', { generations: 0 }, /"generations"/],
   ])('exits 2 for a configuration naming %s, writing nothing', (_, change, message) => {

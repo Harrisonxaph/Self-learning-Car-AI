@@ -15,12 +15,15 @@
 // - held-out: heldOutTrack(), which hands a held-out track only to a frozen model from freezeModel().
 import manifestData from '../data/tracks/index.json';
 import hairpinChicane from '../data/tracks/hairpin-chicane.json';
+import hairpinRun from '../data/tracks/hairpin-run.json';
+import hookChicane from '../data/tracks/hook-chicane.json';
 import kidneyLoop from '../data/tracks/kidney-loop.json';
 import longSweepers from '../data/tracks/long-sweepers.json';
 import roundedRectangle from '../data/tracks/rounded-rectangle.json';
 import silverstone from '../data/tracks/silverstone.json';
 import sSweepers from '../data/tracks/s-sweepers.json';
 import stadiumOval from '../data/tracks/stadium-oval.json';
+import sweepHook from '../data/tracks/sweep-hook.json';
 import technicalNarrow from '../data/tracks/technical-narrow.json';
 import { loadTrack, type Track, type Vec2 } from '../sim/track';
 import { describeTrackErrors, validateTrack } from '../sim/trackValidation';
@@ -274,10 +277,26 @@ const EPOCH_2: readonly (readonly [string, Split])[] = [
   ['technical-narrow', 'held-out'],
 ];
 const EPOCH_3: readonly (readonly [string, Split])[] = [...EPOCH_2, ['silverstone', 'training']];
+// Epoch 4 (P5-02 step 2b): three fresh held-out circuits are appended, and the three circuits E3 opened as held-out evidence (they are spent) become
+// validation circuits. Epochs 1 to 3 keep their own labels, so every recorded result of theirs stays valid.
+const EPOCH_4: readonly (readonly [string, Split])[] = [
+  ['stadium-oval', 'training'],
+  ['rounded-rectangle', 'validation'],
+  ['hairpin-chicane', 'validation'],
+  ['kidney-loop', 'training'],
+  ['s-sweepers', 'validation'],
+  ['long-sweepers', 'validation'],
+  ['technical-narrow', 'validation'],
+  ['silverstone', 'training'],
+  ['hairpin-run', 'held-out'],
+  ['sweep-hook', 'held-out'],
+  ['hook-chicane', 'held-out'],
+];
 export const SPLIT_EPOCHS: readonly SplitEpoch[] = Object.freeze([
   freezeEpoch(1, 'P2-10', EPOCH_1),
   freezeEpoch(2, 'P4-04', EPOCH_2),
   freezeEpoch(3, 'P4-06', EPOCH_3),
+  freezeEpoch(4, 'P5-02 step 2b', EPOCH_4),
 ]);
 export const LATEST_SPLIT_EPOCH: number = SPLIT_EPOCHS[SPLIT_EPOCHS.length - 1]!.epoch;
 
@@ -291,6 +310,9 @@ export const BUILT_IN_TRACK_SPLITS: TrackSplits = loadTrackSplits(manifestData, 
   's-sweepers.json': sSweepers,
   'technical-narrow.json': technicalNarrow,
   'silverstone.json': silverstone,
+  'hairpin-run.json': hairpinRun,
+  'sweep-hook.json': sweepHook,
+  'hook-chicane.json': hookChicane,
 }, SPLIT_EPOCHS);
 
 /** The circuit IDs of an epoch. Throws TrackSplitError for an unknown one. */

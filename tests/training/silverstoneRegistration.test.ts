@@ -57,7 +57,8 @@ describe('the registration', () => {
     for (const t of BUILT_IN_TRACK_SPLITS.tracks) if (t.id !== 'silverstone') expect(t.limits, t.id).toBeNull();
   });
   it('is the last manifest entry, so every earlier entry keeps its position', () => {
-    expect(BUILT_IN_TRACK_SPLITS.tracks.map((t) => t.id)).toEqual(['stadium-oval', 'rounded-rectangle', 'hairpin-chicane', 'kidney-loop', 's-sweepers', 'long-sweepers', 'technical-narrow', 'silverstone']);
+    // (P5-02 step 2b appended three fresh circuits after it; the first eight entries keep their positions)
+    expect(BUILT_IN_TRACK_SPLITS.tracks.slice(0, 8).map((t) => t.id)).toEqual(['stadium-oval', 'rounded-rectangle', 'hairpin-chicane', 'kidney-loop', 's-sweepers', 'long-sweepers', 'technical-narrow', 'silverstone']);
   });
   it('is exactly the track file the importer wrote (the file named by the entry)', () => {
     expect((manifestData as Json).tracks.find((t: Json) => t.id === 'silverstone').file).toBe('silverstone.json');
@@ -105,19 +106,20 @@ describe('the limits are strictly validated and are part of no hash', () => {
 
 describe('the epochs', () => {
   it('append epoch 3 (the seven circuits of epoch 2 plus Silverstone) and redefine nothing', () => {
-    expect(SPLIT_EPOCHS.map((e) => [e.epoch, e.introducedBy])).toEqual([[1, 'P2-10'], [2, 'P4-04'], [3, 'P4-06']]);
-    expect(LATEST_SPLIT_EPOCH).toBe(3);
+    expect(SPLIT_EPOCHS.map((e) => [e.epoch, e.introducedBy])).toEqual([[1, 'P2-10'], [2, 'P4-04'], [3, 'P4-06'], [4, 'P5-02 step 2b']]); // epoch 4 is P5-02 step 2b; epochs 1 to 3 are untouched
+    expect(LATEST_SPLIT_EPOCH).toBe(4);
     expect([...epochIds(3)]).toEqual([...epochIds(2), 'silverstone']);
     expect([...epochIds(2)]).toEqual(['stadium-oval', 'rounded-rectangle', 'hairpin-chicane', 'kidney-loop', 's-sweepers', 'long-sweepers', 'technical-narrow']);
     expect(manifestRecord(BUILT_IN_TRACK_SPLITS, 1).hash).toBe('sha256:3cb594e2cdf4ed07728a8a50a54d558fc20f3d8e01628acd376eb9ff940772c3');
     expect(manifestRecord(BUILT_IN_TRACK_SPLITS, 2).hash).toBe('sha256:4a56521e1e89b6cf58409181a7c6d3bcb1675dff8076a9df87aa675b9e2df91e');
     expect(new Set([1, 2, 3].map((e) => manifestRecord(BUILT_IN_TRACK_SPLITS, e).hash)).size).toBe(3);
   });
-  it('the record of an epoch-2 experiment (made by the unchanged code) is still recognised as epoch 2, and a new record is epoch 3', () => {
+  it('the record of an epoch-2 experiment (made by the unchanged code) is still recognised as epoch 2, and a new record is epoch 4', () => {
     const old = fixture('experiment-record.json');
     expect(manifestEpochOf(old.tracks.manifest)).toBe(2);
-    expect(manifestEpochOf(manifestRecord())).toBe(3);
-    expect(manifestEpochOf(manifestRecord().hash)).toBe(3);
+    expect(manifestEpochOf(manifestRecord())).toBe(4);
+    expect(manifestEpochOf(manifestRecord().hash)).toBe(4);
+    expect(manifestEpochOf(manifestRecord(BUILT_IN_TRACK_SPLITS, 3))).toBe(3);
   });
   it('an epoch-2 record cannot name Silverstone: an eighth circuit is never absorbed into an earlier epoch', () => {
     const study = fixture('study-manifest.json');
@@ -195,7 +197,7 @@ describe('selection and the limits (step 3)', () => {
   it('the evaluate and race pages still do not offer it as a circuit to run on (their fixed 60 s rules cannot complete a 5.9 km lap), and say so in one list', () => {
     expect([...TRAINING_PAGE_ONLY]).toEqual(['silverstone']);
     expect(offered(training).map((t) => t.id)).toEqual(['stadium-oval', 'kidney-loop']);
-    expect(offered(tracksIn('validation')).map((t) => t.id)).toEqual(['rounded-rectangle', 's-sweepers']);
+    expect(offered(tracksIn('validation')).map((t) => t.id)).toEqual(['rounded-rectangle', 'hairpin-chicane', 's-sweepers', 'long-sweepers', 'technical-narrow']); // the three circuits E3 opened are validation circuits from epoch 4
   });
   it('a new run on it takes its manifest limits; every other circuit keeps the defaults exactly', () => {
     expect(trainingConfigFor(entry.limits)).toMatchObject({ maxEpisodeSeconds: 420, stallSeconds: 10, maxLaps: 1 });

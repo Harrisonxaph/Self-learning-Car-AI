@@ -147,7 +147,7 @@ describe('training and validation are kept apart; no held-out track', () => {
 
   it.each([
     ['the held-out track as the training track', (m: Json) => (m.tracks.training.id = 'hairpin-chicane')],
-    ['the held-out track as the validation track', (m: Json) => (m.tracks.validation.id = 'hairpin-chicane')],
+    ['the held-out track as the validation track', (m: Json) => (m.tracks.validation.id = 'hairpin-run')],
     ['the validation track as the training track', (m: Json) => (m.tracks.training.id = 'rounded-rectangle')],
     ['the training track as the validation track', (m: Json) => (m.tracks.validation.id = 'stadium-oval')],
   ])('refuses %s', (_label, change) => {

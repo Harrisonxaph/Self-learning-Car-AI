@@ -5,7 +5,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import manifestData from '../../src/data/tracks/index.json';
-import hairpinChicane from '../../src/data/tracks/hairpin-chicane.json';
+import hairpinRun from '../../src/data/tracks/hairpin-run.json';
 import roundedRectangle from '../../src/data/tracks/rounded-rectangle.json';
 import stadiumOval from '../../src/data/tracks/stadium-oval.json';
 import { createNetworkDriver } from '../../src/ai/drivers';
@@ -66,11 +66,11 @@ const gateFor = (...models: { id: string }[]) => createHeldOutGate(protocol(mode
 describe('the existing guards are untouched', () => {
   it('createEvaluationSetup still refuses the real held-out track and a renamed copy of it', () => {
     const env = (track: ReturnType<typeof loadTrack>) => ({ track, physics: DEFAULT_VEHICLE_PHYSICS, timestepSeconds: DEFAULT_SIM_CONFIG.timestepSeconds });
-    expect(() => createEvaluationSetup({}, env(loadTrack(hairpinChicane)))).toThrow(TrackLeakageError);
-    expect(() => createEvaluationSetup({}, env(loadTrack({ ...hairpinChicane, id: 'renamed-copy' })))).toThrow(TrackLeakageError);
+    expect(() => createEvaluationSetup({}, env(loadTrack(hairpinRun)))).toThrow(TrackLeakageError);
+    expect(() => createEvaluationSetup({}, env(loadTrack({ ...hairpinRun, id: 'renamed-copy' })))).toThrow(TrackLeakageError);
   });
   it('heldOutTrack refuses anything that is not an unchanged frozen model (the real track is only refused, not evaluated)', () => {
-    expect(() => heldOutTrack('hairpin-chicane', { parameters: [1], provenance: {}, id: 'x' } as never)).toThrow(TrackLeakageError);
+    expect(() => heldOutTrack('hairpin-run', { parameters: [1], provenance: {}, id: 'x' } as never)).toThrow(TrackLeakageError);
   });
   it('only the evaluation module and the access module use buildEvaluationSetup', () => {
     const dir = join(__dirname, '../../src');
@@ -177,7 +177,7 @@ describe('the gate: protocol checks', () => {
     for (const id of ['stadium-oval', 'rounded-rectangle', 'nope']) expect(() => createHeldOutGate(protocol([m.id], { trackIds: [id] }), createMemoryLedger(), SPLITS)).toThrow(TrackLeakageError);
   });
   it('the default registry is the built-in one: the real held-out track is accepted in a protocol, and a synthetic one is not', () => {
-    expect(createHeldOutGate(protocol([m.id], { trackIds: ['hairpin-chicane'] }), createMemoryLedger()).opened).toBe(false);
+    expect(createHeldOutGate(protocol([m.id], { trackIds: ['hairpin-run'] }), createMemoryLedger()).opened).toBe(false);
     expect(() => createHeldOutGate(protocol([m.id]), createMemoryLedger())).toThrow(TrackLeakageError);
   });
 });

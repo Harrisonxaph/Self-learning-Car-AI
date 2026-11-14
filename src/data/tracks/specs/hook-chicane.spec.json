@@ -1,0 +1,15 @@
+{
+  "id": "hook-chicane",
+  "version": "1",
+  "name": "Hook chicane",
+  "width": 13,
+  "half": [
+    { "type": "straight", "length": 80 },
+    { "type": "arc", "turn": "left", "radius": 25, "degrees": 120 },
+    { "type": "arc", "turn": "right", "radius": 30, "degrees": 45 },
+    { "type": "arc", "turn": "left", "radius": 30, "degrees": 45 },
+    { "type": "arc", "turn": "left", "radius": 40, "degrees": 60 },
+    { "type": "straight", "length": 20 }
+  ],
+  "solve": { "segment": 5, "field": "length", "range": [0, 400] }
+}

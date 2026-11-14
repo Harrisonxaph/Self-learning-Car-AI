@@ -102,7 +102,7 @@ describe('npm run e4: usage and refusals before anything runs', () => {
     expect(cli('run', MANIFEST_FILE, '--seed', '7799', '--out', out).err).toMatch(/not one of the manifest's seeds/);
     expect(cli('run', MANIFEST_FILE, '--seed', '2001', '--out', out).err).toMatch(/not one of the manifest's seeds/);
     expect(cli('run', withManifest('e4-seed.json', (m) => (m.seeds = [2001])), '--seed', '2001', '--out', out).err).toMatch(/reserved seed/);
-    expect(cli('run', withManifest('held-out.json', (m) => (m.tracks.validation.id = 'hairpin-chicane')), '--seed', '7711', '--out', out).err).toMatch(/held-out|leak|split/i);
+    expect(cli('run', withManifest('held-out.json', (m) => (m.tracks.validation.id = 'hairpin-run')), '--seed', '7711', '--out', out).err).toMatch(/held-out|leak|split/i);
     expect(existsSync(out)).toBe(false);
   });
 
