@@ -207,15 +207,21 @@ export function parseE5Manifest(input: unknown, splits: TrackSplits = BUILT_IN_T
     const entry = view.tracks.find((x) => x.id === ref.id);
     if (entry === undefined || entry.split !== 'held-out') fail(`manifest.tracks.heldOut[${i}] ("${String(ref.id)}") is not a registered held-out circuit.`);
     if (ref.contentHash !== entry!.contentHash) fail(`manifest.tracks.heldOut[${i}].contentHash does not match the registered circuit.`);
+    return { ref, entry: entry! };
+  }).map(({ ref, entry }, i) => {
+    if (E5_SPENT_CIRCUITS.includes(ref.id as string)) {
+      fail(`manifest.tracks.heldOut lists "${ref.id as string}", which E3 already exposed: it is spent as held-out evidence for E5 and may only be development/validation evidence (plan section 0.1). E5 needs fresh held-out circuits.`);
+    }
+    // A held-out circuit for E5 must carry provenance showing it was designed for this study before any evaluation (P5-02 step 2b), so a
+    // circuit that was examined before, or introduced for another purpose, cannot be listed.
+    const provenance = entry.provenance;
+    if (provenance === null || provenance.designedBeforeAnyEvaluation !== true || !provenance.introducedBy.startsWith('P5-02')) {
+      fail(`manifest.tracks.heldOut[${i}] ("${ref.id as string}") has no registered provenance showing it was designed for P5-02 before any evaluation (introducedBy starting "P5-02" and designedBeforeAnyEvaluation true).`);
+    }
     return { id: ref.id as string, contentHash: ref.contentHash as string };
   });
   if (heldList.length === 0) fail('manifest.tracks.heldOut must list at least one held-out circuit: E5 is a held-out evaluation.');
   if (new Set(heldList.map((h) => h.id)).size !== heldList.length) fail('manifest.tracks.heldOut must be distinct.');
-  for (const h of heldList) {
-    if (E5_SPENT_CIRCUITS.includes(h.id)) {
-      fail(`manifest.tracks.heldOut lists "${h.id}", which E3 already exposed: it is spent as held-out evidence for E5 and may only be development/validation evidence (plan section 0.1). E5 needs fresh held-out circuits.`);
-    }
-  }
   if (epoch !== undefined) {
     for (const h of heldList) {
       if (!epochIds(epoch, splits.epochs).includes(h.id)) fail(`manifest.tracks lists "${h.id}", which is not part of the track set (split epoch ${epoch}) the manifest names.`);
