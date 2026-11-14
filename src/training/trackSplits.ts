@@ -79,6 +79,12 @@ export interface TrackProvenance {
 export interface TrackSplits {
   /** Every track, in manifest order. */
   readonly tracks: readonly SplitTrack[];
+  /**
+   * The epoch history this registry keeps (the built-in registry's SPLIT_EPOCHS). A registry with epochs is "epoched": its recorded
+   * split manifests are those of its epochs, and `splitsAsOf` gives the registry as of an earlier epoch. A synthetic registry
+   * (a test's) has none and is recorded whole.
+   */
+  readonly epochs?: readonly SplitEpoch[];
 }
 
 /** The content hash of a loaded track: `sha256:` + SHA-256 of its canonical JSON. */
@@ -98,7 +104,7 @@ export function trackGeometryHash(track: Track): string {
  * split; a missing file; a file that does not load (TrackFormatError's message is kept); a file whose id or version
  * differs from its entry; a content hash that does not match; or two entries with the same geometry.
  */
-export function loadTrackSplits(manifest: unknown, files: Readonly<Record<string, unknown>>): TrackSplits {
+export function loadTrackSplits(manifest: unknown, files: Readonly<Record<string, unknown>>, epochs?: readonly SplitEpoch[]): TrackSplits {
   const fail = (message: string): never => {
     throw new TrackSplitError(`Track splits: ${message}`);
   };
@@ -182,8 +188,98 @@ export function loadTrackSplits(manifest: unknown, files: Readonly<Record<string
   for (const split of SPLITS) {
     if (!tracks.some((t) => t.split === split)) fail(`the "${split}" split has no tracks.`);
   }
-  return Object.freeze({ tracks: Object.freeze(tracks) });
+  if (epochs === undefined) return Object.freeze({ tracks: Object.freeze(tracks) });
+  // Validate and keep a PRIVATE, deeply frozen copy: the caller's objects are neither frozen nor trusted afterwards, so mutating them
+  // cannot change this registry's recorded epoch hashes or the lineage classification cached for it.
+  const history = snapshotEpochs(epochs, fail);
+  checkEpochs(history, tracks, fail);
+  return Object.freeze({ tracks: Object.freeze(tracks), epochs: history });
 }
+
+/** A deep, frozen copy of an epoch history (the array, each epoch, its ordered ids and its split-label map). Never freezes the caller's objects. */
+function snapshotEpochs(epochs: readonly SplitEpoch[], fail: (message: string) => never): readonly SplitEpoch[] {
+  if (!Array.isArray(epochs)) fail('an epoch history must be an array.');
+  return Object.freeze(
+    epochs.map((e) => {
+      if (e === null || typeof e !== 'object' || !Array.isArray(e.ids) || e.splits === null || typeof e.splits !== 'object') fail('an epoch must have a number, an introducer, a list of circuit IDs and a split-label map.');
+      return Object.freeze({
+        epoch: e.epoch,
+        introducedBy: e.introducedBy,
+        ids: Object.freeze([...e.ids]),
+        splits: Object.freeze({ ...e.splits }) as Readonly<Record<string, Split>>,
+      });
+    }),
+  );
+}
+
+/**
+ * An epoch history must be consistent with its registry: epochs numbered 1, 2, 3 ... in order, each circuit listed once with a valid
+ * split label, every listed circuit registered, each epoch's circuits a prefix extension of the previous epoch's (append-only, in
+ * order), and the LATEST epoch's labels equal to the registry's current labels.
+ */
+function checkEpochs(epochs: readonly SplitEpoch[], tracks: readonly SplitTrack[], fail: (message: string) => never): void {
+  if (epochs.length === 0) fail('an epoch history needs at least one epoch.');
+  epochs.forEach((e, i) => {
+    if (e.epoch !== i + 1) fail(`epoch ${String(e.epoch)} is out of order (expected ${i + 1}).`);
+    if (new Set(e.ids).size !== e.ids.length) fail(`epoch ${e.epoch} lists a circuit more than once.`);
+    for (const id of e.ids) {
+      if (!tracks.some((t) => t.id === id)) fail(`epoch ${e.epoch} lists "${id}", which is not registered.`);
+      const label = e.splits[id];
+      if (label === undefined || !(SPLITS as readonly string[]).includes(label)) fail(`epoch ${e.epoch} gives "${id}" no valid split label.`);
+    }
+    if (Object.keys(e.splits).length !== e.ids.length) fail(`epoch ${e.epoch} labels circuits it does not list.`);
+    if (i > 0 && !epochs[i - 1]!.ids.every((id, j) => e.ids[j] === id)) fail(`epoch ${e.epoch} is not an append-only extension of epoch ${e.epoch - 1}.`);
+  });
+  const latest = epochs[epochs.length - 1]!;
+  // The latest epoch is the registry's own record: it must list EVERY registered circuit, in manifest order, so a circuit cannot be
+  // registered without being appended to the history (which would leave the recorded manifest hash unchanged).
+  if (latest.ids.length !== tracks.length || !tracks.every((t, i) => t.id === latest.ids[i])) {
+    fail(`the latest epoch must list every registered circuit in manifest order (${tracks.map((t) => t.id).join(', ')}), but lists ${latest.ids.join(', ')}.`);
+  }
+  for (const id of latest.ids) {
+    const current = tracks.find((t) => t.id === id)!.split;
+    if (latest.splits[id] !== current) fail(`the latest epoch labels "${id}" ${String(latest.splits[id])}, but the registry's current split is ${current}.`);
+  }
+}
+
+/**
+ * The split-manifest epochs: an APPEND-ONLY registry of explicit circuit-ID lists WITH the split each circuit had in that epoch
+ * (P4-04; the labels are P5-02 step 2b-1). Epoch 1 is the three P2-10 circuits, epoch 2 (P4-04) adds four, epoch 3 (P4-06) adds Silverstone.
+ * Every change that adds circuits appends exactly ONE new epoch (the previous epoch's IDs plus the added ones, in manifest
+ * order); an epoch is never redefined and an added circuit is never absorbed into an existing epoch. **An epoch's labels are frozen
+ * history**: the recorded split manifest of an epoch is recomputed from today's circuit files (id, version, content hash) but with
+ * the epoch's OWN split labels, so reclassifying a circuit in a later epoch (a circuit that was held-out becoming validation) does not
+ * change any earlier epoch's hash and no recorded result is refused. A recorded split manifest is accepted only if it equals the
+ * manifest record of one of these epochs. New records use the latest epoch, whose labels are the registry's current ones.
+ */
+export interface SplitEpoch {
+  readonly epoch: number;
+  readonly introducedBy: string;
+  readonly ids: readonly string[];
+  /** The split of every circuit in `ids` as this epoch defined it. */
+  readonly splits: Readonly<Record<string, Split>>;
+}
+const freezeEpoch = (epoch: number, introducedBy: string, labels: readonly (readonly [string, Split])[]): SplitEpoch =>
+  Object.freeze({ epoch, introducedBy, ids: Object.freeze(labels.map(([id]) => id)), splits: Object.freeze(Object.fromEntries(labels)) as Readonly<Record<string, Split>> });
+const EPOCH_1: readonly (readonly [string, Split])[] = [
+  ['stadium-oval', 'training'],
+  ['rounded-rectangle', 'validation'],
+  ['hairpin-chicane', 'held-out'],
+];
+const EPOCH_2: readonly (readonly [string, Split])[] = [
+  ...EPOCH_1,
+  ['kidney-loop', 'training'],
+  ['s-sweepers', 'validation'],
+  ['long-sweepers', 'held-out'],
+  ['technical-narrow', 'held-out'],
+];
+const EPOCH_3: readonly (readonly [string, Split])[] = [...EPOCH_2, ['silverstone', 'training']];
+export const SPLIT_EPOCHS: readonly SplitEpoch[] = Object.freeze([
+  freezeEpoch(1, 'P2-10', EPOCH_1),
+  freezeEpoch(2, 'P4-04', EPOCH_2),
+  freezeEpoch(3, 'P4-06', EPOCH_3),
+]);
+export const LATEST_SPLIT_EPOCH: number = SPLIT_EPOCHS[SPLIT_EPOCHS.length - 1]!.epoch;
 
 /** The built-in splits, loaded once from src/data/tracks/index.json and the track files it lists. */
 export const BUILT_IN_TRACK_SPLITS: TrackSplits = loadTrackSplits(manifestData, {
@@ -195,40 +291,76 @@ export const BUILT_IN_TRACK_SPLITS: TrackSplits = loadTrackSplits(manifestData, 
   's-sweepers.json': sSweepers,
   'technical-narrow.json': technicalNarrow,
   'silverstone.json': silverstone,
-});
-
-/**
- * The split-manifest epochs: an APPEND-ONLY registry of explicit circuit-ID lists (P4-04). Epoch 1 is the three circuits of P2-10, epoch 2 (P4-04) adds four, epoch 3 (P4-06) adds Silverstone.
- * Every change that adds circuits appends exactly ONE new epoch (the previous epoch's IDs plus the added ones, in manifest
- * order); an epoch is never redefined and an added circuit is never absorbed into an existing epoch. A recorded split manifest
- * is accepted only if it equals the manifest record of one of these epochs, recomputed from today's data restricted to that
- * epoch's IDs (so a changed or removed circuit makes the old record differ and it is refused). New records use the latest epoch.
- */
-export interface SplitEpoch {
-  readonly epoch: number;
-  readonly introducedBy: string;
-  readonly ids: readonly string[];
-}
-export const SPLIT_EPOCHS: readonly SplitEpoch[] = Object.freeze([
-  Object.freeze({ epoch: 1, introducedBy: 'P2-10', ids: Object.freeze(['stadium-oval', 'rounded-rectangle', 'hairpin-chicane']) }),
-  Object.freeze({
-    epoch: 2,
-    introducedBy: 'P4-04',
-    ids: Object.freeze(['stadium-oval', 'rounded-rectangle', 'hairpin-chicane', 'kidney-loop', 's-sweepers', 'long-sweepers', 'technical-narrow']),
-  }),
-  Object.freeze({
-    epoch: 3,
-    introducedBy: 'P4-06',
-    ids: Object.freeze(['stadium-oval', 'rounded-rectangle', 'hairpin-chicane', 'kidney-loop', 's-sweepers', 'long-sweepers', 'technical-narrow', 'silverstone']),
-  }),
-]);
-export const LATEST_SPLIT_EPOCH: number = SPLIT_EPOCHS[SPLIT_EPOCHS.length - 1]!.epoch;
+}, SPLIT_EPOCHS);
 
 /** The circuit IDs of an epoch. Throws TrackSplitError for an unknown one. */
-export function epochIds(epoch: number): readonly string[] {
-  const found = SPLIT_EPOCHS.find((e) => e.epoch === epoch);
+export function epochIds(epoch: number, epochs: readonly SplitEpoch[] = SPLIT_EPOCHS): readonly string[] {
+  return findEpoch(epoch, epochs).ids;
+}
+
+function findEpoch(epoch: number, epochs: readonly SplitEpoch[]): SplitEpoch {
+  const found = epochs.find((e) => e.epoch === epoch);
   if (found === undefined) throw new TrackSplitError(`Track splits: there is no split-manifest epoch ${String(epoch)}.`);
-  return found.ids;
+  return found;
+}
+
+/** The split of every circuit of an epoch, as that epoch defined it. Throws TrackSplitError for an unknown epoch. */
+export function epochSplits(epoch: number, epochs: readonly SplitEpoch[] = SPLIT_EPOCHS): Readonly<Record<string, Split>> {
+  return findEpoch(epoch, epochs).splits;
+}
+
+/** The latest epoch number of an epoch history. */
+export const latestEpochOf = (epochs: readonly SplitEpoch[]): number => epochs[epochs.length - 1]!.epoch;
+
+const lineageCache = new WeakMap<TrackSplits, boolean>();
+
+/** Two epochs are the same when their number, introducer, ordered circuit IDs and each circuit's label match: compared by value, never by property order. */
+function sameEpoch(a: SplitEpoch, b: SplitEpoch): boolean {
+  if (a.epoch !== b.epoch || a.introducedBy !== b.introducedBy || a.ids.length !== b.ids.length) return false;
+  if (!a.ids.every((id, i) => id === b.ids[i])) return false;
+  const keys = Object.keys(a.splits);
+  return keys.length === Object.keys(b.splits).length && a.ids.every((id) => a.splits[id] === b.splits[id]);
+}
+
+/**
+ * Whether a registry is the built-in registry or a later version of it: it keeps an epoch history that begins with the built-in epochs
+ * UNCHANGED (frozen history). The study rules that are about REAL data (a confirmatory study uses the built-in registry; a mechanics
+ * study never touches a real held-out circuit) apply to exactly these registries, today's and every future built-in one, and never to a
+ * synthetic registry a test builds. A registry without an epoch history is never built-in.
+ */
+export function isBuiltInRegistry(splits: TrackSplits): boolean {
+  if (splits === BUILT_IN_TRACK_SPLITS) return true;
+  const cached = lineageCache.get(splits);
+  if (cached !== undefined) return cached;
+  const epochs = splits.epochs;
+  const result = epochs !== undefined && epochs.length >= SPLIT_EPOCHS.length && SPLIT_EPOCHS.every((known, i) => sameEpoch(epochs[i]!, known));
+  lineageCache.set(splits, result);
+  return result;
+}
+
+const asOfCache = new WeakMap<TrackSplits, Map<number, TrackSplits>>();
+
+/**
+ * The registry AS OF an epoch: the circuits that epoch lists, each with the split THAT EPOCH gave it (frozen history). This is how an
+ * old study replays on the registry it was recorded against even after a circuit was reclassified later: E3's committed records name
+ * epoch 2, in which the three circuits it opened are held-out. For the registry's latest epoch the registry itself is returned
+ * (identity), so nothing changes for new work. Throws TrackSplitError for a registry without epochs or an unknown epoch.
+ */
+export function splitsAsOf(splits: TrackSplits, epoch: number): TrackSplits {
+  if (splits.epochs === undefined) throw new TrackSplitError('Track splits: only a registry with an epoch history has epochs.');
+  if (epoch === latestEpochOf(splits.epochs)) return splits;
+  const cached = asOfCache.get(splits)?.get(epoch);
+  if (cached !== undefined) return cached;
+  const found = findEpoch(epoch, splits.epochs);
+  const tracks = found.ids.map((id) => {
+    const entry = splits.tracks.find((t) => t.id === id)!;
+    return Object.freeze({ ...entry, split: found.splits[id]! });
+  });
+  const view: TrackSplits = Object.freeze({ tracks: Object.freeze(tracks), epochs: splits.epochs });
+  const byEpoch = asOfCache.get(splits) ?? new Map<number, TrackSplits>();
+  byEpoch.set(epoch, view);
+  asOfCache.set(splits, byEpoch);
+  return view;
 }
 
 /** Every track in one split, in manifest order. */

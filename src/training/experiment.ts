@@ -28,9 +28,9 @@ import { FITNESS_VERSION, scoreEpisode, type Episode, type EpisodeOutcome } from
 import {
   BUILT_IN_TRACK_SPLITS,
   epochIds,
+  epochSplits,
   freezeModel,
-  LATEST_SPLIT_EPOCH,
-  SPLIT_EPOCHS,
+  latestEpochOf,
   trackContentHash,
   trainingTrack,
   TRACK_SPLITS_FORMAT,
@@ -331,14 +331,18 @@ export function currentContracts(): ExperimentContracts {
  */
 export function manifestRecord(splits: TrackSplits = BUILT_IN_TRACK_SPLITS, epoch?: number): ExperimentTracks['manifest'] {
   let chosen: readonly SplitTrack[] = splits.tracks;
-  if (splits === BUILT_IN_TRACK_SPLITS) {
-    chosen = epochIds(epoch ?? LATEST_SPLIT_EPOCH).map((id) => {
+  if (splits.epochs !== undefined) {
+    const epochs = splits.epochs;
+    const number = epoch ?? latestEpochOf(epochs);
+    const labels = epochSplits(number, epochs);
+    chosen = epochIds(number, epochs).map((id) => {
       const entry = splits.tracks.find((t) => t.id === id);
-      if (entry === undefined) throw new TrackSplitError(`Track splits: epoch ${String(epoch ?? LATEST_SPLIT_EPOCH)} lists "${id}", which is no longer registered.`);
-      return entry;
+      if (entry === undefined) throw new TrackSplitError(`Track splits: epoch ${String(number)} lists "${id}", which is no longer registered.`);
+      // The epoch's own label, not today's: reclassifying a circuit later must not change an earlier epoch's record.
+      return { ...entry, split: labels[id]! };
     });
   } else if (epoch !== undefined) {
-    throw new TrackSplitError('Track splits: only the built-in registry has epochs.');
+    throw new TrackSplitError('Track splits: only a registry with an epoch history has epochs.');
   }
   const entries = chosen.map(({ id, version, split, contentHash }) => ({ id, version, split, contentHash }));
   const body = { format: TRACK_SPLITS_FORMAT, version: TRACK_SPLITS_VERSION, entries };
@@ -346,9 +350,9 @@ export function manifestRecord(splits: TrackSplits = BUILT_IN_TRACK_SPLITS, epoc
 }
 
 /** The epoch whose manifest record has this hash (or equals this record), or null for a manifest this code does not know. */
-export function manifestEpochOf(recordedHashOrRecord: unknown): number | null {
-  for (const { epoch } of SPLIT_EPOCHS) {
-    const record = manifestRecord(BUILT_IN_TRACK_SPLITS, epoch);
+export function manifestEpochOf(recordedHashOrRecord: unknown, splits: TrackSplits = BUILT_IN_TRACK_SPLITS): number | null {
+  for (const { epoch } of splits.epochs ?? []) {
+    const record = manifestRecord(splits, epoch);
     if (typeof recordedHashOrRecord === 'string' ? recordedHashOrRecord === record.hash : canonicalJson(recordedHashOrRecord) === canonicalJson(record)) return epoch;
   }
   return null;
