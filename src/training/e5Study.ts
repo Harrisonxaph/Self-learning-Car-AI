@@ -1,19 +1,21 @@
-// P5-02 step 3: the E5 study kind (docs/plans/p5-02-plan.md §3 and §4): does the brake output make a measurable difference
-// on circuits the agents did not train on? Design A: E4's ten frozen champion PAIRS (A4, brake masked; A5, brake enabled)
-// are read unchanged from the committed E4 records and each is evaluated, once, on each listed held-out circuit through
-// the once-only gate of heldOutAccess.ts. No new training. Headless and deterministic.
-// THIS MODULE RUNS NO STUDY. It defines the manifest, the held-out record, strict parsers, replay and the paired analysis;
-// the tests use E4 *mechanics* records (tiny, non-reserved seeds) and a SYNTHETIC held-out registry. No real held-out
-// circuit is evaluated here, and no E5 result exists.
+// P5-02 step 3 (reworked on the corrected plan, docs/plans/p5-02-plan.md section 0): the E5 study kind. Does the brake output
+// improve collisions and/or lap time on circuits the agents did not train on? Design A: E4's ten frozen champion PAIRS (A4, brake
+// masked; A5, brake enabled) are read unchanged from the committed E4 records and each is evaluated, once, on each listed
+// held-out circuit through the once-only gate of heldOutAccess.ts, from the evaluation protocol's five fixed starts. No new training.
+// THIS MODULE RUNS NO STUDY. It defines the manifest, the held-out record, strict parsers, replay and the paired analysis; the
+// tests use E4 *mechanics* records (tiny, non-reserved seeds) and a SYNTHETIC held-out registry. No real held-out circuit is
+// evaluated here and no E5 result exists. A confirmatory manifest cannot be built yet: the three circuits E3 exposed are spent
+// as held-out evidence (plan 0.1) and the fresh circuits do not exist (step 2b, a separate gated step).
 //
-// The sequence the formats enforce:
-//  1. the E5 manifest pins the E4 manifest hash and, for every seed, the A4 and A5 frozen model ids and the E4 record's
-//     resultsHash, so a result names exactly the champions that were evaluated;
-//  2. the pairs are read from the E4 records through the strict E4 parser (never re-trained, never re-selected);
-//  3. ONE HELD-OUT RECORD: each frozen agent evaluated once on each listed held-out circuit, with its brake usage.
-// The analysis is a pure function of the manifest, the E4 records and the held-out record.
-import { BRAKE_USAGE_THRESHOLD, withBrakeCount, type BrakeUsage } from './e4Agents';
-import { c1Training, E4_CONFIRMATORY_GENERATIONS, E4_DELTA, E4_TRAINING_TRACK, e4ManifestHash, parseE4Manifest, parseE4Record, type E4Manifest } from './e4Study';
+// The decision (plan 0.2): collisions and lap time decide; ordered progress is descriptive. Per circuit, per endpoint, the seed
+// (pair) is the unit and the five starts are scenario variation of one deterministic champion, not independent samples.
+//  * Collision: per pair d = crashRate(A5) - crashRate(A4) over the five starts; seed-cluster bootstrap; delta_c = 0.20.
+//  * Lap time: per pair, the mean first-lap seconds over the MATCHED starts (both completed a lap), A5 minus A4; a pair is
+//    eligible with at least one matched start; a decision needs at least 6 eligible pairs, otherwise `inconclusive`; delta_t = 1 s.
+//  * Combining: a net benefit needs the other endpoint's HARM EXCLUDED by its interval; otherwise the headline is endpoint-specific
+//    (`partial`). No pooled headline, no equivalence claim, no multiplicity correction claimed, no imputation of a missing time.
+import { BRAKE_USAGE_THRESHOLD, type BrakeUsage } from './e4Agents';
+import { c1Training, E4_CONFIRMATORY_GENERATIONS, E4_TRAINING_TRACK, e4ManifestHash, parseE4Manifest, parseE4Record, type E4Manifest } from './e4Study';
 import { bootstrapMeanInterval, iqr, median } from './analysis';
 import { episodeResult, resolveBaselineConfig, type EpisodeResult } from './baselines';
 import { canonicalJson, jsonDifferences, manifestEpochOf, manifestRecord, type ExperimentEngine, type ExperimentSource } from './experiment';
@@ -66,7 +68,28 @@ export const E5_VERSION = 1;
 export const E5_LABELS = Object.freeze(['mechanics', 'confirmatory'] as const);
 export type E5Label = (typeof E5_LABELS)[number];
 export const E5_BOOTSTRAP = Object.freeze({ resamples: 10_000, seed: 20261114, level: 0.95, method: 'percentile-nearest-rank-v1' });
-export const E5_DECISION_RULE = 'p5-02-e5-decision-v1';
+export const E5_DECISION_RULE = 'p5-02-e5-decision-v2';
+/** The evaluation protocol's five fixed starts (P4-05): the circuit's nominal start (0) and four perturbed starts (1 to 4). */
+export const E5_STARTS = Object.freeze([0, 1, 2, 3, 4]);
+/**
+ * The predeclared endpoint rules (plan 0.2). PROPOSED DEFAULTS, not yet owner-approved: the owner and Codex may change them
+ * before the analysis-design freeze (a reviewed one-line change here). The harm margin is the same meaningful difference.
+ */
+export const E5_ENDPOINTS = Object.freeze({
+  /** Meaningful difference in crash rate (one start in five). */
+  collisionDelta: 0.2,
+  /** Meaningful difference in first-lap time, simulated seconds. */
+  lapTimeDeltaSeconds: 1.0,
+  /** At least this many of the pairs must be eligible (have a matched start) for a lap-time decision. */
+  minEligiblePairs: 6,
+});
+/**
+ * The three circuits E3 already exposed: spent as held-out evidence for E5 (plan 0.1). They may be development/validation
+ * evidence, never E5's held-out conclusion, so no E5 manifest may list them.
+ */
+export const E5_SPENT_CIRCUITS = Object.freeze(['hairpin-chicane', 'long-sweepers', 'technical-narrow']);
+/** A descriptive, non-deciding progress level (laps) used only to decide whether the report shows a possible-floor caution. */
+export const E5_LOW_PROGRESS = 0.25;
 export const E5_AGENTS = Object.freeze(['A4', 'A5'] as const);
 export type E5Agent = (typeof E5_AGENTS)[number];
 
@@ -96,8 +119,10 @@ export interface E5Manifest {
     readonly splitManifestHash: string;
   };
   readonly analysis: {
-    readonly metric: typeof METRIC;
-    readonly delta: number;
+    /** Ordered progress, kept as an additional DESCRIPTIVE measure: it decides nothing. */
+    readonly descriptiveMetric: typeof METRIC;
+    readonly starts: readonly number[];
+    readonly endpoints: typeof E5_ENDPOINTS;
     readonly bootstrap: typeof E5_BOOTSTRAP;
     readonly decisionRule: typeof E5_DECISION_RULE;
     readonly brakeUsageThreshold: number;
@@ -185,6 +210,11 @@ export function parseE5Manifest(input: unknown, splits: TrackSplits = BUILT_IN_T
   });
   if (heldList.length === 0) fail('manifest.tracks.heldOut must list at least one held-out circuit: E5 is a held-out evaluation.');
   if (new Set(heldList.map((h) => h.id)).size !== heldList.length) fail('manifest.tracks.heldOut must be distinct.');
+  for (const h of heldList) {
+    if (E5_SPENT_CIRCUITS.includes(h.id)) {
+      fail(`manifest.tracks.heldOut lists "${h.id}", which E3 already exposed: it is spent as held-out evidence for E5 and may only be development/validation evidence (plan section 0.1). E5 needs fresh held-out circuits.`);
+    }
+  }
   if (epoch !== undefined) {
     for (const h of heldList) {
       if (!epochIds(epoch).includes(h.id)) fail(`manifest.tracks lists "${h.id}", which is not part of the track set (split epoch ${epoch}) the manifest names.`);
@@ -198,9 +228,10 @@ export function parseE5Manifest(input: unknown, splits: TrackSplits = BUILT_IN_T
   }
   if (label === 'mechanics' && builtIn) fail('a mechanics manifest uses a synthetic registry: mechanics never touches real held-out data.');
 
-  const a = exact(m.analysis, 'manifest.analysis', ['metric', 'delta', 'bootstrap', 'decisionRule', 'brakeUsageThreshold'], fail);
-  same(a.metric, METRIC, 'manifest.analysis.metric', fail);
-  same(a.delta, E4_DELTA, 'manifest.analysis.delta', fail);
+  const a = exact(m.analysis, 'manifest.analysis', ['descriptiveMetric', 'starts', 'endpoints', 'bootstrap', 'decisionRule', 'brakeUsageThreshold'], fail);
+  same(a.descriptiveMetric, METRIC, 'manifest.analysis.descriptiveMetric', fail);
+  same(a.starts, E5_STARTS, 'manifest.analysis.starts (the evaluation protocol\'s five fixed starts)', fail);
+  same(a.endpoints, E5_ENDPOINTS, 'manifest.analysis.endpoints (the predeclared collision and lap-time rules)', fail);
   same(a.bootstrap, E5_BOOTSTRAP, 'manifest.analysis.bootstrap', fail);
   same(a.decisionRule, E5_DECISION_RULE, 'manifest.analysis.decisionRule', fail);
   same(a.brakeUsageThreshold, BRAKE_USAGE_THRESHOLD, 'manifest.analysis.brakeUsageThreshold', fail);
@@ -267,11 +298,11 @@ export interface E5Pair {
 /** The pins an E5 manifest needs, built from E4's manifest and records (for the author of a manifest; `loadE5Pairs` re-checks them). */
 export function e5PairPins(e4ManifestInput: unknown, e4Records: readonly unknown[], engine: ExperimentEngine): { e4ManifestHash: string; pairs: E5PairPin[] } {
   const e4Manifest = parseE4Manifest(e4ManifestInput);
-  const pairs = readPairs(e4Manifest, e4Records, engine);
+  const pairs = readE5PairsFromE4(e4Manifest, e4Records, engine);
   return { e4ManifestHash: e4ManifestHash(e4Manifest), pairs: pairs.map((p) => ({ seed: p.seed, a4: p.a4.id, a5: p.a5.id, e4ResultsHash: p.e4ResultsHash })) };
 }
 
-function readPairs(e4Manifest: E4Manifest, e4Records: readonly unknown[], engine: ExperimentEngine): E5Pair[] {
+export function readE5PairsFromE4(e4Manifest: E4Manifest, e4Records: readonly unknown[], engine: ExperimentEngine): E5Pair[] {
   return e4Records.map((input) => {
     const record = parseE4Record(input, e4Manifest, engine);
     const agents = record.agents as Record<string, { model: { parameters: number[]; provenance: Record<string, string | number | boolean> } }>;
@@ -303,7 +334,7 @@ export function loadE5Pairs(manifestInput: unknown, e4ManifestInput: unknown, e4
     throw new StudyCompatibilityError('E5 pairs are incompatible: manifest.configuration differs from the E4 manifest\'s (the champions were evolved under another configuration).');
   }
   if (manifest.label === 'confirmatory' && e4Manifest.label !== 'confirmatory') fail('a confirmatory E5 manifest reads confirmatory E4 records only.');
-  const pairs = readPairs(e4Manifest, e4Records, engine);
+  const pairs = readE5PairsFromE4(e4Manifest, e4Records, engine);
   const seeds = pairs.map((p) => p.seed);
   if (canonicalJson(seeds) !== canonicalJson(manifest.pairs.map((p) => p.seed))) {
     fail(`the E4 records must be exactly the manifest's pair seeds in order (${manifest.pairs.map((p) => p.seed).join(', ')}), got ${seeds.join(', ')}.`);
@@ -337,14 +368,22 @@ export function e5HeldOutProtocol(manifestInput: unknown, pairs: readonly E5Pair
 // ---------------------------------------------------------------------------------------------------------------
 // The held-out record: the one opening
 
+/** One champion on one start of one held-out circuit: its complete episode and its brake usage on that start. */
+export interface E5StartResult {
+  /** 0 is the circuit's nominal start; 1 to 4 are the protocol's perturbed starts. */
+  readonly start: number;
+  readonly episode: EpisodeResult;
+  /** Ticks driven and ticks with a brake command above the threshold. */
+  readonly brakeUsage: BrakeUsage;
+}
+
 export interface E5HeldOutEvaluation {
   readonly agent: E5Agent;
   readonly seed: number;
   readonly modelId: string;
   readonly trackId: string;
-  readonly episode: EpisodeResult;
-  /** Ticks driven and ticks with a brake command above the threshold. */
-  readonly brakeUsage: BrakeUsage;
+  /** Exactly one entry per protocol start, in order. */
+  readonly starts: readonly E5StartResult[];
 }
 
 export interface E5HeldOutRecord {
@@ -365,10 +404,11 @@ const HELDOUT_KEYS = ['format', 'version', 'manifestHash', 'recordedAt', 'source
 
 /**
  * The ONE held-out look: every frozen champion (for each seed, its A4 then its A5) is evaluated once on each listed held-out
- * circuit through the gate, with its brake usage counted by a wrapper that changes no control. The gate must be made for
- * exactly this study's protocol (`e5HeldOutProtocol`) with a ledger restored from earlier openings; opening it claims the
- * protocol in that ledger. The pairs are read and checked (`loadE5Pairs`) before the gate opens, so a bad record can never
- * use up the look.
+ * circuit through the gate, from the protocol's five fixed starts, with its brake usage counted per start by a READ-ONLY
+ * observer (the gate owns the driver; the observer sees a frozen copy of each decision's controls and changes nothing). The
+ * gate must be made for exactly this study's protocol (`e5HeldOutProtocol`) with a ledger restored from earlier openings;
+ * opening it claims the protocol in that ledger. The pairs are read and checked (`loadE5Pairs`) before the gate opens, so a
+ * bad record can never use up the look.
  */
 export function runE5HeldOut(
   manifestInput: unknown,
@@ -393,19 +433,22 @@ export function runE5HeldOut(
   for (const track of manifest.tracks.heldOut) {
     const gates = gatesOf(track.id, splits);
     for (const { agent, seed, model } of agents) {
-      let counts: () => BrakeUsage = () => ({ ticks: 0, brakeTicks: 0 });
-      const result = session.evaluate(model, track.id, config, (driver) => {
-        const counted = withBrakeCount(driver);
-        counts = counted.counts;
-        return counted.driver;
+      const ticks = E5_STARTS.map(() => 0);
+      const brakeTicks = E5_STARTS.map(() => 0);
+      const results = session.evaluateStarts(model, track.id, config, ({ start, controls }) => {
+        ticks[start]! += 1;
+        if (controls.brake > BRAKE_USAGE_THRESHOLD) brakeTicks[start]! += 1;
       });
       evaluations.push({
         agent,
         seed,
         modelId: model.id,
         trackId: track.id,
-        episode: episodeResult(result.episode, scoring.config.fitness, scoring.rules, gates),
-        brakeUsage: counts(),
+        starts: results.map((result, i) => ({
+          start: E5_STARTS[i]!,
+          episode: episodeResult(result.episode, scoring.config.fitness, scoring.rules, gates),
+          brakeUsage: { ticks: ticks[i]!, brakeTicks: brakeTicks[i]! },
+        })),
       });
     }
   }
@@ -463,14 +506,21 @@ export function parseE5HeldOutRecord(
   const expected = manifest.tracks.heldOut.flatMap((t) => agents.map((a) => ({ track: t.id, ...a })));
   if (evals.length !== expected.length) fail(`record.evaluations must hold ${expected.length} evaluations (each frozen champion once on each held-out circuit), got ${evals.length}.`);
   evals.forEach((value, i) => {
-    const e = exact(value, `record.evaluations[${i}]`, ['agent', 'seed', 'modelId', 'trackId', 'episode', 'brakeUsage'], fail);
+    const e = exact(value, `record.evaluations[${i}]`, ['agent', 'seed', 'modelId', 'trackId', 'starts'], fail);
     const want = expected[i]!;
     same([e.agent, e.seed, e.modelId, e.trackId], [want.agent, want.seed, want.model.id, want.track], `record.evaluations[${i}] (agent, seed, model, circuit)`, fail);
-    const episode = checkEpisode(e.episode, `record.evaluations[${i}].episode`, episodeCheck(manifest, want.track, splits), fail);
-    const usage = exact(e.brakeUsage, `record.evaluations[${i}].brakeUsage`, ['ticks', 'brakeTicks'], fail);
-    same(usage.ticks, episode.ticks, `record.evaluations[${i}].brakeUsage.ticks (the episode's ticks)`, fail);
-    int(usage.brakeTicks, `record.evaluations[${i}].brakeUsage.brakeTicks`, 0, episode.ticks as number, fail);
-    if (want.agent === 'A4' && usage.brakeTicks !== 0) fail(`record.evaluations[${i}]: an A4 champion cannot brake, but its brakeTicks is ${String(usage.brakeTicks)}.`);
+    const starts = dense(e.starts, `record.evaluations[${i}].starts`, fail);
+    if (starts.length !== E5_STARTS.length) fail(`record.evaluations[${i}].starts must hold ${E5_STARTS.length} starts (the protocol's), got ${starts.length}.`);
+    starts.forEach((sv, j) => {
+      const path = `record.evaluations[${i}].starts[${j}]`;
+      const st = exact(sv, path, ['start', 'episode', 'brakeUsage'], fail);
+      same(st.start, E5_STARTS[j], `${path}.start`, fail);
+      const episode = checkEpisode(st.episode, `${path}.episode`, episodeCheck(manifest, want.track, splits), fail);
+      const usage = exact(st.brakeUsage, `${path}.brakeUsage`, ['ticks', 'brakeTicks'], fail);
+      same(usage.ticks, episode.ticks, `${path}.brakeUsage.ticks (the episode's ticks)`, fail);
+      int(usage.brakeTicks, `${path}.brakeUsage.brakeTicks`, 0, episode.ticks as number, fail);
+      if (want.agent === 'A4' && usage.brakeTicks !== 0) fail(`${path}: an A4 champion cannot brake, but its brakeTicks is ${String(usage.brakeTicks)}.`);
+    });
   });
   if (r.resultsHash !== hashOf({ opening: r.opening, evaluations: r.evaluations })) fail('record.resultsHash does not match the opening and evaluations.');
   return input as E5HeldOutRecord;
@@ -512,69 +562,238 @@ export function replayE5HeldOutRecord(
 }
 
 // ---------------------------------------------------------------------------------------------------------------
-// The analysis
+// The analysis: pure functions of numbers, then of the records
 
-export type E5Outcome = 'a5-higher' | 'a4-higher' | 'no-clear-difference';
+const sumOf = (values: readonly number[]): number => values.reduce((total, v) => total + v, 0);
+const meanOf = (values: readonly number[]): number => sumOf(values) / values.length;
 
-/** The decision wording for one circuit, from the predeclared delta and the bootstrap interval (never from a p-value). */
-export function classifyE5(mean: number, lower: number, upper: number, delta: number): E5Outcome {
-  if (lower > 0 && mean >= delta) return 'a5-higher';
-  if (upper < 0 && mean <= -delta) return 'a4-higher';
+/** What the analysis needs from one champion on one start. */
+export interface E5StartRow {
+  readonly crashed: boolean;
+  /** Simulated seconds of the first completed lap, or null when no lap completed (never zero). */
+  readonly firstLapSeconds: number | null;
+  /** Ordered progress in laps (gates passed over gates per lap). */
+  readonly progress: number;
+  readonly ticks: number;
+  readonly brakeTicks: number;
+}
+
+/** One seed's pair: the A4 and the A5 champion on the same starts, in start order. */
+export interface E5PairRows {
+  readonly seed: number;
+  readonly a4: readonly E5StartRow[];
+  readonly a5: readonly E5StartRow[];
+}
+
+const THRESHOLD_TOLERANCE = 1e-9;
+
+export type E5EndpointLabel = 'favours-a5' | 'favours-a4' | 'no-clear-difference' | 'inconclusive';
+
+/**
+ * One endpoint's label from the predeclared rule: the difference is A5 minus A4 and NEGATIVE favours A5 for both endpoints
+ * (fewer crashes, a shorter lap). Clear only when the whole interval is beyond zero AND the mean is at least the meaningful
+ * difference; never from a p-value.
+ */
+export function classifyE5Endpoint(mean: number, lower: number, upper: number, delta: number): Exclude<E5EndpointLabel, 'inconclusive'> {
+  // A mean that is exactly the meaningful difference counts as meeting it: a crash-rate difference of exactly one start in five is
+  // 0.19999999999999996 in floating point, so the comparison tolerates rounding at the 1e-9 level.
+  if (upper < 0 && mean <= -delta + THRESHOLD_TOLERANCE) return 'favours-a5';
+  if (lower > 0 && mean >= delta - THRESHOLD_TOLERANCE) return 'favours-a4';
   return 'no-clear-difference';
 }
 
-const progressOf = (episode: EpisodeResult, gates: number): number => episode.gatesPassed / gates;
-const sumOf = (values: readonly number[]): number => values.reduce((total, v) => total + v, 0);
-
-export function e5AgentBlock(rows: readonly E5HeldOutEvaluation[], gates: number): Json {
-  const progress = rows.map((r) => progressOf(r.episode, gates));
-  const ticks = sumOf(rows.map((r) => r.brakeUsage.ticks));
-  const brakeTicks = sumOf(rows.map((r) => r.brakeUsage.brakeTicks));
-  return {
-    n: rows.length,
-    progress,
-    medianProgress: median(progress),
-    iqrProgress: iqr(progress),
-    crashes: rows.filter((r) => r.episode.crashed).length,
-    lapCompletions: rows.filter((r) => r.episode.lapTicks.length >= 1).length,
-    brakeUsage: { ticks, brakeTicks, fraction: ticks === 0 ? null : brakeTicks / ticks, championsThatBraked: rows.filter((r) => r.brakeUsage.brakeTicks > 0).length },
-  };
+export interface E5EndpointResult {
+  readonly label: E5EndpointLabel;
+  /** For A5: the whole interval lies below +delta, so a meaningful harm to A5 is excluded. False when there is no interval. */
+  readonly harmExcludedForA5: boolean;
+  /** For A4 (the mirror image): the whole interval lies above -delta. */
+  readonly harmExcludedForA4: boolean;
 }
 
+export type E5Headline = 'a5-net-benefit' | 'a4-net-benefit' | 'a5-partial' | 'a4-partial' | 'mixed' | 'no-clear-difference' | 'inconclusive';
+
+const ENDPOINT_WORDS = { collision: { a5: 'A5 has fewer collisions', a4: 'A4 has fewer collisions', name: 'collision' }, lapTime: { a5: 'A5 is faster on matched starts', a4: 'A4 is faster on matched starts', name: 'lap-time' } } as const;
+
 /**
- * The paired first-lap time, descriptive only (the rule P5-05 settled): over the pairs where BOTH champions completed a lap,
- * in simulated seconds; each agent's own number of completed laps is shown, and the pairs left out are named. A missing time
- * is never zero and never dropped from one side only.
+ * The per-circuit headline from the two endpoints (plan 0.2): a NET BENEFIT needs the other endpoint's harm excluded by its
+ * interval (or both endpoints favouring the same agent); one clear endpoint without that is PARTIAL and its statement names the
+ * unresolved endpoint ("A5 has fewer collisions; the lap-time effect is unresolved"), never "helps"; endpoints that favour
+ * different agents are MIXED; neither clear is `no-clear-difference`, or `inconclusive` when lap time could not be decided
+ * and collisions show no clear difference.
  */
-export function e5PairedFirstLap(a4: readonly E5HeldOutEvaluation[], a5: readonly E5HeldOutEvaluation[]): Json {
-  const dt = DEFAULT_SIM_CONFIG.timestepSeconds;
-  const first = (r: E5HeldOutEvaluation): number | null => (r.episode.lapTicks.length >= 1 ? r.episode.lapTicks[0]! * dt : null);
-  const both: { seed: number; a4: number; a5: number }[] = [];
-  const excluded: { seed: number; completed: string }[] = [];
-  a4.forEach((r4, i) => {
-    const r5 = a5[i]!;
-    const t4 = first(r4);
-    const t5 = first(r5);
-    if (t4 !== null && t5 !== null) both.push({ seed: r4.seed, a4: t4, a5: t5 });
-    else if (t4 !== null || t5 !== null) excluded.push({ seed: r4.seed, completed: t4 !== null ? 'A4 only' : 'A5 only' });
-  });
-  const mean = (values: readonly number[]): number | null => (values.length === 0 ? null : sumOf(values) / values.length);
+export function e5Headline(collision: E5EndpointResult, lapTime: E5EndpointResult): { readonly headline: E5Headline; readonly statement: string } {
+  const named = [
+    { key: 'collision' as const, result: collision, other: lapTime, otherKey: 'lapTime' as const },
+    { key: 'lapTime' as const, result: lapTime, other: collision, otherKey: 'collision' as const },
+  ];
+  const for5 = named.filter((n) => n.result.label === 'favours-a5');
+  const for4 = named.filter((n) => n.result.label === 'favours-a4');
+  if (for5.length > 0 && for4.length > 0) {
+    return { headline: 'mixed', statement: `${ENDPOINT_WORDS[for5[0]!.key].a5}; ${ENDPOINT_WORDS[for4[0]!.key].a4}.` };
+  }
+  const side = for5.length > 0 ? { agent: 'a5' as const, list: for5 } : for4.length > 0 ? { agent: 'a4' as const, list: for4 } : null;
+  if (side !== null) {
+    const clear = side.list[0]!;
+    const agentLabel = side.agent === 'a5' ? 'A5' : 'A4';
+    if (side.list.length === 2) return { headline: `${side.agent}-net-benefit`, statement: `${ENDPOINT_WORDS.collision[side.agent]} and ${ENDPOINT_WORDS.lapTime[side.agent]}.` };
+    const excluded = side.agent === 'a5' ? clear.other.harmExcludedForA5 : clear.other.harmExcludedForA4;
+    if (excluded) {
+      return { headline: `${side.agent}-net-benefit`, statement: `${ENDPOINT_WORDS[clear.key][side.agent]}; a meaningful ${ENDPOINT_WORDS[clear.otherKey].name} harm to ${agentLabel} is excluded.` };
+    }
+    return { headline: `${side.agent}-partial`, statement: `${ENDPOINT_WORDS[clear.key][side.agent]}; the ${ENDPOINT_WORDS[clear.otherKey].name} effect is unresolved.` };
+  }
+  if (lapTime.label === 'inconclusive' && collision.label === 'no-clear-difference') {
+    return { headline: 'inconclusive', statement: 'No clear collision difference, and too few eligible pairs to decide lap time.' };
+  }
+  return { headline: 'no-clear-difference', statement: 'Neither endpoint shows a clear difference (this is not a statement of no effect or equivalence).' };
+}
+
+interface Settings {
+  readonly collisionDelta: number;
+  readonly lapTimeDeltaSeconds: number;
+  readonly minEligiblePairs: number;
+  readonly bootstrap: { readonly resamples: number; readonly seed: number; readonly level: number };
+}
+
+const interval = (values: readonly number[], bootstrap: Settings['bootstrap']): { mean: number; lower: number; upper: number } => {
+  const ci = bootstrapMeanInterval(values, bootstrap);
+  return { mean: meanOf(values), lower: ci.lower, upper: ci.upper };
+};
+
+function agentSummary(rows: readonly (readonly E5StartRow[])[]): Json {
+  const all = rows.flat();
+  const progress = all.map((r) => r.progress);
+  const ticks = sumOf(all.map((r) => r.ticks));
+  const brakeTicks = sumOf(all.map((r) => r.brakeTicks));
   return {
-    pairsWithBoth: both.length,
-    a4Completed: a4.filter((r) => first(r) !== null).length,
-    a5Completed: a5.filter((r) => first(r) !== null).length,
-    excludedPairs: excluded,
-    meanSecondsA4: mean(both.map((p) => p.a4)),
-    meanSecondsA5: mean(both.map((p) => p.a5)),
-    meanDifferenceA5MinusA4: mean(both.map((p) => p.a5 - p.a4)),
+    champions: rows.length,
+    starts: all.length,
+    crashedStarts: all.filter((r) => r.crashed).length,
+    lapCompletedStarts: all.filter((r) => r.firstLapSeconds !== null).length,
+    progress: { median: median(progress), iqr: iqr(progress), mean: meanOf(progress), startsAtOrAboveOneLap: progress.filter((p) => p >= 1).length },
+    brakeUsage: { ticks, brakeTicks, fraction: ticks === 0 ? null : brakeTicks / ticks, championsThatBraked: rows.filter((champion) => champion.some((r) => r.brakeTicks > 0)).length },
   };
 }
 
 /**
- * The E5 analysis, a pure function of the manifest, the E4 records and the held-out record. Per held-out circuit: the paired
- * differences d = progress(A5) − progress(A4) by seed, their mean, the seed-cluster bootstrap interval and one of three
- * labels; and the descriptive secondary measures. There is **no pooled headline** across circuits: if the labels differ the
- * analysis says so. "No clear difference" is a valid, reported outcome and is not a claim of no effect.
+ * The analysis of ONE circuit from its pairs (a pure function of numbers, tested analytically). Collision: per pair, the A5 crash
+ * rate minus the A4 crash rate over the starts. Lap time: per pair, over the MATCHED starts (both champions completed a lap),
+ * the mean first-lap seconds, A5 minus A4; a pair is eligible with at least one matched start; fewer than `minEligiblePairs`
+ * eligible pairs makes the endpoint `inconclusive` (no interval, no label, never replaced by another measure). Every excluded
+ * start and pair is listed, including starts where neither champion completed a lap. Progress and the secondary counts are
+ * descriptive. No missing time is ever zero or imputed.
+ */
+export function analyseE5Circuit(pairs: readonly E5PairRows[], settings: Settings): Json {
+  if (pairs.length === 0) throw new RangeError('A circuit analysis needs at least one pair.');
+  for (const p of pairs) {
+    if (p.a4.length !== p.a5.length || p.a4.length === 0) throw new RangeError(`Pair ${p.seed}: both champions need the same, non-empty starts.`);
+  }
+  // Collision endpoint (always defined).
+  const crashRate = (rows: readonly E5StartRow[]): number => rows.filter((r) => r.crashed).length / rows.length;
+  const collisionDiffs = pairs.map((p) => crashRate(p.a5) - crashRate(p.a4));
+  const c = interval(collisionDiffs, settings.bootstrap);
+  const collisionLabel = classifyE5Endpoint(c.mean, c.lower, c.upper, settings.collisionDelta);
+  const collision = {
+    differences: collisionDiffs,
+    meanDifference: c.mean,
+    interval: [c.lower, c.upper],
+    delta: settings.collisionDelta,
+    pairsA5Fewer: collisionDiffs.filter((d) => d < 0).length,
+    pairsTied: collisionDiffs.filter((d) => d === 0).length,
+    pairsA4Fewer: collisionDiffs.filter((d) => d > 0).length,
+    label: collisionLabel,
+  };
+  // Lap-time endpoint (conditioned on both completing; a decision needs enough eligible pairs).
+  const perPair = pairs.map((p) => {
+    const matched: number[] = [];
+    let a4Only = 0;
+    let a5Only = 0;
+    let neither = 0;
+    p.a4.forEach((r4, i) => {
+      const r5 = p.a5[i]!;
+      if (r4.firstLapSeconds !== null && r5.firstLapSeconds !== null) matched.push(i);
+      else if (r4.firstLapSeconds !== null) a4Only += 1;
+      else if (r5.firstLapSeconds !== null) a5Only += 1;
+      else neither += 1;
+    });
+    const eligible = matched.length > 0;
+    return {
+      seed: p.seed,
+      matchedStarts: matched.length,
+      excludedStarts: { a4OnlyCompleted: a4Only, a5OnlyCompleted: a5Only, neitherCompleted: neither },
+      eligible,
+      meanSecondsA4: eligible ? meanOf(matched.map((i) => p.a4[i]!.firstLapSeconds as number)) : null,
+      meanSecondsA5: eligible ? meanOf(matched.map((i) => p.a5[i]!.firstLapSeconds as number)) : null,
+    };
+  });
+  const eligiblePairs = perPair.filter((p) => p.eligible);
+  const decidable = eligiblePairs.length >= settings.minEligiblePairs;
+  const lapDiffs = eligiblePairs.map((p) => (p.meanSecondsA5 as number) - (p.meanSecondsA4 as number));
+  let lapLabel: E5EndpointLabel = 'inconclusive';
+  let lapStats: { mean: number; lower: number; upper: number } | null = null;
+  if (decidable) {
+    lapStats = interval(lapDiffs, settings.bootstrap);
+    lapLabel = classifyE5Endpoint(lapStats.mean, lapStats.lower, lapStats.upper, settings.lapTimeDeltaSeconds);
+  }
+  const lapTime = {
+    delta: settings.lapTimeDeltaSeconds,
+    minEligiblePairs: settings.minEligiblePairs,
+    eligiblePairs: eligiblePairs.length,
+    pairs: pairs.length,
+    pairDetails: perPair,
+    excludedPairs: perPair.filter((p) => !p.eligible).map((p) => p.seed),
+    differences: decidable ? lapDiffs : null,
+    meanDifference: lapStats === null ? null : lapStats.mean,
+    interval: lapStats === null ? null : [lapStats.lower, lapStats.upper],
+    label: lapLabel,
+  };
+  const harm = (stats: { lower: number; upper: number } | null, delta: number) => ({
+    forA5: stats !== null && stats.upper < delta,
+    forA4: stats !== null && stats.lower > -delta,
+  });
+  const ch = harm(c, settings.collisionDelta);
+  const lh = harm(lapStats, settings.lapTimeDeltaSeconds);
+  const verdict = e5Headline(
+    { label: collisionLabel, harmExcludedForA5: ch.forA5, harmExcludedForA4: ch.forA4 },
+    { label: lapLabel, harmExcludedForA5: lh.forA5, harmExcludedForA4: lh.forA4 },
+  );
+  const a4 = agentSummary(pairs.map((p) => p.a4));
+  const a5 = agentSummary(pairs.map((p) => p.a5));
+  const progressDiffs = pairs.map((p) => meanOf(p.a5.map((r) => r.progress)) - meanOf(p.a4.map((r) => r.progress)));
+  const medianOf = (summary: Json): number => (summary.progress as { median: number }).median;
+  const lowProgressNoLaps = medianOf(a4) < E5_LOW_PROGRESS && medianOf(a5) < E5_LOW_PROGRESS && a4.lapCompletedStarts === 0 && a5.lapCompletedStarts === 0;
+  return {
+    pairs: pairs.length,
+    startsPerChampion: pairs[0]!.a4.length,
+    collision,
+    lapTime,
+    harm: { collisionForA5Excluded: ch.forA5, collisionForA4Excluded: ch.forA4, lapTimeForA5Excluded: lh.forA5, lapTimeForA4Excluded: lh.forA4 },
+    headline: verdict.headline,
+    statement: verdict.statement,
+    descriptive: { a4, a5, progressMeanDifferenceA5MinusA4: meanOf(progressDiffs), lowProgressNoLaps },
+  };
+}
+
+/** The rows of the analysis for one circuit from a parsed held-out record. */
+function pairRowsFor(held: E5HeldOutRecord, pairs: readonly E5Pair[], trackId: string, gates: number): E5PairRows[] {
+  const dt = DEFAULT_SIM_CONFIG.timestepSeconds;
+  const rowsOf = (agent: E5Agent, seed: number): E5StartRow[] => {
+    const e = held.evaluations.find((x) => x.trackId === trackId && x.agent === agent && x.seed === seed)!;
+    return e.starts.map((s) => ({
+      crashed: s.episode.crashed,
+      firstLapSeconds: s.episode.lapTicks.length >= 1 ? s.episode.lapTicks[0]! * dt : null,
+      progress: s.episode.gatesPassed / gates,
+      ticks: s.brakeUsage.ticks,
+      brakeTicks: s.brakeUsage.brakeTicks,
+    }));
+  };
+  return pairs.map((p) => ({ seed: p.seed, a4: rowsOf('A4', p.seed), a5: rowsOf('A5', p.seed) }));
+}
+
+/**
+ * The E5 analysis, a pure function of the manifest, the E4 records and the held-out record. One block per held-out circuit
+ * (`analyseE5Circuit`); there is **no pooled headline** across circuits, and `circuitsAgree` only says whether the headlines
+ * coincide. "No clear difference" and `inconclusive` are valid, reported outcomes and are not claims of no effect.
  */
 export function analyseE5(
   manifestInput: unknown,
@@ -587,33 +806,11 @@ export function analyseE5(
   const manifest = parseE5Manifest(manifestInput, splits);
   const pairs = loadE5Pairs(manifest, e4ManifestInput, e4Records, engine, splits);
   const held = parseE5HeldOutRecord(heldOutRecord, manifest, e4ManifestInput, e4Records, engine, splits);
+  const settings: Settings = { ...manifest.analysis.endpoints, bootstrap: manifest.analysis.bootstrap };
   const tracks: Json[] = manifest.tracks.heldOut.map((track) => {
     const gates = gatesOf(track.id, splits);
-    const rows = held.evaluations.filter((e) => e.trackId === track.id);
-    const a4 = pairs.map((p) => rows.find((e) => e.agent === 'A4' && e.seed === p.seed)!);
-    const a5 = pairs.map((p) => rows.find((e) => e.agent === 'A5' && e.seed === p.seed)!);
-    const diffs = a5.map((r, i) => progressOf(r.episode, gates) - progressOf(a4[i]!.episode, gates));
-    const mean = sumOf(diffs) / diffs.length;
-    const ci = bootstrapMeanInterval(diffs, manifest.analysis.bootstrap);
-    const agents = { A4: e5AgentBlock(a4, gates), A5: e5AgentBlock(a5, gates) };
-    return {
-      trackId: track.id,
-      gates,
-      primary: {
-        differences: diffs,
-        meanDifference: mean,
-        interval: [ci.lower, ci.upper],
-        seedsA5Higher: diffs.filter((d) => d > 0).length,
-        seedsTied: diffs.filter((d) => d === 0).length,
-        seedsA4Higher: diffs.filter((d) => d < 0).length,
-        outcome: classifyE5(mean, ci.lower, ci.upper, manifest.analysis.delta),
-      },
-      agents,
-      allEpisodesCrashed: [...a4, ...a5].every((r) => r.episode.crashed),
-      pairedFirstLap: e5PairedFirstLap(a4, a5),
-    };
+    return { trackId: track.id, gates, ...analyseE5Circuit(pairRowsFor(held, pairs, track.id, gates), settings) };
   });
-  const outcomes = tracks.map((t) => (t.primary as Json).outcome as E5Outcome);
   return plain({
     format: E5_ANALYSIS_FORMAT,
     version: E5_VERSION,
@@ -624,16 +821,16 @@ export function analyseE5(
         ? 'MECHANICS ONLY: a check that the machinery runs on a synthetic held-out registry. Not study evidence and not acceptance evidence, whatever the numbers say.'
         : 'Confirmatory held-out evaluation under the manifest\'s predeclared rule.',
     pairCount: manifest.pairs.length,
-    metric: manifest.analysis.metric,
     decisionRule: manifest.analysis.decisionRule,
-    delta: manifest.analysis.delta,
+    endpoints: manifest.analysis.endpoints,
+    startsPerChampion: manifest.analysis.starts.length,
     bootstrap: manifest.analysis.bootstrap,
     seeds: manifest.pairs.map((p) => p.seed),
     tracks,
-    circuitsAgree: new Set(outcomes).size === 1,
+    circuitsAgree: new Set(tracks.map((t) => t.headline as string)).size === 1,
     pooledHeadline: null,
     claim:
-      'Descriptive paired comparison of ten frozen A5 (brake) and A4 (no brake) champion pairs on the listed held-out circuits; it supports no statement about braking in general, other circuits or learning beyond them, and "no clear difference" is a valid outcome that does not mean "no effect".',
+      'Descriptive paired comparison of ten frozen A5 (brake) and A4 (no brake) champion pairs on the listed held-out circuits. A headline is a statement about these pairs on that circuit only: not about braking in general, other circuits or learning beyond them; "no clear difference" and "inconclusive" do not mean no effect or equivalence.',
   });
 }
 
@@ -641,49 +838,60 @@ export function analyseE5(
 export const e5AnalysisJson = (analysis: Json): string => `${canonicalJson(analysis)}\n`;
 
 const fmt = (value: unknown, digits = 3): string => (typeof value === 'number' ? value.toFixed(digits) : 'n/a');
+const range = (value: unknown): string => (Array.isArray(value) ? `${fmt(value[0])} to ${fmt(value[1])}` : 'not decided');
 
-/** A short Markdown report of an analysis, deterministic for a given analysis. */
+/** A short Markdown report of an analysis, deterministic for a given analysis. Counts are factual; no cause is inferred. */
 export function renderE5Report(analysis: Json): string {
   const label = String(analysis.label);
   const n = analysis.pairCount as number;
+  const e = analysis.endpoints as Json;
+  const tracks = analysis.tracks as Json[];
   const lines: string[] = [
     `# P5-02 E5 (${label}): brake against no brake on held-out circuits`,
     '',
     ...(label === 'mechanics' ? [`> **${String(analysis.evidence)}**`, ''] : []),
-    `Label ${label}; ${n} frozen champion pair${n === 1 ? '' : 's'} (seeds ${(analysis.seeds as number[]).join(', ')}). Manifest \`${String(analysis.manifestHash)}\`. Metric ${String(analysis.metric)}; predeclared meaningful difference ${String(analysis.delta)}; decision rule ${String(analysis.decisionRule)}.`,
+    `Label ${label}; ${n} frozen champion pair${n === 1 ? '' : 's'} (seeds ${(analysis.seeds as number[]).join(', ')}), ${String(analysis.startsPerChampion)} fixed starts per champion. Manifest \`${String(analysis.manifestHash)}\`. Decision rule ${String(analysis.decisionRule)}: collision (meaningful difference ${String(e.collisionDelta)} in crash rate) and lap time (meaningful difference ${String(e.lapTimeDeltaSeconds)} s, at least ${String(e.minEligiblePairs)} eligible pairs) decide; ordered progress is descriptive.`,
     '',
     `**${String(analysis.claim)}**`,
     '',
+    '## Headline per circuit (no pooled headline)',
+    '',
+    '| Circuit | Collision (A5 − A4 crash rate): mean, 95% interval, label | Lap time (A5 − A4 s): eligible pairs, mean, 95% interval, label | Headline |',
+    '| --- | --- | --- | --- |',
   ];
-  const tracks = analysis.tracks as Json[];
-  lines.push('## Primary: A5 − A4 ordered progress, paired by seed', '', '| Circuit | Mean difference | 95% interval | A5 higher / tied / A4 higher | Outcome |', '| --- | --- | --- | --- | --- |');
   for (const t of tracks) {
-    const p = t.primary as Json;
-    const [lo, hi] = p.interval as number[];
-    lines.push(`| ${String(t.trackId)} | ${fmt(p.meanDifference)} | ${fmt(lo)} to ${fmt(hi)} | ${String(p.seedsA5Higher)} / ${String(p.seedsTied)} / ${String(p.seedsA4Higher)} | ${String(p.outcome)} |`);
+    const c = t.collision as Json;
+    const l = t.lapTime as Json;
+    lines.push(`| ${String(t.trackId)} | ${fmt(c.meanDifference)}, ${range(c.interval)}, ${String(c.label)} | ${String(l.eligiblePairs)} of ${String(l.pairs)}, ${fmt(l.meanDifference)}, ${range(l.interval)}, ${String(l.label)} | ${String(t.headline)}: ${String(t.statement)} |`);
   }
-  lines.push('', analysis.circuitsAgree ? 'The circuits give the same label. There is still **no pooled headline**: each circuit is reported on its own.' : '**The circuits disagree.** There is no pooled headline and none is to be made; the per-circuit rows above are the whole result.', '');
-  lines.push('## Secondary (descriptive; they decide nothing)', '', '| Circuit | Agent | Crashes | Lap completions | Median progress | Brake ticks / ticks | Champions that braked |', '| --- | --- | --- | --- | --- | --- | --- |');
+  lines.push('', analysis.circuitsAgree ? 'The circuits give the same headline. There is still **no pooled headline**: each circuit is reported on its own.' : '**The circuits give different headlines.** There is no pooled headline and none is to be made; the per-circuit rows above are the whole result.', '');
+  lines.push('## Counts (factual, descriptive; they decide nothing)', '', '| Circuit | Agent | Crashed starts | Lap-completed starts | Progress median (laps) | Starts at or above one lap | Brake ticks / ticks | Champions that braked |', '| --- | --- | --- | --- | --- | --- | --- | --- |');
   for (const t of tracks) {
-    for (const agent of E5_AGENTS) {
-      const a = (t.agents as Json)[agent] as Json;
+    const d = t.descriptive as Json;
+    for (const agent of ['a4', 'a5'] as const) {
+      const a = d[agent] as Json;
       const u = a.brakeUsage as Json;
-      lines.push(`| ${String(t.trackId)} | ${agent} | ${String(a.crashes)} of ${String(a.n)} | ${String(a.lapCompletions)} | ${fmt(a.medianProgress)} | ${String(u.brakeTicks)} / ${String(u.ticks)} | ${String(u.championsThatBraked)} |`);
+      const p = a.progress as Json;
+      lines.push(`| ${String(t.trackId)} | ${agent.toUpperCase()} | ${String(a.crashedStarts)} of ${String(a.starts)} | ${String(a.lapCompletedStarts)} | ${fmt(p.median)} | ${String(p.startsAtOrAboveOneLap)} | ${String(u.brakeTicks)} / ${String(u.ticks)} | ${String(u.championsThatBraked)} of ${String(a.champions)} |`);
     }
   }
-  lines.push('', '### First-lap time (simulated seconds), only over pairs where both champions completed a lap', '', '| Circuit | Pairs with both | A4 laps | A5 laps | Mean A4 | Mean A5 | Excluded pairs |', '| --- | --- | --- | --- | --- | --- | --- |');
+  lines.push('', '### Lap time: matched starts, excluded starts and excluded pairs', '', '| Circuit | Eligible pairs | Excluded pairs | Starts only A4 completed | Starts only A5 completed | Starts neither completed |', '| --- | --- | --- | --- | --- | --- |');
   for (const t of tracks) {
-    const f = t.pairedFirstLap as Json;
-    const excluded = (f.excludedPairs as { seed: number; completed: string }[]).map((e) => `${e.seed} (${e.completed})`).join(', ');
-    lines.push(`| ${String(t.trackId)} | ${String(f.pairsWithBoth)} | ${String(f.a4Completed)} | ${String(f.a5Completed)} | ${fmt(f.meanSecondsA4)} | ${fmt(f.meanSecondsA5)} | ${excluded === '' ? 'none' : excluded} |`);
+    const l = t.lapTime as Json;
+    const details = l.pairDetails as { excludedStarts: { a4OnlyCompleted: number; a5OnlyCompleted: number; neitherCompleted: number } }[];
+    const total = (key: 'a4OnlyCompleted' | 'a5OnlyCompleted' | 'neitherCompleted') => sumOf(details.map((p) => p.excludedStarts[key]));
+    const excluded = (l.excludedPairs as number[]).join(', ');
+    lines.push(`| ${String(t.trackId)} | ${String(l.eligiblePairs)} of ${String(l.pairs)} | ${excluded === '' ? 'none' : excluded} | ${total('a4OnlyCompleted')} | ${total('a5OnlyCompleted')} | ${total('neitherCompleted')} |`);
   }
-  lines.push('', '## Limits', '');
-  lines.push('- The champions are E4\'s ten pairs, so E5 is **not independent of E4\'s seeds**; it tests the same pairs on new circuits. The champions were chosen by training-circuit fitness.');
-  lines.push('- The held-out circuits were looked at once before (E3, for different agents); "unseen" means only that no E5 agent was trained or tuned on them.');
-  lines.push('- Intervals are pointwise per circuit, not a simultaneous guarantee across circuits.');
+  lines.push('', '## Reading the result', '');
+  lines.push('- Collision and lap time are the deciding endpoints; a lap-time decision uses only starts where both champions completed a lap and needs enough eligible pairs, otherwise it is `inconclusive` and is not replaced by another measure. A missing time is never zero and never dropped from one side only.');
+  lines.push('- A net benefit needs the other endpoint\'s harm excluded by its interval; one clear endpoint without that is `partial` and says which effect is unresolved.');
+  lines.push('- The champions are E4\'s ten pairs, so E5 is **not independent of E4\'s seeds**; the champions were chosen by training-circuit fitness. The five starts are scenario variation of one deterministic champion, not independent samples, and the intervals are over the ten seeds only. Intervals are pointwise per circuit; two endpoints on several circuits are not corrected for multiplicity.');
   for (const t of tracks) {
-    if (t.allEpisodesCrashed) lines.push(`- On ${String(t.trackId)} every champion crashed: a "no clear difference" there is the likeliest result of a floor effect and says nothing about the brake.`);
+    if ((t.descriptive as Json).lowProgressNoLaps) {
+      lines.push(`- On ${String(t.trackId)} both agents' median progress is below ${E5_LOW_PROGRESS} lap and no start completed a lap (the counts above). A floor effect is a possibility that has not been tested here; the cause of a weak result is not established.`);
+    }
   }
-  lines.push('- A missing first-lap time is never zero and never dropped from one side only; the secondary measures decide nothing.', '');
+  lines.push('');
   return lines.join('\n');
 }
