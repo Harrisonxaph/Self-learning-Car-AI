@@ -189,8 +189,27 @@ export function loadTrackSplits(manifest: unknown, files: Readonly<Record<string
     if (!tracks.some((t) => t.split === split)) fail(`the "${split}" split has no tracks.`);
   }
   if (epochs === undefined) return Object.freeze({ tracks: Object.freeze(tracks) });
-  checkEpochs(epochs, tracks, fail);
-  return Object.freeze({ tracks: Object.freeze(tracks), epochs });
+  // Validate and keep a PRIVATE, deeply frozen copy: the caller's objects are neither frozen nor trusted afterwards, so mutating them
+  // cannot change this registry's recorded epoch hashes or the lineage classification cached for it.
+  const history = snapshotEpochs(epochs, fail);
+  checkEpochs(history, tracks, fail);
+  return Object.freeze({ tracks: Object.freeze(tracks), epochs: history });
+}
+
+/** A deep, frozen copy of an epoch history (the array, each epoch, its ordered ids and its split-label map). Never freezes the caller's objects. */
+function snapshotEpochs(epochs: readonly SplitEpoch[], fail: (message: string) => never): readonly SplitEpoch[] {
+  if (!Array.isArray(epochs)) fail('an epoch history must be an array.');
+  return Object.freeze(
+    epochs.map((e) => {
+      if (e === null || typeof e !== 'object' || !Array.isArray(e.ids) || e.splits === null || typeof e.splits !== 'object') fail('an epoch must have a number, an introducer, a list of circuit IDs and a split-label map.');
+      return Object.freeze({
+        epoch: e.epoch,
+        introducedBy: e.introducedBy,
+        ids: Object.freeze([...e.ids]),
+        splits: Object.freeze({ ...e.splits }) as Readonly<Record<string, Split>>,
+      });
+    }),
+  );
 }
 
 /**

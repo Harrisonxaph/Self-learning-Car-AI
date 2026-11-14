@@ -101,7 +101,7 @@ describe('the built-in epochs keep their own split labels (no data change)', () 
     expect([...epochIds(3)]).toEqual(Object.keys(FROZEN_LABELS[3]!));
     const latest = SPLIT_EPOCHS[SPLIT_EPOCHS.length - 1]!;
     for (const id of latest.ids) expect(BUILT_IN_TRACK_SPLITS.tracks.find((t) => t.id === id)!.split).toBe(latest.splits[id]);
-    expect(BUILT_IN_TRACK_SPLITS.epochs).toBe(SPLIT_EPOCHS);
+    expect(BUILT_IN_TRACK_SPLITS.epochs).toEqual(SPLIT_EPOCHS); // a private frozen copy with the same content
   });
   it('the registry as of the latest epoch is the registry itself; as of epoch 2 it lists epoch 2\'s circuits with epoch 2\'s labels', () => {
     expect(splitsAsOf(BUILT_IN_TRACK_SPLITS, LATEST_SPLIT_EPOCH)).toBe(BUILT_IN_TRACK_SPLITS);
@@ -117,6 +117,57 @@ describe('the built-in epochs keep their own split labels (no data change)', () 
     const relabelled = SPLIT_EPOCHS.map((e) => (e.epoch === 2 ? { ...e, splits: { ...e.splits, 'long-sweepers': 'validation' as Split } } : e));
     expect(isBuiltInRegistry(loadTrackSplits(manifestData, FILES, relabelled.map((e, i) => (i === 2 ? { ...e, splits: { ...e.splits, 'long-sweepers': 'held-out' as Split } } : e))))).toBe(false);
     expect(isBuiltInRegistry(loadTrackSplits(manifestData, FILES, SPLIT_EPOCHS.map((e) => (e.epoch === 1 ? { ...e, introducedBy: 'other' } : e))))).toBe(false);
+  });
+  describe('the registry keeps a private, deeply frozen snapshot of the history it was given', () => {
+    type Loose = { epoch: number; introducedBy: string; ids: string[]; splits: Record<string, Split> };
+    const mutable = (): Loose[] => SPLIT_EPOCHS.map((e) => ({ epoch: e.epoch, introducedBy: e.introducedBy, ids: [...e.ids], splits: { ...e.splits } }));
+    it('mutating the caller\'s epochs after loading cannot change a recorded epoch hash', () => {
+      const given = mutable();
+      const registry = loadTrackSplits(manifestData, FILES, given);
+      const before = EPOCH_HASH.map((_h, i) => manifestRecord(registry, i + 1).hash);
+      expect(before).toEqual(EPOCH_HASH);
+      given[0]!.splits['hairpin-chicane'] = 'validation';
+      given[0]!.ids.push('nowhere');
+      given[1]!.introducedBy = 'tampered';
+      expect(EPOCH_HASH.map((_h, i) => manifestRecord(registry, i + 1).hash)).toEqual(EPOCH_HASH);
+      expect(registry.epochs![0]!.splits['hairpin-chicane']).toBe('held-out');
+    });
+    it('a lineage answer cannot be changed by restoring or editing the caller\'s objects (no stale cached classification)', () => {
+      const given = mutable();
+      given[0]!.introducedBy = 'synthetic';
+      const synthetic = loadTrackSplits(manifestData, FILES, given);
+      expect(isBuiltInRegistry(synthetic)).toBe(false);
+      given[0]!.introducedBy = 'P2-10'; // restoring the caller's object does not make the loaded registry built-in
+      expect(isBuiltInRegistry(synthetic)).toBe(false);
+      const real = loadTrackSplits(manifestData, FILES, mutable());
+      const given2 = mutable();
+      const registry = loadTrackSplits(manifestData, FILES, given2);
+      given2[0]!.introducedBy = 'synthetic'; // editing the caller's object does not make a built-in registry synthetic
+      expect(isBuiltInRegistry(registry)).toBe(true);
+      expect(isBuiltInRegistry(real)).toBe(true);
+    });
+    it('exposes a history that cannot be mutated, and does not freeze the caller\'s objects', () => {
+      const given = mutable();
+      const registry = loadTrackSplits(manifestData, FILES, given);
+      const history = registry.epochs! as SplitEpoch[];
+      expect(Object.isFrozen(history)).toBe(true);
+      for (const e of history) {
+        expect(Object.isFrozen(e)).toBe(true);
+        expect(Object.isFrozen(e.ids)).toBe(true);
+        expect(Object.isFrozen(e.splits)).toBe(true);
+      }
+      expect(() => { (history[0]!.splits as Record<string, Split>)['hairpin-chicane'] = 'training'; }).toThrow(TypeError);
+      expect(() => (history[0]!.ids as string[]).push('x')).toThrow(TypeError);
+      expect(() => history.push(history[0]!)).toThrow(TypeError);
+      expect(Object.isFrozen(given)).toBe(false);
+      expect(Object.isFrozen(given[0])).toBe(false);
+      expect(Object.isFrozen(given[0]!.ids)).toBe(false);
+      expect(Object.isFrozen(given[0]!.splits)).toBe(false);
+    });
+    it('a malformed epoch is a TrackSplitError, not a TypeError', () => {
+      expect(() => loadTrackSplits(manifestData, FILES, [null as unknown as SplitEpoch])).toThrow(TrackSplitError);
+      expect(() => loadTrackSplits(manifestData, FILES, [{ epoch: 1, introducedBy: 'x', ids: 'abc', splits: {} } as unknown as SplitEpoch])).toThrow(TrackSplitError);
+    });
   });
   it('the built-in rules apply to the built-in registry and its later versions, never to a synthetic registry', () => {
     expect(isBuiltInRegistry(BUILT_IN_TRACK_SPLITS)).toBe(true);
