@@ -23,7 +23,7 @@ import * as e5Study from '../../src/training/e5Study';
 import * as access from '../../src/training/heldOutAccess';
 import { manifestRecord } from '../../src/training/experiment';
 import { currentStreams, hashOf, METRIC, trackReferences, WILCOXON, type StudyContext } from '../../src/training/study';
-import { loadTrackSplits, trackContentHash } from '../../src/training/trackSplits';
+import { BUILT_IN_TRACK_SPLITS, loadTrackSplits, trackContentHash } from '../../src/training/trackSplits';
 import { execute, parseArgs, readE4Records, UsageError, type E5Deps } from '../../scripts/e5Commands.mjs';
 
 type Json = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -83,7 +83,7 @@ describe('the real process on the built-in registry', () => {
     const shaped = {
       format: e5Study.E5_MANIFEST_FORMAT, version: 1, id: 'shape-check', label: 'confirmatory', description: 'Shape check only: never frozen, never run.',
       e4: { manifestHash: pins.e4ManifestHash }, pairs: pins.pairs, configuration: clone(e4Manifest.configuration),
-      tracks: { heldOut: [{ id: 'hairpin-chicane', contentHash: trackContentHash(loadTrack(hairpinChicane)) }], splitManifestHash: manifestRecord().hash },
+      tracks: { heldOut: [{ id: 'hairpin-chicane', contentHash: trackContentHash(loadTrack(hairpinChicane)) }], splitManifestHash: manifestRecord(BUILT_IN_TRACK_SPLITS, 2).hash }, // epoch 2: the circuit is still held-out there, so the SPENT refusal is what fires
       analysis: { descriptiveMetric: METRIC, starts: [...e5Study.E5_STARTS], endpoints: { ...e5Study.E5_ENDPOINTS }, bootstrap: { ...e5Study.E5_BOOTSTRAP }, decisionRule: e5Study.E5_DECISION_RULE, brakeUsageThreshold: BRAKE_USAGE_THRESHOLD },
       authorisation: 'issue-34#shape-check', code: { revision: 'a'.repeat(40) },
     };
@@ -91,6 +91,9 @@ describe('the real process on the built-in registry', () => {
     const validate = cli('validate', manifest);
     expect(validate.code).toBe(2);
     expect(validate.err).toMatch(/already exposed.*spent/);
+    // on today's registry (epoch 4) the spent circuit is a validation circuit, so a manifest naming the latest epoch is refused as not held-out
+    const latest = put('shaped-latest.json', { ...shaped, tracks: { ...shaped.tracks, splitManifestHash: manifestRecord().hash } });
+    expect(cli('validate', latest).err).toMatch(/not a registered held-out circuit/);
     const ledger = join(DIR, 'never.ledger.json');
     const run = cli('run-held-out', manifest, '--e4-manifest', e4ManifestPath, '--e4-dir', e4Dir, '--ledger', ledger, '--out', join(DIR, 'never.held-out.json'), '--open-held-out');
     expect(run.code).toBe(2);
