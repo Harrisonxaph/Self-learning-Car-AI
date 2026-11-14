@@ -24,6 +24,10 @@ import {
   type RuleParams,
 } from '../ai/ruleBasedDriver';
 import { DEFAULT_SIM_CONFIG, DEFAULT_VEHICLE_PHYSICS } from '../sim/config';
+import { createCar } from '../sim/collision';
+import { EVALUATION_SEEDS, evaluationStartFor, type EvaluationStart } from '../sim/evaluationStarts';
+import type { Pose, Track } from '../sim/track';
+import type { Controls } from '../sim/vehicle';
 import { buildEvaluationSetup, evaluateDriver, type DriverEvaluation } from './evaluation';
 import { modelBrakeEnabled } from './frozenModelBrake';
 import {
@@ -163,6 +167,8 @@ function checkOpening(value: unknown): HeldOutOpening {
 // ---------------------------------------------------------------------------------------------------------------
 // The gate.
 
+const poseOf = (s: EvaluationStart): Pose => ({ position: { x: s.x, y: s.y }, heading: s.heading });
+
 export class HeldOutAccessError extends Error {
   override name = 'HeldOutAccessError';
 }
@@ -190,10 +196,26 @@ export interface HeldOutOpening {
   readonly agentIds: readonly string[];
 }
 
+/** What a read-only observer is told after each decision: the start's index (0 to 4) and a frozen copy of the controls. */
+export interface ControlEvent {
+  readonly start: number;
+  readonly controls: Readonly<Controls>;
+}
+
 export interface HeldOutSession {
   readonly opening: HeldOutOpening;
-  /** Evaluates one listed frozen agent on one listed held-out track, once. */
+  /** Evaluates one listed frozen agent on one listed held-out track, once, from the track's nominal start. */
   evaluate(model: FrozenModel, trackId: string, config?: unknown): DriverEvaluation;
+  /**
+   * Evaluates one listed frozen agent on one listed held-out track, once, from the evaluation protocol's five fixed starts
+   * (the track's nominal start and four small perturbed starts, derived HERE from the track's own start pose; the caller
+   * supplies no pose). The pair counts as evaluated for `evaluate` too, so the pair is looked at once either way.
+   * `observe` is a READ-ONLY notification: it is called after every decision with the start's index and a frozen copy of the
+   * controls the gate's own driver chose. What it returns is ignored and nothing it does reaches the driver, the model, the
+   * controls the episode uses or the reset, which the gate owns; a callback that throws stops the run (the pair is already
+   * recorded as looked at).
+   */
+  evaluateStarts(model: FrozenModel, trackId: string, config?: unknown, observe?: (event: ControlEvent) => void): readonly DriverEvaluation[];
   /** The pairs evaluated so far, in order. */
   evaluated(): readonly { readonly modelId: string; readonly trackId: string }[];
 }
@@ -256,22 +278,57 @@ export function createHeldOutGate(protocol: HeldOutProtocol, ledger: OpeningLedg
       ledger.claim(opening);
       opened = true;
       const seen: { modelId: string; trackId: string }[] = [];
+      // The common checks for one pair; `deferRecord` leaves recording the pair to the caller (after its own validation).
+      const prepare = (model: FrozenModel, trackId: string, config: unknown, deferRecord = false) => {
+        if (!isFrozenModel(model)) throw new TrackLeakageError('Held-out tracks are only for frozen models (freezeModel).');
+        if (!frozenProtocol.agentIds.includes(model.id)) throw new HeldOutAccessError(`Agent ${model.id} is not listed in the protocol.`);
+        if (!frozenProtocol.trackIds.includes(trackId)) throw new HeldOutAccessError(`Track "${trackId}" is not listed in the protocol.`);
+        if (seen.some((s) => s.modelId === model.id && s.trackId === trackId)) {
+          throw new HeldOutAccessError(`Agent ${model.id} has already been evaluated on "${trackId}"; each pair is evaluated once.`);
+        }
+        const track = heldOutTrack(trackId, model, splits);
+        const driver = driverForFrozenAgent(model);
+        // The track comes from heldOutTrack, so it is the registered held-out track of that ID by construction.
+        const setup = buildEvaluationSetup(config, { track, physics: DEFAULT_VEHICLE_PHYSICS, timestepSeconds: DEFAULT_SIM_CONFIG.timestepSeconds }, () => 'held-out');
+        const record = () => {
+          // Recorded before any episode runs: a pair that started counts as looked at, even if the run were interrupted.
+          seen.push({ modelId: model.id, trackId });
+        };
+        if (!deferRecord) record();
+        return { setup, driver, check: deferRecord ? { starts: (t: Track) => [0, ...EVALUATION_SEEDS].map((seed) => evaluationStartFor(t.start, seed)), record } : undefined };
+      };
       return Object.freeze({
         opening,
         evaluate(model: FrozenModel, trackId: string, config: unknown = {}): DriverEvaluation {
-          if (!isFrozenModel(model)) throw new TrackLeakageError('Held-out tracks are only for frozen models (freezeModel).');
-          if (!frozenProtocol.agentIds.includes(model.id)) throw new HeldOutAccessError(`Agent ${model.id} is not listed in the protocol.`);
-          if (!frozenProtocol.trackIds.includes(trackId)) throw new HeldOutAccessError(`Track "${trackId}" is not listed in the protocol.`);
-          if (seen.some((s) => s.modelId === model.id && s.trackId === trackId)) {
-            throw new HeldOutAccessError(`Agent ${model.id} has already been evaluated on "${trackId}"; each pair is evaluated once.`);
-          }
-          const track = heldOutTrack(trackId, model, splits);
-          const driver = driverForFrozenAgent(model);
-          // The track comes from heldOutTrack, so it is the registered held-out track of that ID by construction.
-          const setup = buildEvaluationSetup(config, { track, physics: DEFAULT_VEHICLE_PHYSICS, timestepSeconds: DEFAULT_SIM_CONFIG.timestepSeconds }, () => 'held-out');
-          // Recorded before the episode runs: a pair that started counts as looked at, even if the run were interrupted.
-          seen.push({ modelId: model.id, trackId });
+          const { setup, driver } = prepare(model, trackId, config);
           return evaluateDriver(driver, setup);
+        },
+        evaluateStarts(model: FrozenModel, trackId: string, config: unknown = {}, observe?: (event: ControlEvent) => void): readonly DriverEvaluation[] {
+          const { setup, driver, check } = prepare(model, trackId, config, true);
+          const track = setup.environment.track;
+          const starts = check!.starts(track);
+          // Validated before the pair is recorded: a circuit whose perturbed start touches a wall cannot be evaluated under the protocol.
+          for (const start of starts) {
+            if (start.seed !== 0 && createCar(poseOf(start), track, setup.environment.physics).crashed) {
+              throw new HeldOutAccessError(`The perturbed start ${start.seed} on "${trackId}" touches a wall, so this circuit cannot be evaluated under the protocol.`);
+            }
+          }
+          check!.record();
+          const results: DriverEvaluation[] = [];
+          starts.forEach((start, index) => {
+            // The gate owns the driver: it asks the validated frozen driver for controls, hands the observer a frozen COPY, and
+            // returns the original controls to the episode, so nothing the observer returns or mutates can reach the run.
+            const watched: EpisodeDriver = {
+              decide(observation) {
+                const controls = driver.decide(observation);
+                if (observe !== undefined) observe(Object.freeze({ start: index, controls: Object.freeze({ ...controls }) }));
+                return controls;
+              },
+              reset: () => driver.reset(),
+            };
+            results.push(evaluateDriver(watched, setup, { start: poseOf(start) }));
+          });
+          return Object.freeze(results);
         },
         evaluated: () => seen.map((s) => ({ ...s })),
       });
