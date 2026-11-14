@@ -54,6 +54,7 @@ src/
     modelImport.ts       text of a file to a validated model or a list of errors; writes nothing (P3-06)
     migrations.ts        schema migration hook; the registry is empty (P3-06)
     modelCompare.ts     compare two validated models: rows, whether fitness may be ranked, whether they can replay together (P3-08)
+    evaluationCompare.ts compare two models' recorded evaluations on shared circuits: per-circuit values, A minus B, spread across the five starts, exact aggregate rules, no verdict (P5-05 step 1; not yet shown in any page)
     checkpointFormat.ts  training checkpoint document: build and validate, bounds before allocation, injected config rules (P3-07)
     checkpointStore.ts   one-slot checkpoint in an injected localStorage; a failed write keeps the previous one (P3-07)
     trackStore.ts         custom track save/load
