@@ -551,6 +551,24 @@ body {
   .compare-table td:nth-of-type(2)::before {
     content: 'B: ';
   }
+
+  .compare-table td:nth-of-type(3)::before {
+    content: 'A minus B: ';
+  }
+}
+
+/* The recorded-evaluation tables (P5-05) show the circuit's name: their caption is visible, unlike the side-by-side table's. */
+.eval-compare-table caption,
+.eval-compare-aggregate caption {
+  position: static;
+  width: auto;
+  height: auto;
+  margin: 0.6rem 0 0.2rem;
+  overflow: visible;
+  clip-path: none;
+  color: #ffb000;
+  font-weight: 600;
+  text-align: left;
 }
 
 .checkpoint-offer {

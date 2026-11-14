@@ -142,6 +142,8 @@ if (pageMode(window.location.search) === 'train') {
       replay: element<HTMLButtonElement>('#compare-replay'),
       status: element<HTMLElement>('#compare-status'),
       result: element<HTMLElement>('#compare-result') as unknown as UiList,
+      evaluations: element<HTMLElement>('#compare-evaluations') as unknown as UiList,
+      customTracks: customSourceFromStore(customTrackStore()),
     },
     checkpoint: {
       status: element<HTMLElement>('#checkpoint-status'),

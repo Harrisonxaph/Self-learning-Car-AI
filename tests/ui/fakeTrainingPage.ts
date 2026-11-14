@@ -203,7 +203,7 @@ export function fakePage(frames: FakeFrames, options: FakePageOptions | { ms: nu
     appVersion: '0.0.0',
   };
   const compare = opts.compare
-    ? { a: new FakeSelect(), b: new FakeSelect(), run: new FakeControl(), replay: new FakeControl(), status: { textContent: '' as string | null }, result: new FakeNode('div') }
+    ? { a: new FakeSelect(), b: new FakeSelect(), run: new FakeControl(), replay: new FakeControl(), status: { textContent: '' as string | null }, result: new FakeNode('div'), evaluations: new FakeNode('div') }
     : undefined;
   if (compare) {
     compare.run.disabled = true;

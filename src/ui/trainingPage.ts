@@ -21,6 +21,10 @@ import { createChampionReplay, type ChampionReplay, type ReplayFrame } from '../
 import { createPairReplay, type PairReplay } from '../training/pairReplay';
 import { compareModels, type CompareResult } from '../persistence/modelCompare';
 import { renderComparison } from './compareView';
+import { renderEvaluationComparison } from './evaluationCompareView';
+import { compareEvaluations } from '../persistence/evaluationCompare';
+import { recogniseEvaluations } from '../persistence/evaluationEntry';
+import { entryContext, type CustomSource } from './modelEvaluation';
 import { RACE_COLOURS } from '../render/raceView';
 import { circuitControlState, circuitCredit } from './trainingCircuit';
 import { createTrainer, DEFAULT_TRAINING_CONFIG, type Generation, type TrainerState, type TrainingConfig } from '../training/trainer';
@@ -153,6 +157,10 @@ export interface TrainingPage {
     readonly replay: HTMLButtonElement;
     readonly status: HTMLElement;
     readonly result: UiList;
+    /** Recorded evaluations on shared circuits (P5-05): rendered under the table; absent in older fakes. */
+    readonly evaluations?: UiList;
+    /** The person's saved custom circuits, so custom-circuit entries are checked against them (P4-03). */
+    readonly customTracks?: CustomSource;
   };
   /**
    * Saved champions (P3-05): a name field, a Save button, a status sentence, a list, and what saving needs. Saved brains are
@@ -837,6 +845,7 @@ export function startTrainingPage(page: TrainingPage): void {
       if (compared && !(valid.some((e) => e.id === compared!.a) && valid.some((e) => e.id === compared!.b))) {
         compared = null;
         renderComparison(comparePanel.result, savedPanel.ui, null);
+        if (comparePanel.evaluations) renderEvaluationComparison(comparePanel.evaluations, savedPanel.ui, null);
         comparePanel.replay.disabled = true;
         stopReplayIfPair();
       }
@@ -868,6 +877,21 @@ export function startTrainingPage(page: TrainingPage): void {
       const result = compareModels(left.model, right.model);
       compared = { a: idA, b: idB, nameA: left.model.name ?? 'Unnamed champion', nameB: right.model.name ?? 'Unnamed champion', modelA: left.model, modelB: right.model, result };
       renderComparison(comparePanel.result, savedPanel.ui, result);
+      if (comparePanel.evaluations) {
+        // The recorded evaluations of the two saves (P5-05): recognised exactly as the Evaluate page recognises them, so an invalid or
+        // foreign entry is opaque here too. View-only: nothing is evaluated and nothing is written.
+        let evaluations: ReturnType<typeof compareEvaluations> | null = null;
+        if (result.ok) {
+          try {
+            const entriesOf = (model: ModelDocument) => recogniseEvaluations(Array.isArray(model.evaluation) ? model.evaluation : [], entryContext(model, comparePanel.customTracks)).entries;
+            evaluations = compareEvaluations(left.model, right.model, entriesOf(left.model), entriesOf(right.model));
+          } catch {
+            evaluations = { ok: false, message: 'The recorded evaluations of these two champions could not be read.' };
+          }
+        }
+        renderEvaluationComparison(comparePanel.evaluations, savedPanel.ui, evaluations);
+        canvas.dataset.compareEvaluations = evaluations === null ? 'none' : evaluations.ok ? (evaluations.aggregate === null ? 'circuits' : 'aggregate') : 'refused';
+      }
       comparePanel.replay.disabled = !(result.ok && result.sharedReplay.ok);
       compareSay(result.ok ? `Compared A (${compared.nameA}) with B (${compared.nameB}).` : result.message);
       canvas.dataset.compare = !result.ok ? 'refused' : result.fitness.comparable ? 'comparable' : 'not-ranked';
