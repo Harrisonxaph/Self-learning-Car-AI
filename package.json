@@ -28,6 +28,7 @@
     "e3": "node scripts/e3.mjs",
     "e4": "node scripts/e4.mjs",
     "e5": "node scripts/e5.mjs",
+    "e6": "node scripts/e6.mjs",
     "bench": "node scripts/bench.mjs",
     "profile": "node scripts/profile.mjs",
     "index:measure": "node scripts/index-measure.mjs"
