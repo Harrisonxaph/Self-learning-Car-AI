@@ -1,7 +1,7 @@
 {
   "format": "self-driving-ai-evolution/track-splits",
   "version": 1,
-  "note": "Built-in track splits (P2-10, docs/AI_EVALUATION.md section 5). Training tracks are for evolution; validation tracks are for choosing hyperparameters and champions; held-out tracks are only for the final evaluation of frozen models and are never used for tuning. contentHash is sha256 of JSON.stringify(loadTrack(file)); change a track's version and hash together. P4-04 adds more circuits.",
+  "note": "Built-in track splits (P2-10, docs/AI_EVALUATION.md section 5). Training tracks are for evolution; validation tracks are for choosing hyperparameters and champions; held-out tracks are only for the final evaluation of frozen models and are never used for tuning. contentHash is sha256 of JSON.stringify(loadTrack(file)); change a track's version and hash together. P4-04 adds more circuits. P5-02 step 2b adds three fresh held-out circuits (epoch 4) and reclassifies the three circuits E3 opened (hairpin-chicane, long-sweepers, technical-narrow) as validation: they are spent as held-out evidence, and the recorded manifests of epochs 1 to 3 keep their own labels (docs/plans/p5-02-fresh-circuits-plan.md).",
   "tracks": [
     {
       "id": "stadium-oval",
@@ -32,7 +32,7 @@
     {
       "id": "hairpin-chicane",
       "version": "1",
-      "split": "held-out",
+      "split": "validation",
       "file": "hairpin-chicane.json",
       "contentHash": "sha256:313f00c635d3667dfdfa5c37ba1f2731d1810a91b0801fb4234699d38a5f5770",
       "description": "A right-left chicane (30 degrees each way, radius 25 m), a left then a right 180-degree hairpin (radius 12 m) and four 90-degree left corners (radius 16 m); 11 m wide; 502 m lap; 18 gates. Built like rounded-rectangle.",
@@ -71,7 +71,7 @@
     {
       "id": "long-sweepers",
       "version": "1",
-      "split": "held-out",
+      "split": "validation",
       "file": "long-sweepers.json",
       "contentHash": "sha256:4d2c6ca2773f3c0b246de7b37716e9620a51dc31057061e0bac2bacaba32ec7c",
       "description": "A 100 m straight and two large-radius 90-degree sweepers (radius 60 m and about 110 m), the half lap mirrored; 10 m wide; 633 m lap; 24 gates.",
@@ -84,7 +84,7 @@
     {
       "id": "technical-narrow",
       "version": "1",
-      "split": "held-out",
+      "split": "validation",
       "file": "technical-narrow.json",
       "contentHash": "sha256:f6fba4ba5687f850a40d66d516bf84e302ff9d133bc88ee9c451b9a3804e5e5c",
       "description": "A short straight, five alternating right and left kinks (radius 35 m, 25 degrees; three right, two left), a 135-degree left corner (radius 22 m) and a closing sweep and straight; 8 m wide; 566 m lap; 23 gates.",
@@ -109,6 +109,45 @@
       "provenance": {
         "introducedBy": "P4-06",
         "designCriteria": "A real-world circuit imported by scripts/importSilverstone.mjs from the committed, unmodified source file src/data/tracks/sources/Silverstone.csv (SHA-256 27c51454e81780a75c353d3e6c9f73dbbcd1e82139782e95bd722ade19736e39) with src/tracks/convertRacetrack.ts; a training circuit, so results on it support no generalisation claim. Its version is the source commit (7 characters) and the first 12 hex characters of the source file's SHA-256.",
+        "designedBeforeAnyEvaluation": true
+      }
+    },
+    {
+      "id": "hairpin-run",
+      "version": "1",
+      "split": "held-out",
+      "file": "hairpin-run.json",
+      "contentHash": "sha256:8aae2913cd848de88ad706ea0042388cfc5afa795af7fedb4752762bfae4dc18",
+      "description": "A long straight into a 150-degree left hairpin (radius 28 m), then a gentle right bend (45 m, 40 degrees) and a left bend (60 m, 70 degrees); 9 m wide; 551 m lap; 22 gates. Built by scripts/makeTracks.mjs from specs/hairpin-run.spec.json.",
+      "provenance": {
+        "introducedBy": "P5-02 step 2b",
+        "designCriteria": "docs/plans/p5-02-fresh-circuits-plan.md section 3.2 (owner-approved criteria) and docs/plans/p5-02-fresh-circuits-specs.md (the exact half-lap spec, Codex-approved and merged before generation): closed, counter-clockwise, 8 to 14 m wide, 400 to 650 m long, made of straights and arcs by scripts/makeTracks.mjs, with a tight corner (centre-line arc of radius at most 30 m turning at least 90 degrees) and a fast run (at least 150 m straight or arcs of radius at least 70 m), all geometric proxies that guarantee no speed change or lap time for any driver; not matched by any registered circuit; designed after E3's results were seen (disclosed) but before any model, rule or driver was evaluated on it. A held-out circuit: no model is evaluated on it before the one E5 opening.",
+        "designedBeforeAnyEvaluation": true
+      }
+    },
+    {
+      "id": "sweep-hook",
+      "version": "1",
+      "split": "held-out",
+      "file": "sweep-hook.json",
+      "contentHash": "sha256:0358b2c5e89e8eeda939b0a06cb1e98e0ef7ee7babc7508095f46b4c115b493b",
+      "description": "Two long large-radius left sweepers (100 m and 80 m, 60 degrees each) into a 100-degree left hook (radius 26 m) and a right-hand release (40 m, 40 degrees); 12 m wide; 565 m lap; 23 gates. Built by scripts/makeTracks.mjs from specs/sweep-hook.spec.json.",
+      "provenance": {
+        "introducedBy": "P5-02 step 2b",
+        "designCriteria": "docs/plans/p5-02-fresh-circuits-plan.md section 3.2 (owner-approved criteria) and docs/plans/p5-02-fresh-circuits-specs.md (the exact half-lap spec, Codex-approved and merged before generation): closed, counter-clockwise, 8 to 14 m wide, 400 to 650 m long, made of straights and arcs by scripts/makeTracks.mjs, with a tight corner (centre-line arc of radius at most 30 m turning at least 90 degrees) and a fast run (at least 150 m straight or arcs of radius at least 70 m), all geometric proxies that guarantee no speed change or lap time for any driver; not matched by any registered circuit; designed after E3's results were seen (disclosed) but before any model, rule or driver was evaluated on it. A held-out circuit: no model is evaluated on it before the one E5 opening.",
+        "designedBeforeAnyEvaluation": true
+      }
+    },
+    {
+      "id": "hook-chicane",
+      "version": "1",
+      "split": "held-out",
+      "file": "hook-chicane.json",
+      "contentHash": "sha256:ea1076c024cef6d541363aa9d502232279f33e05d320ea58c392d54e5fabfd40",
+      "description": "A straight into a 120-degree left hook (radius 25 m), a right-left chicane (30 m, 45 degrees each way) and a medium left bend (40 m, 60 degrees); 13 m wide; 564 m lap; 23 gates. Built by scripts/makeTracks.mjs from specs/hook-chicane.spec.json.",
+      "provenance": {
+        "introducedBy": "P5-02 step 2b",
+        "designCriteria": "docs/plans/p5-02-fresh-circuits-plan.md section 3.2 (owner-approved criteria) and docs/plans/p5-02-fresh-circuits-specs.md (the exact half-lap spec, Codex-approved and merged before generation): closed, counter-clockwise, 8 to 14 m wide, 400 to 650 m long, made of straights and arcs by scripts/makeTracks.mjs, with a tight corner (centre-line arc of radius at most 30 m turning at least 90 degrees) and a fast run (at least 150 m straight or arcs of radius at least 70 m), all geometric proxies that guarantee no speed change or lap time for any driver; not matched by any registered circuit; designed after E3's results were seen (disclosed) but before any model, rule or driver was evaluated on it. A held-out circuit: no model is evaluated on it before the one E5 opening.",
         "designedBeforeAnyEvaluation": true
       }
     }

@@ -219,7 +219,7 @@ describe('over a whole episode (mechanics only, no outcome is asserted)', () => 
   });
 
   it('never gets a held-out track: the evaluation setup refuses one', () => {
-    const heldOut = { ...oval, id: 'hairpin-chicane' };
+    const heldOut = { ...oval, id: 'hairpin-run' };
     expect(() => createEvaluationSetup({}, { track: heldOut, physics: DEFAULT_VEHICLE_PHYSICS, timestepSeconds: DEFAULT_SIM_CONFIG.timestepSeconds })).toThrow();
     expect(validationTrack('rounded-rectangle').gates.length).toBe(14);
   });

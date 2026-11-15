@@ -2,22 +2,19 @@
 // split labels, so a circuit reclassified in a later epoch (the three E3 circuits becoming validation in step 2b-2) does not change any
 // earlier epoch's recorded hash and no recorded result is refused; `splitsAsOf` gives the registry as it was in an epoch; E3 parses,
 // verifies and replays through the registry of the epoch its manifest names.
-// NO DATA CHANGE: the built-in registry's circuits and labels are untouched here. The reclassification is only SIMULATED with synthetic
-// registries (a scaled oval relabelled), and the real committed E3 records are only READ and recomputed (no held-out circuit is
-// evaluated, no model is trained).
+// Epoch 4 (P5-02 step 2b-2) is REAL now: the three circuits E3 opened are validation circuits and three fresh circuits are held-out. The
+// tests below pin all four epoch hashes and check the real epoch 4. Where a test needs a registry that differs from the built-in one (an epoch
+// history consistency refusal, a registry with another reclassification, an E3 round trip whose records were made in epoch 1), it builds a
+// SYNTHETIC registry from a scaled oval; the real committed E3 records are only READ and recomputed read-only (no fresh or held-out circuit
+// is evaluated, no model is trained, no episode of the real study is run).
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import manifestData from '../../src/data/tracks/index.json';
-import hairpinChicane from '../../src/data/tracks/hairpin-chicane.json';
-import kidneyLoop from '../../src/data/tracks/kidney-loop.json';
-import longSweepers from '../../src/data/tracks/long-sweepers.json';
 import roundedRectangle from '../../src/data/tracks/rounded-rectangle.json';
-import sSweepers from '../../src/data/tracks/s-sweepers.json';
-import silverstone from '../../src/data/tracks/silverstone.json';
 import stadiumOval from '../../src/data/tracks/stadium-oval.json';
-import technicalNarrow from '../../src/data/tracks/technical-narrow.json';
 import { loadTrack } from '../../src/sim/track';
+import { BUILT_IN_FILES } from '../helpers/builtInTrackFiles';
 import { resolveBaselineConfig } from '../../src/training/baselines';
 import { canonicalJson, manifestEpochOf, manifestRecord } from '../../src/training/experiment';
 import { E4_DELTA } from '../../src/training/e4Study';
@@ -67,11 +64,12 @@ import { PARAMETER_COUNT } from '../../src/ai/network';
 type Json = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 const clone = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
 
-// The three recorded epoch hashes, as LITERALS computed before any history change (E4 and the P2-08 records name epoch 1, E3 names epoch 2).
+// The recorded epoch hashes, as LITERALS computed before any history change (E4 and the P2-08 records name epoch 1, E3 names epoch 2).
 const EPOCH_HASH = [
   'sha256:3cb594e2cdf4ed07728a8a50a54d558fc20f3d8e01628acd376eb9ff940772c3',
   'sha256:4a56521e1e89b6cf58409181a7c6d3bcb1675dff8076a9df87aa675b9e2df91e',
   'sha256:297e0b586694b37ff61faebeeb17ca7044401b18ad51142d96e92b9cb68d1bbd',
+  'sha256:681d603918e4db06b4c8434f9893275ae50477dd2c7735dc67a86be3dc4bfbc5', // epoch 4 (P5-02 step 2b), pinned when the fresh circuits were registered
 ] as const;
 const SPENT = ['hairpin-chicane', 'long-sweepers', 'technical-narrow'] as const;
 
@@ -86,19 +84,26 @@ const FROZEN_LABELS: Record<number, Record<string, Split>> = {
     'stadium-oval': 'training', 'rounded-rectangle': 'validation', 'hairpin-chicane': 'held-out', 'kidney-loop': 'training', 's-sweepers': 'validation',
     'long-sweepers': 'held-out', 'technical-narrow': 'held-out', silverstone: 'training',
   },
+  // Epoch 4 (P5-02 step 2b): the three circuits E3 opened are spent and become validation; three fresh circuits are held-out.
+  4: {
+    'stadium-oval': 'training', 'rounded-rectangle': 'validation', 'hairpin-chicane': 'validation', 'kidney-loop': 'training', 's-sweepers': 'validation',
+    'long-sweepers': 'validation', 'technical-narrow': 'validation', silverstone: 'training', 'hairpin-run': 'held-out', 'sweep-hook': 'held-out', 'hook-chicane': 'held-out',
+  },
 };
 
 describe('the built-in epochs keep their own split labels (no data change)', () => {
-  it('records the three epoch hashes as literals, recomputed from today\'s data with each epoch\'s own labels', () => {
+  it('records the four epoch hashes as literals, recomputed from today\'s data with each epoch\'s own labels', () => {
     EPOCH_HASH.forEach((hash, i) => expect(manifestRecord(undefined, i + 1).hash).toBe(hash));
-    expect(manifestRecord().hash).toBe(EPOCH_HASH[2]);
+    expect(manifestRecord().hash).toBe(EPOCH_HASH[3]); // new records use the latest epoch (4)
     expect(manifestEpochOf(EPOCH_HASH[0])).toBe(1);
     expect(manifestEpochOf(EPOCH_HASH[1])).toBe(2);
     expect(manifestEpochOf(EPOCH_HASH[2])).toBe(3);
+    expect(manifestEpochOf(EPOCH_HASH[3])).toBe(4);
   });
-  it('freezes the labels of epochs 1 to 3 as written out, and the latest epoch\'s labels are the registry\'s current ones', () => {
-    for (const epoch of [1, 2, 3]) expect({ ...epochSplits(epoch) }).toEqual(FROZEN_LABELS[epoch]);
+  it('freezes the labels of epochs 1 to 4 as written out, and the latest epoch\'s labels are the registry\'s current ones', () => {
+    for (const epoch of [1, 2, 3, 4]) expect({ ...epochSplits(epoch) }).toEqual(FROZEN_LABELS[epoch]);
     expect([...epochIds(3)]).toEqual(Object.keys(FROZEN_LABELS[3]!));
+    expect([...epochIds(4)]).toEqual(Object.keys(FROZEN_LABELS[4]!));
     const latest = SPLIT_EPOCHS[SPLIT_EPOCHS.length - 1]!;
     for (const id of latest.ids) expect(BUILT_IN_TRACK_SPLITS.tracks.find((t) => t.id === id)!.split).toBe(latest.splits[id]);
     expect(BUILT_IN_TRACK_SPLITS.epochs).toEqual(SPLIT_EPOCHS); // a private frozen copy with the same content
@@ -184,21 +189,12 @@ describe('the built-in epochs keep their own split labels (no data change)', () 
   });
 });
 
-const FILES = {
-  'stadium-oval.json': stadiumOval,
-  'rounded-rectangle.json': roundedRectangle,
-  'hairpin-chicane.json': hairpinChicane,
-  'kidney-loop.json': kidneyLoop,
-  'long-sweepers.json': longSweepers,
-  's-sweepers.json': sSweepers,
-  'technical-narrow.json': technicalNarrow,
-  'silverstone.json': silverstone,
-};
+const FILES = BUILT_IN_FILES;
 
 describe('an epoch history must be consistent with its registry', () => {
   const ok = (epochs: readonly SplitEpoch[]) => loadTrackSplits(manifestData, FILES, epochs);
   const epoch = (n: number, labels: [string, Split][]): SplitEpoch => ({ epoch: n, introducedBy: 'test', ids: labels.map(([id]) => id), splits: Object.fromEntries(labels) });
-  const all = Object.entries(FROZEN_LABELS[3]!) as [string, Split][];
+  const all = Object.entries(FROZEN_LABELS[4]!) as [string, Split][];
   it('accepts the built-in history', () => expect(() => ok(SPLIT_EPOCHS)).not.toThrow());
   it.each<[string, SplitEpoch[], RegExp]>([
     ['no epoch', [], /at least one epoch/],
@@ -210,14 +206,14 @@ describe('an epoch history must be consistent with its registry', () => {
     ['a later epoch that is not an append-only extension', [epoch(1, all.slice(0, 3)), epoch(2, [all[1]!, all[0]!, ...all.slice(2)])], /append-only extension/],
     ['a registered circuit that the latest epoch omits', [epoch(1, all.slice(0, 7))], /every registered circuit in manifest order/],
     ['a latest epoch that lists the circuits in another order', [epoch(1, [all[1]!, all[0]!, ...all.slice(2)])], /every registered circuit in manifest order/],
-    ['a latest epoch whose labels differ from the registry\'s current ones', [epoch(1, all.map(([id, s]) => (id === 'hairpin-chicane' ? [id, 'validation' as Split] : [id, s])))], /current split is held-out/],
+    ['a latest epoch whose labels differ from the registry\'s current ones', [epoch(1, all.map(([id, s]) => (id === 'hairpin-chicane' ? [id, 'held-out' as Split] : [id, s])))], /current split is validation/],
   ])('refuses %s', (_name, epochs, pattern) => {
     expect(() => ok(epochs)).toThrow(pattern);
     expect(() => ok(epochs)).toThrow(TrackSplitError);
   });
 });
 
-// ---- A SIMULATED future registry: the three spent circuits relabelled validation, a synthetic fresh circuit held-out (epoch 4) ----
+// ---- Helpers for the synthetic registries below ----
 const scale = (p: { x: number; y: number }, k: number) => ({ x: p.x * k, y: p.y * k });
 const oval = stadiumOval as unknown as { outer: { x: number; y: number }[]; inner: { x: number; y: number }[]; start: { position: { x: number; y: number }; heading: number }; gates: { a: { x: number; y: number }; b: { x: number; y: number } }[] };
 const scaled = (id: string, k: number) => ({
@@ -229,27 +225,17 @@ const scaled = (id: string, k: number) => ({
   start: { position: scale(oval.start.position, k), heading: oval.start.heading },
   gates: oval.gates.map((g) => ({ a: scale(g.a, k), b: scale(g.b, k) })),
 });
-const fresh = scaled('synthetic-fresh', 1.6);
 
-describe('a simulated epoch 4 (the three spent circuits become validation) changes no earlier epoch and no enforcement of new work', () => {
-  const relabel = (m: Json, labels: Record<string, string>): Json => ({ ...m, tracks: m.tracks.map((t: Json) => (labels[t.id] ? { ...t, split: labels[t.id] } : t)) });
-  const futureManifest = (() => {
-    const m = relabel(clone(manifestData), Object.fromEntries(SPENT.map((id) => [id, 'validation'])));
-    m.tracks.push({ id: 'synthetic-fresh', version: '1', split: 'held-out', file: 'fresh.json', contentHash: trackContentHash(loadTrack(fresh)), description: 'simulated fresh held-out circuit' });
-    return m;
-  })();
-  const epoch4: SplitEpoch = {
-    epoch: 4,
-    introducedBy: 'test (simulated P5-02 step 2b-2)',
-    ids: [...epochIds(3), 'synthetic-fresh'],
-    splits: { ...FROZEN_LABELS[3], ...Object.fromEntries(SPENT.map((id) => [id, 'validation'])), 'synthetic-fresh': 'held-out' } as Record<string, Split>,
-  };
-  const FUTURE = loadTrackSplits(futureManifest, { ...FILES, 'fresh.json': fresh }, [...SPLIT_EPOCHS, epoch4]);
+describe('the real epoch 4 (the three spent circuits became validation; three fresh circuits are held-out) changes no earlier epoch and no enforcement of new work', () => {
+  const FUTURE = BUILT_IN_TRACK_SPLITS; // epoch 4 is the real latest epoch now (P5-02 step 2b); the name keeps the tests below readable
+  const FRESH = ['hairpin-run', 'sweep-hook', 'hook-chicane'] as const;
+  const freshEntry = FUTURE.tracks.find((t) => t.id === 'hairpin-run')!;
 
   it('every earlier epoch keeps its pinned hash although the three circuits are now validation', () => {
     expect(FUTURE.tracks.find((t) => t.id === 'hairpin-chicane')!.split).toBe('validation');
     EPOCH_HASH.forEach((hash, i) => expect(manifestRecord(FUTURE, i + 1).hash).toBe(hash));
     expect(manifestRecord(FUTURE).hash).not.toBe(EPOCH_HASH[2]); // the new epoch is a different record
+    expect(manifestRecord(FUTURE).hash).toBe(EPOCH_HASH[3]); // and its own hash is pinned too
     const current = (manifestRecord(FUTURE).entries as unknown as { id: string; split: string }[]).filter((e) => (SPENT as readonly string[]).includes(e.id));
     expect(current.map((e) => [e.id, e.split])).toEqual(SPENT.map((id) => [id, 'validation']));
     expect(manifestEpochOf(EPOCH_HASH[0], FUTURE)).toBe(1);
@@ -264,17 +250,20 @@ describe('a simulated epoch 4 (the three spent circuits become validation) chang
     }
     expect(splitsAsOf(FUTURE, 4)).toBe(FUTURE);
   });
-  it('new work uses the current labels: the spent circuits are evaluable and not held-out, the fresh one is held-out only', () => {
+  it('new work uses the current labels: the spent circuits are evaluable and not held-out, the fresh ones are held-out only', () => {
     for (const id of SPENT) {
       const entry = FUTURE.tracks.find((t) => t.id === id)!;
       expect(assertEvaluationTrack(entry.track, FUTURE)).toBe('validation');
       expect(() => assertTrainingTrack(entry.track, FUTURE)).toThrow(TrackLeakageError); // the trainer refuses a validation circuit
     }
-    const freshEntry = FUTURE.tracks.find((t) => t.id === 'synthetic-fresh')!;
-    expect(() => assertEvaluationTrack(freshEntry.track, FUTURE)).toThrow(TrackLeakageError);
+    for (const id of FRESH) {
+      const entry = FUTURE.tracks.find((t) => t.id === id)!;
+      expect(() => assertEvaluationTrack(entry.track, FUTURE)).toThrow(TrackLeakageError); // the evaluator refuses a held-out circuit
+      expect(() => assertTrainingTrack(entry.track, FUTURE)).toThrow(TrackLeakageError); // so does the trainer
+    }
     const model = freezeNoBrakeNetworkAgent(Array.from({ length: PARAMETER_COUNT }, (_, i) => Math.sin(i + 1) * 0.3), { seed: 1 });
     expect(() => heldOutTrack('hairpin-chicane', model, FUTURE)).toThrow(TrackLeakageError); // no longer a held-out circuit
-    expect(heldOutTrack('synthetic-fresh', model, FUTURE)).toBe(freshEntry.track);
+    expect(heldOutTrack('hairpin-run', model, FUTURE)).toBe(freshEntry.track); // handing a track to a frozen model evaluates nothing
   });
   it('a NEW study naming epoch 4 cannot list a spent circuit as held-out, while the same circuits are still held-out in epoch 2', () => {
     // The E3 manifest names epoch 2, where they are held-out: it parses on the future registry.

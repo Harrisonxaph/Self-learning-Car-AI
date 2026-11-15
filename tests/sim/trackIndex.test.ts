@@ -159,7 +159,7 @@ function rayDifference(track: Track, index: TrackIndex, origin: Vec2, angle: num
 
 describe('the circuits tested are the training and validation ones only', () => {
   it('names them, so no held-out circuit is read', () => {
-    expect(circuits.map((c) => c.id).sort()).toEqual(['kidney-loop', 'rounded-rectangle', 's-sweepers', 'silverstone', 'stadium-oval']);
+    expect(circuits.map((c) => c.id).sort()).toEqual(['hairpin-chicane', 'kidney-loop', 'long-sweepers', 'rounded-rectangle', 's-sweepers', 'silverstone', 'stadium-oval', 'technical-narrow']); // epoch 4: the three circuits E3 opened are validation circuits now
     const source = readFileSync(new URL('./trackIndex.test.ts', import.meta.url), 'utf8');
     // (the patterns are built from pieces so that this file does not match itself)
     expect(source).not.toMatch(new RegExp(`tracksIn\\(\\s*'held${'-'}out'`));

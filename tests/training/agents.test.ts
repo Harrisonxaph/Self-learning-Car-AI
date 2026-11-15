@@ -234,7 +234,7 @@ describe('invalid inputs and boundaries', () => {
   });
 
   it.each([
-    ['the held-out track as validation', { validationTrackId: 'hairpin-chicane' }],
+    ['the held-out track as validation', { validationTrackId: 'hairpin-run' }],
     ['the training track as validation', { validationTrackId: 'stadium-oval' }],
     ['the held-out track for training', { trackId: 'hairpin-chicane' }],
     ['the validation track for training', { trackId: 'rounded-rectangle' }],

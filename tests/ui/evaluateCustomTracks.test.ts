@@ -62,7 +62,7 @@ describe('saved custom tracks on the evaluate page', () => {
     const id = (tracks.save(drawn(90, 45, 'My oval')) as { id: string }).id;
     controller.refresh();
     const options = controller.circuits();
-    expect(options.map((o) => o.split)).toEqual(['training', 'training', 'validation', 'validation', 'custom']);
+    expect(options.map((o) => o.split)).toEqual(['training', 'training', 'validation', 'validation', 'validation', 'validation', 'validation', 'custom']);
     expect(options.at(-1)).toMatchObject({ id, name: 'My oval', split: 'custom', checked: false });
   });
 

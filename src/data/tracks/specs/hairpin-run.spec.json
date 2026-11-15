@@ -1,0 +1,14 @@
+{
+  "id": "hairpin-run",
+  "version": "1",
+  "name": "Hairpin run",
+  "width": 9,
+  "half": [
+    { "type": "straight", "length": 80 },
+    { "type": "arc", "turn": "left", "radius": 28, "degrees": 150 },
+    { "type": "arc", "turn": "right", "radius": 45, "degrees": 40 },
+    { "type": "arc", "turn": "left", "radius": 60, "degrees": 70 },
+    { "type": "straight", "length": 40 }
+  ],
+  "solve": { "segment": 4, "field": "length", "range": [0, 400] }
+}

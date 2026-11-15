@@ -37,6 +37,7 @@ import {
 type Json = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 const ROOT = join(__dirname, '../..');
 const NEW_IDS = ['kidney-loop', 's-sweepers', 'long-sweepers', 'technical-narrow'] as const;
+const FRESH_IDS = ['hairpin-run', 'sweep-hook', 'hook-chicane'] as const; // P5-02 step 2b: the three fresh held-out circuits
 const clone = <T>(v: T): T => JSON.parse(JSON.stringify(v)) as T;
 const entries = BUILT_IN_TRACK_SPLITS.tracks;
 const ids = (split: 'training' | 'validation' | 'held-out') => tracksIn(split).map((t) => t.id);
@@ -51,10 +52,11 @@ const width = (track: Track): number => Math.hypot(track.gates[0]!.a.x - track.g
 const FROZEN: FrozenModel = freezeModel([0.1, 0.2, 0.3], { agent: 'test' });
 
 describe('the track sets', () => {
-  it('have exactly 3 training, 2 validation and 3 held-out circuits', () => {
+  it('have exactly 3 training, 5 validation and 3 held-out circuits (epoch 4)', () => {
     expect(ids('training')).toEqual(['stadium-oval', 'kidney-loop', 'silverstone']); // P4-06 adds Silverstone, a training circuit
-    expect(ids('validation')).toEqual(['rounded-rectangle', 's-sweepers']);
-    expect(ids('held-out')).toEqual(['hairpin-chicane', 'long-sweepers', 'technical-narrow']);
+    // The three circuits E3 opened as held-out evidence are spent and are validation circuits from epoch 4; the three fresh ones are the held-out set.
+    expect(ids('validation')).toEqual(['rounded-rectangle', 'hairpin-chicane', 's-sweepers', 'long-sweepers', 'technical-narrow']);
+    expect(ids('held-out')).toEqual([...FRESH_IDS]);
   });
   it('every circuit validates with no errors and its manifest version and content hash match its own file', () => {
     for (const e of entries) {
@@ -129,7 +131,7 @@ describe('the generator', () => {
     expect(run.stderr).toBe('');
     expect(run.status).toBe(0);
     const specs = readdirSync(join(ROOT, 'src/data/tracks/specs')).filter((f) => f.endsWith('.spec.json')).map((f) => f.replace('.spec.json', '')).sort();
-    expect(specs).toEqual([...NEW_IDS].sort());
+    expect(specs).toEqual([...NEW_IDS, ...FRESH_IDS].sort());
   });
   describe('--check on a scratch copy', () => {
     const scratch = (change: (dir: string) => void) => {
@@ -234,7 +236,7 @@ describe('source scan: which modules may reach restricted accessors (test enforc
 
 describe('split-manifest epochs', () => {
   it('are an append-only registry: epoch 1 is the three P2-10 circuits, each later epoch extends the one before it', () => {
-    expect(SPLIT_EPOCHS.map((e) => e.epoch)).toEqual([1, 2, 3]);
+    expect(SPLIT_EPOCHS.map((e) => e.epoch)).toEqual([1, 2, 3, 4]);
     expect([...epochIds(1)]).toEqual(['stadium-oval', 'rounded-rectangle', 'hairpin-chicane']);
     expect(epochIds(LATEST_SPLIT_EPOCH).length).toBe(entries.length);
     for (let i = 1; i < SPLIT_EPOCHS.length; i += 1) expect([...SPLIT_EPOCHS[i]!.ids.slice(0, SPLIT_EPOCHS[i - 1]!.ids.length)]).toEqual([...SPLIT_EPOCHS[i - 1]!.ids]);
@@ -244,7 +246,7 @@ describe('split-manifest epochs', () => {
     expect(manifestRecord(BUILT_IN_TRACK_SPLITS, 1).hash).toBe('sha256:3cb594e2cdf4ed07728a8a50a54d558fc20f3d8e01628acd376eb9ff940772c3');
     expect(manifestRecord().hash).not.toBe(manifestRecord(BUILT_IN_TRACK_SPLITS, 1).hash);
     expect(manifestEpochOf(manifestRecord(BUILT_IN_TRACK_SPLITS, 1).hash)).toBe(1);
-    expect(manifestEpochOf(manifestRecord().hash)).toBe(3);
+    expect(manifestEpochOf(manifestRecord().hash)).toBe(4);
     // Epoch 2's record is exactly the one the unchanged P4-04 to P5-03 code recorded (the hash in tests/fixtures/pre-p4-06): registering Silverstone changed no earlier epoch.
     expect(manifestRecord(BUILT_IN_TRACK_SPLITS, 2).hash).toBe('sha256:4a56521e1e89b6cf58409181a7c6d3bcb1675dff8076a9df87aa675b9e2df91e');
     expect(manifestEpochOf(manifestRecord(BUILT_IN_TRACK_SPLITS, 2).hash)).toBe(2);

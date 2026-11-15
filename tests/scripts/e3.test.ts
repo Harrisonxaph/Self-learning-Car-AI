@@ -46,7 +46,7 @@ const MANIFEST: Json = {
     training: { id: 'stadium-oval', contentHash: trackContentHash(trainingTrack('stadium-oval')) },
     validation: { id: 'rounded-rectangle', contentHash: trackContentHash(validationTrack('rounded-rectangle')) },
     heldOut: [],
-    splitManifestHash: manifestRecord(BUILT_IN_TRACK_SPLITS).hash,
+    splitManifestHash: manifestRecord(BUILT_IN_TRACK_SPLITS, 2).hash, // E3 manifests name epoch 2, where the three circuits are held-out
   },
   rules: ruleIds(),
   analysis: { metric: METRIC, delta: E4_DELTA, bootstrap: { ...E3_BOOTSTRAP }, decisionRule: E3_DECISION_RULE },

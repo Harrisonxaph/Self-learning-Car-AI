@@ -267,7 +267,7 @@ describe('study command line', () => {
   describe('invalid input for run, writing nothing', () => {
     it.each([
       ['a seed the manifest does not list', MANIFEST_FILE, '7399', /Seed 7399 is not one of the manifest's seeds/],
-      ['the held-out track', withManifest('held-out.json', (m) => (m.tracks.validation.id = 'hairpin-chicane')), '7311', /held-out|hairpin/],
+      ['the held-out track', withManifest('held-out.json', (m) => (m.tracks.validation.id = 'hairpin-run')), '7311', /held-out|hairpin-run/],
       ['a reserved seed in a mechanics manifest', withManifest('reserved.json', (m) => (m.seeds = [7311, 1005])), '7311', /reserved/],
       ['an invalid setting', withManifest('no-elites.json', (m) => (m.configuration.training.eliteCount = 0)), '7311', /eliteCount/],
       ['a manifest that is not JSON', write('broken-manifest.json', '{'), '7311', /not valid JSON/],
