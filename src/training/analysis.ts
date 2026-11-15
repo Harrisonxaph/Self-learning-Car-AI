@@ -93,7 +93,7 @@ export const median = (values: readonly number[]): number => quantile(values, 0.
 export const iqr = (values: readonly number[]): [number, number] => [quantile(values, 0.25), quantile(values, 0.75)];
 
 /** Nearest rank ⌈B·p⌉ (1-based), with the product rounded to 1e-9 first so 10,000 × 0.025 is rank 250. */
-const nearestRank = (resamples: number, p: number): number => Math.max(1, Math.ceil(Math.round(resamples * p * 1e9) / 1e9));
+export const nearestRank = (resamples: number, p: number): number => Math.max(1, Math.ceil(Math.round(resamples * p * 1e9) / 1e9));
 
 export interface BootstrapInterval {
   readonly lower: number;
