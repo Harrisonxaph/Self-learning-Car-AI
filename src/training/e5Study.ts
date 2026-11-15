@@ -251,30 +251,35 @@ export function parseE5Manifest(input: unknown, splits: TrackSplits = BUILT_IN_T
 }
 
 /** The episode limits and scoring the champions were trained under; every E5 evaluation uses exactly these. */
-function limitsOf(manifest: E5Manifest) {
+/** The episode limits and scoring of a held-out evaluation under a training configuration (shared with E6, which scores its baselines identically). */
+export function heldOutLimits(configuration: { readonly generations: number; readonly training: Json }, seed: number) {
   const { setup } = resolveBaselineConfig(
-    { training: { ...manifest.configuration.training, brakeEnabled: true }, generations: manifest.configuration.generations, trackId: E4_TRAINING_TRACK },
-    manifest.pairs[0]!.seed,
+    { training: { ...configuration.training, brakeEnabled: true }, generations: configuration.generations, trackId: E4_TRAINING_TRACK },
+    seed,
   );
   const { maxEpisodeSeconds, stallSeconds, maxLaps, fitness } = setup.config;
   return { maxEpisodeSeconds, stallSeconds, maxLaps, fitness };
 }
+const limitsOf = (manifest: E5Manifest) => heldOutLimits(manifest.configuration, manifest.pairs[0]!.seed);
 
-/** The limits and scoring (no track is read). Held-out evaluations are scored with these. */
-function scoringSetup(manifest: E5Manifest, splits: TrackSplits): EvaluationSetup {
+/** The scoring setup (no track is read). Held-out evaluations are scored with these limits. */
+export function heldOutScoring(configuration: { readonly generations: number; readonly training: Json }, seed: number, splits: TrackSplits): EvaluationSetup {
   const anyTrack = splits.tracks.find((t) => t.split === 'training')!.track;
-  return createEvaluationSetup(limitsOf(manifest), { track: anyTrack, physics: DEFAULT_VEHICLE_PHYSICS, timestepSeconds: DEFAULT_SIM_CONFIG.timestepSeconds });
+  return createEvaluationSetup(heldOutLimits(configuration, seed), { track: anyTrack, physics: DEFAULT_VEHICLE_PHYSICS, timestepSeconds: DEFAULT_SIM_CONFIG.timestepSeconds });
 }
+const scoringSetup = (manifest: E5Manifest, splits: TrackSplits): EvaluationSetup => heldOutScoring(manifest.configuration, manifest.pairs[0]!.seed, splits);
 
-function episodeCheck(manifest: E5Manifest, trackId: string, splits: TrackSplits): EpisodeCheck {
-  const setup = scoringSetup(manifest, splits);
+/** The episode check for one start of one held-out circuit. */
+export function heldOutEpisodeCheck(configuration: { readonly generations: number; readonly training: Json }, seed: number, trackId: string, splits: TrackSplits): EpisodeCheck {
+  const setup = heldOutScoring(configuration, seed, splits);
   const entry = splits.tracks.find((t) => t.id === trackId)!;
   return { maxTicks: setup.rules.maxEpisodeTicks, gates: entry.track.gates.length, fitness: setup.config.fitness, rules: setup.rules };
 }
+const episodeCheck = (manifest: E5Manifest, trackId: string, splits: TrackSplits): EpisodeCheck => heldOutEpisodeCheck(manifest.configuration, manifest.pairs[0]!.seed, trackId, splits);
 
-const gatesOf = (trackId: string, splits: TrackSplits): number => splits.tracks.find((t) => t.id === trackId)!.track.gates.length;
+export const gatesOf = (trackId: string, splits: TrackSplits): number => splits.tracks.find((t) => t.id === trackId)!.track.gates.length;
 
-function checkSourcePin(manifest: E5Manifest, source: ExperimentSource, fail: Fail): void {
+export function checkSourcePin(manifest: { readonly code: { readonly revision: string | null } }, source: ExperimentSource, fail: Fail): void {
   const pinned = manifest.code.revision;
   if (pinned === null) return;
   if (source.revision === null) fail(`the source revision is unknown, but the manifest is frozen at ${pinned}; run it from a clean checkout of that commit.`);
