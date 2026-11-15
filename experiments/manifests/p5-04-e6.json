@@ -1,0 +1,214 @@
+{
+  "format": "self-driving-ai-evolution/p5-04-e6-manifest",
+  "version": 1,
+  "id": "p5-04-e6",
+  "label": "exploratory",
+  "description": "P5-04 E6, exploratory and descriptive: do evolved drivers (the ten E4 champions of A5 and A4, read from the E5 held-out record) complete laps on the three fresh held-out circuits at a rate above untrained networks (A2), random-action drivers (A1, A7) and the rule A3? Frozen after the E5 opening, so E5 results are already known: E6 is not preregistered before the look and claims nothing about learning or braking.",
+  "e5": {
+    "manifestHash": "sha256:689aead26e69d6f770481e7e0d1b6f12bc2832f578c3902f11bd452eb0f0c8b6",
+    "resultsHash": "sha256:1a5664c1ab2e3d53f0b3377cc65df69dc18d615240e182c928196512c2f9c260"
+  },
+  "baselines": {
+    "a2": [
+      {
+        "seed": 2001,
+        "modelId": "sha256:b9328b8b7df5e3ae1f90af60ac1716ec6b02e6d6f23811e79dd2b84b2aabb838"
+      },
+      {
+        "seed": 2002,
+        "modelId": "sha256:2a1f50aea82bffdab92a0cf6fd1bfeabfcbfe9ffde7c3dfa51100d4eb8ff5d76"
+      },
+      {
+        "seed": 2003,
+        "modelId": "sha256:301f2ac126e46e926aad5b73d764e8ca6a233c838efaa34dd948c6cacf1f8efd"
+      },
+      {
+        "seed": 2004,
+        "modelId": "sha256:15afceabc3e742d247d95a0eab3eb5a154533f5e219bf772a045d8d93c67e845"
+      },
+      {
+        "seed": 2005,
+        "modelId": "sha256:e36e15e8b7199b8cccc57b8c505be2def003bc1d1964e4500e28d4fc3390e8ee"
+      },
+      {
+        "seed": 2006,
+        "modelId": "sha256:5657bda800a940c07e828a93c20e71b1b9ec072a160397c7e3c257379486d28f"
+      },
+      {
+        "seed": 2007,
+        "modelId": "sha256:8b47eb34c0d036153ef428078f90eb219b57b3f2f925478f095999b043ab95fd"
+      },
+      {
+        "seed": 2008,
+        "modelId": "sha256:10690800d662ba4e103dd47a0efabc63561f2ddd96bf98f7e6c4b6a84bc58790"
+      },
+      {
+        "seed": 2009,
+        "modelId": "sha256:2459c2c51cf4fdced830b8b17d52a33eb0e1a9c6abbcb0c7228f86bfffa81970"
+      },
+      {
+        "seed": 2010,
+        "modelId": "sha256:58839a74e0040d5fffd0fbaa2ae60316952cc42a77ef1d7fe39d0115a7a35f86"
+      }
+    ],
+    "a1": [
+      {
+        "seed": 5001,
+        "modelId": "sha256:ee6b7b475a4cbfe3cf69e1c16dc3d38f7cb76f85d67e5cf36649a3f55b15738b"
+      },
+      {
+        "seed": 5002,
+        "modelId": "sha256:ea5253eef6cf94dfcc4703d09e24dee9c436857baefcf95a6524b057268ee8ac"
+      },
+      {
+        "seed": 5003,
+        "modelId": "sha256:7aea939f6c098f70a0916a1c39b67089cc57fa45d262e99d335e5cc72f3786dd"
+      },
+      {
+        "seed": 5004,
+        "modelId": "sha256:8c5484b5a8425a27707c87a7c6cd940ea3de2bdaa1d30ea8a1b17fb1879be6ae"
+      },
+      {
+        "seed": 5005,
+        "modelId": "sha256:84c07ddeea0a5ed620bacef0361f5c72409a65ecdb39eda357d9d63c050b7df0"
+      },
+      {
+        "seed": 5006,
+        "modelId": "sha256:5187cd9946e94e234ee2a0e617c93b0e14be67a519c9dda4221ab8fd0ca28d73"
+      },
+      {
+        "seed": 5007,
+        "modelId": "sha256:834d6d15cd897cc88f29788da68213054cb3277ce8a4bdf2c5c1d2e7170a9d50"
+      },
+      {
+        "seed": 5008,
+        "modelId": "sha256:2dd0faf84d2a0ba2b3289e9df28df666becb7ead4e3745dc8ec57228fe2bbadc"
+      },
+      {
+        "seed": 5009,
+        "modelId": "sha256:6c14f87c443b8ec96915ee96f5274f3bd967b86ed3cb5e0796bf2676c8ac3f79"
+      },
+      {
+        "seed": 5010,
+        "modelId": "sha256:4f3747a1e7192a291597285e9b492ebec0f677d37d5c20e7a767d881881ecd33"
+      }
+    ],
+    "a7": [
+      {
+        "seed": 5001,
+        "modelId": "sha256:4452ff9a1d2524550f3f1e0276919cb36342b02dbee1e1114a663298c8633a9a"
+      },
+      {
+        "seed": 5002,
+        "modelId": "sha256:13dd9c6bea1ab2b9b020403beebbd1fae3095d73e4d549b35aca0b294b1b1973"
+      },
+      {
+        "seed": 5003,
+        "modelId": "sha256:72db5dcb4ce77cee0f3b99e09d0c42357bf4ebfa035f7328ccb7f78ca3ad12cf"
+      },
+      {
+        "seed": 5004,
+        "modelId": "sha256:ef0db313056eb5b3d555f8e85fcec68ab5ee6a9b41972d5af2a9d28bd6237e23"
+      },
+      {
+        "seed": 5005,
+        "modelId": "sha256:c99190f7e5b5c5df6d86e163b0e2f18e4b7a78e2bbfb97b99e5fb72f3f7870a8"
+      },
+      {
+        "seed": 5006,
+        "modelId": "sha256:0b901fd7f74ee13dca1372829a66c3b96c9e16b216dc1dff402141db0b94ed97"
+      },
+      {
+        "seed": 5007,
+        "modelId": "sha256:92113c30ef233525892195b7822fcfdaff8ddae8437bd2350aa3d407ab51d9e0"
+      },
+      {
+        "seed": 5008,
+        "modelId": "sha256:bdd4699f1b2b20d2b8924f5605f48b0a5718a1c4a4b8d207d83c7405be2a91d6"
+      },
+      {
+        "seed": 5009,
+        "modelId": "sha256:3350d1698c68fea183d4a2aeda4cd822edba7563e6c7e8820bc63e257d77b6e7"
+      },
+      {
+        "seed": 5010,
+        "modelId": "sha256:7938f49244058604d1072005a6bf7cc5fc69d47d109f0d1c69cc8e6e481feadf"
+      }
+    ],
+    "a3": {
+      "modelId": "sha256:76b52c87521ee557240bf2a9d817e43764a4bdee84e46c888fde937cf9f2617e"
+    }
+  },
+  "configuration": {
+    "generations": 100,
+    "training": {
+      "populationSize": 50,
+      "eliteCount": 2,
+      "selection": {
+        "type": "tournament",
+        "size": 3
+      },
+      "crossover": {
+        "type": "uniform",
+        "rate": 0.7
+      },
+      "mutation": {
+        "rate": 0.1,
+        "scale": 0.2
+      },
+      "maxEpisodeSeconds": 60,
+      "stallSeconds": 5,
+      "maxLaps": 3,
+      "fitness": {
+        "version": 1,
+        "checkpointWeight": 1000,
+        "partialProgressWeight": 1000,
+        "lapWeight": 5000,
+        "collisionPenalty": 500,
+        "lapTimeBonusScale": 2000,
+        "referenceLapSeconds": 30,
+        "maxLapTimeRatio": 2
+      }
+    }
+  },
+  "tracks": {
+    "heldOut": [
+      {
+        "id": "hairpin-run",
+        "contentHash": "sha256:8aae2913cd848de88ad706ea0042388cfc5afa795af7fedb4752762bfae4dc18"
+      },
+      {
+        "id": "sweep-hook",
+        "contentHash": "sha256:0358b2c5e89e8eeda939b0a06cb1e98e0ef7ee7babc7508095f46b4c115b493b"
+      },
+      {
+        "id": "hook-chicane",
+        "contentHash": "sha256:ea1076c024cef6d541363aa9d502232279f33e05d320ea58c392d54e5fabfd40"
+      }
+    ],
+    "splitManifestHash": "sha256:681d603918e4db06b4c8434f9893275ae50477dd2c7735dc67a86be3dc4bfbc5"
+  },
+  "analysis": {
+    "starts": [
+      0,
+      1,
+      2,
+      3,
+      4
+    ],
+    "margin": 0.2,
+    "bootstrap": {
+      "resamples": 10000,
+      "seed": 20261115,
+      "level": 0.95,
+      "method": "percentile-nearest-rank-v1"
+    },
+    "decisionRule": "p5-04-e6-decision-v1",
+    "floorShare": 0.5,
+    "status": "Exploratory and descriptive: E5's results on these circuits were already known when E6 was designed, so E6 is not preregistered before the look and its labels are pointwise statements about these champions only."
+  },
+  "authorisation": "issue-36#issuecomment-6899115006",
+  "code": {
+    "revision": "0d467bffbe2a4ff3a85700e152cee2c199e07bff"
+  }
+}
