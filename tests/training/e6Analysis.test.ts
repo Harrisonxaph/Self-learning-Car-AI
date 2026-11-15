@@ -79,16 +79,61 @@ describe('the three resampling schemes', () => {
     expect(independentDifferenceInterval(e, reordered, s)).toEqual(indep); // an independent cohort is a multiset: reordering it changes nothing, because the draws are of values, and these two arrays hold the same ones
   });
   it('a constant baseline resamples only the evolved cohort: a constant cohort gives a zero-width interval around e - c', () => {
-    expect(constantDifferenceInterval([1, 1, 1], 0.4, s)).toEqual({ lower: 0.6, upper: 0.6 });
-    const i = constantDifferenceInterval([1, 0, 1, 0], 0.2, s);
-    expect(i.lower).toBeCloseTo(-0.2, 12);
-    expect(i.upper).toBeCloseTo(0.8, 12);
+    // in completed-start COUNT units: every unit completed 5 starts and the constant is 2, so the difference is exactly 3
+    expect(constantDifferenceInterval([5, 5, 5], 2, s)).toEqual({ lower: 3, upper: 3 });
+    expect(constantDifferenceInterval([5, 0, 5, 0], 1, s)).toEqual({ lower: -1, upper: 4 });
   });
   it('is deterministic, and the bootstrap constants are the preregistered ones', () => {
     expect(pairedDifferenceInterval([1, 0, 1], [0, 0, 1], s)).toEqual(pairedDifferenceInterval([1, 0, 1], [0, 0, 1], s));
     expect(E6_BOOTSTRAP).toEqual({ resamples: 10_000, seed: 20261115, level: 0.95, method: 'percentile-nearest-rank-v1' });
     expect(E6_MARGIN).toBe(0.2);
     expect(() => pairedDifferenceInterval([1, 0], [1], s)).toThrow(E6AnalysisError);
+  });
+});
+
+describe('integer completed-start arithmetic (Codex P2 on #214)', () => {
+  // Dividing each count by five before subtracting made equal-magnitude differences unequal at floating-point precision: a zero interval
+  // endpoint became 3.3e-17 and the Wilcoxon ties broke. Differences, sums and ranks are now exact integers.
+  const down = [4, 4, 4, 4, 4, 4, 4, 4, 1, 1];
+  const up = [2, 2, 2, 2, 2, 2, 2, 2, 3, 3];
+  const diff = (a: readonly number[], b: readonly number[]) => contrastOf(analyseE6Circuit(input({ A5: units(a), A2: units(b) })), 'A5', 'A2');
+  it('reviewer case: differences +2 (eight units) and -2 (two units) are exact ties, so the lower bound is exactly 0 and the label is no-clear-difference', () => {
+    const c = diff(down, up);
+    expect(c.interval.lower).toBe(0); // not 3.3306690738754695e-17
+    expect(c.interval.upper).toBeCloseTo(0.4, 12);
+    expect(c.label).toBe('no-clear-difference');
+    expect(c.secondary).toMatchObject({ test: 'wilcoxon-signed-rank', m: 10, w: 33, p: 0.109375 }); // tied signed ranks, not W = 49 and p = 0.0078125
+  });
+  it('the opposite direction mirrors it: the upper bound is exactly 0, the label no-clear-difference and W = -33', () => {
+    const c = diff(up, down);
+    expect(c.interval.upper + 0).toBe(0);
+    expect(c.interval.lower).toBeCloseTo(-0.4, 12);
+    expect(c.label).toBe('no-clear-difference');
+    expect(c.secondary).toMatchObject({ w: -33, p: 0.109375 });
+  });
+  it('the count-unit paired interval of the reviewer case is exactly [0, 2] before the single division by five', () => {
+    const e = [4, 4, 4, 4, 4, 4, 4, 4, 1, 1];
+    const b = [2, 2, 2, 2, 2, 2, 2, 2, 3, 3];
+    const i = pairedDifferenceInterval(e, b, E6_BOOTSTRAP);
+    expect(i.lower).toBe(0);
+    expect(Number.isInteger(i.lower * 10)).toBe(true); // a mean of ten integer differences is a multiple of 0.1
+    expect(i.upper).toBeCloseTo(2, 12);
+  });
+  it('a genuine all-positive difference is still decided: every unit three starts above A2 gives evolved-higher with an exact interval', () => {
+    const c = diff([4, 4, 4, 4, 4, 4, 4, 4, 4, 4], [1, 1, 1, 1, 1, 1, 1, 1, 1, 1]);
+    expect(c.interval).toEqual({ lower: 0.6, upper: 0.6 });
+    expect(c.label).toBe('evolved-higher');
+    expect(c.secondary).toMatchObject({ m: 10, w: 55, p: 0.001953125 }); // ten equal positive differences: 2 / 2^10
+  });
+  it('the independent and the constant comparisons also form their differences from integers: a cohort exactly equal to its baseline never gets a spurious non-zero bound', () => {
+    const same = [4, 4, 4, 4, 4, 4, 4, 4, 1, 1];
+    const a = analyseE6Circuit(input({ A5: units(same), A1: units(same, ACTION), A3: 3 })); // mean count is 3.4; A3 = 3
+    const c1 = contrastOf(a, 'A5', 'A1');
+    expect(c1.meanDifference).toBe(0);
+    expect(c1.label).toBe('no-clear-difference');
+    const flat = analyseE6Circuit(input({ A5: units([3, 3, 3, 3, 3, 3, 3, 3, 3, 3]), A3: 3 }));
+    expect(contrastOf(flat, 'A5', 'A3').interval).toEqual({ lower: 0, upper: 0 });
+    expect(contrastOf(flat, 'A5', 'A3').meanDifference).toBe(0);
   });
 });
 

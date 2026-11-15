@@ -5,6 +5,9 @@
 // STATUS: E6 is EXPLORATORY and DESCRIPTIVE. The owner chose the shared-circuit option after E5 had already opened (E5's results on these
 // circuits are known), so the plan's "design frozen before E5 opens" protection does not apply; every report says so.
 //
+// ARITHMETIC: every difference, bootstrap sum and rank is computed in INTEGER completed-start units (0 to 5 per unit), and only then
+// divided by five for reporting. Dividing each count by five first and subtracting would make mathematically equal differences unequal in
+// floating point (2/5 - 3/5 against 4/5 - 3/5 do not mirror exactly), which can turn a zero interval endpoint positive and break Wilcoxon ties.
 // The deciding endpoint is the LAP-COMPLETION RATE: per unit, the share of the five fixed starts in which a lap was completed. Per circuit,
 // each evolved class (A5, A4) is compared with each baseline (A1, A7, A2, A3):
 //  * A2 is PAIRED with the evolved class by training seed (its representative is the first genome of that seed's generation 0); pairing is
@@ -65,6 +68,10 @@ export interface E6Settings {
 export const E6_SETTINGS: E6Settings = Object.freeze({ margin: E6_MARGIN, bootstrap: E6_BOOTSTRAP });
 
 const rate = (u: E6Unit): number => u.completedStarts / E6_STARTS_PER_UNIT;
+const count = (u: E6Unit): number => u.completedStarts;
+/** Count units to rate units, the only place a division by five happens (a count and its negative stay exact opposites). */
+const toRate = (v: number): number => v / E6_STARTS_PER_UNIT;
+const scaleInterval = (i: E6Interval): E6Interval => ({ lower: toRate(i.lower), upper: toRate(i.upper) });
 
 function checkUnits(units: readonly E6Unit[], path: string): void {
   if (units.length === 0) throw new E6AnalysisError(`${path} has no units.`);
@@ -90,7 +97,7 @@ function percentileInterval(diffs: Float64Array, settings: E6Settings['bootstrap
   return { lower: diffs[nearestRank(settings.resamples, alpha) - 1]!, upper: diffs[nearestRank(settings.resamples, 1 - alpha) - 1]! };
 }
 
-/** PAIRED: one cluster per index; the same index is drawn for both arms. Stream: `createRng(seed)`. */
+/** PAIRED (arguments and result in COUNT units): one cluster per index; the same index is drawn for both arms. Stream: `createRng(seed)`. */
 export function pairedDifferenceInterval(evolved: readonly number[], baseline: readonly number[], settings: E6Settings['bootstrap']): E6Interval {
   const n = evolved.length;
   if (n === 0 || baseline.length !== n) throw new E6AnalysisError('A paired bootstrap needs two arms of the same non-zero length.');
@@ -107,7 +114,7 @@ export function pairedDifferenceInterval(evolved: readonly number[], baseline: r
   return percentileInterval(out, settings);
 }
 
-/** INDEPENDENT: each cohort resampled on its own, the evolved cohort from `createRng(seed)` and the baseline from `createRng(seed + 1)`. */
+/** INDEPENDENT (count units; the difference of the two means is formed from exact integer sums): each cohort resampled on its own, the evolved cohort from `createRng(seed)` and the baseline from `createRng(seed + 1)`. */
 export function independentDifferenceInterval(evolved: readonly number[], baseline: readonly number[], settings: E6Settings['bootstrap']): E6Interval {
   if (evolved.length === 0 || baseline.length === 0) throw new E6AnalysisError('An independent bootstrap needs two non-empty cohorts.');
   const a = createRng(settings.seed);
@@ -118,18 +125,18 @@ export function independentDifferenceInterval(evolved: readonly number[], baseli
     for (let i = 0; i < evolved.length; i += 1) ta += evolved[a.int(0, evolved.length)]!;
     let tb = 0;
     for (let i = 0; i < baseline.length; i += 1) tb += baseline[b.int(0, baseline.length)]!;
-    out[r] = ta / evolved.length - tb / baseline.length;
+    out[r] = (ta * baseline.length - tb * evolved.length) / (evolved.length * baseline.length);
   }
   return percentileInterval(out, settings);
 }
 
-/** CONSTANT baseline (A3): only the evolved cohort is resampled, from `createRng(seed)`. */
+/** CONSTANT baseline (A3; count units): only the evolved cohort is resampled, from `createRng(seed)`. */
 export function constantDifferenceInterval(evolved: readonly number[], constant: number, settings: E6Settings['bootstrap']): E6Interval {
   const { lower, upper } = bootstrapMeanInterval(evolved, settings);
   return { lower: lower - constant, upper: upper - constant };
 }
 
-/** The label from the bootstrap rule only; a mean exactly at the margin counts as meeting it (1e-9 tolerance, as E5). */
+/** The label from the bootstrap rule only, in whatever unit the three numbers share (the analysis uses completed-start counts, margin 1); a mean exactly at the margin counts as meeting it (1e-9 tolerance, as E5). */
 export function classifyE6(mean_: number, interval: E6Interval, margin: number): E6Label {
   if (interval.lower > 0 && mean_ >= margin - TOLERANCE) return 'evolved-higher';
   if (interval.upper < 0 && mean_ <= -margin + TOLERANCE) return 'baseline-higher';
@@ -207,31 +214,41 @@ export interface E6Contrast {
 function alignBySeed(evolved: readonly E6Unit[], a2: readonly E6Unit[]): { readonly e: number[]; readonly b: number[] } {
   const bySeed = new Map(a2.map((u) => [u.seed, u] as const));
   if (evolved.length !== a2.length || evolved.some((u) => !bySeed.has(u.seed))) throw new E6AnalysisError('A2 and the evolved class do not cover the same training seeds, so they cannot be paired.');
-  return { e: evolved.map(rate), b: evolved.map((u) => rate(bySeed.get(u.seed)!)) };
+  return { e: evolved.map(count), b: evolved.map((u) => count(bySeed.get(u.seed)!)) };
 }
 
+const sum = (values: readonly number[]): number => values.reduce((t, v) => t + v, 0);
+
 export function contrast(evolvedName: E6Evolved, evolved: readonly E6Unit[], baseline: E6Baseline, input: E6CircuitInput['baselines'], settings: E6Settings): E6Contrast {
-  const rates = evolved.map(rate);
-  const evolvedMean = mean(rates);
+  const counts = evolved.map(count);
+  const marginCounts = settings.margin * E6_STARTS_PER_UNIT; // 1 for the default 0.20
+  const evolvedMean = mean(counts);
+  const finish = (n: E6Contrast['n'], comparison: E6Contrast['comparison'], baselineMean: number, differenceCounts: number, intervalCounts: E6Interval, secondary: E6Contrast['secondary']): E6Contrast => ({
+    evolved: evolvedName,
+    baseline,
+    comparison,
+    n,
+    evolvedMeanRate: toRate(evolvedMean),
+    baselineMeanRate: toRate(baselineMean),
+    meanDifference: toRate(differenceCounts),
+    interval: scaleInterval(intervalCounts),
+    // The label is decided in count units, where the margin is a whole number of starts.
+    label: classifyE6(differenceCounts, intervalCounts, marginCounts),
+    secondary,
+  });
   if (baseline === 'A3') {
-    const c = rate(input.A3);
-    const interval = constantDifferenceInterval(rates, c, settings.bootstrap);
-    const d = evolvedMean - c;
-    return { evolved: evolvedName, baseline, comparison: 'constant-baseline', n: { evolved: rates.length, baseline: 'constant' }, evolvedMeanRate: evolvedMean, baselineMeanRate: c, meanDifference: d, interval, label: classifyE6(d, interval, settings.margin), secondary: null };
+    const c = count(input.A3);
+    return finish({ evolved: counts.length, baseline: 'constant' }, 'constant-baseline', c, sum(counts) / counts.length - c, constantDifferenceInterval(counts, c, settings.bootstrap), null);
   }
   if (baseline === 'A2') {
     const { e, b } = alignBySeed(evolved, input.A2);
-    const diffs = e.map((v, i) => v - b[i]!);
-    const interval = pairedDifferenceInterval(e, b, settings.bootstrap);
-    const d = mean(diffs);
+    const diffs = e.map((v, i) => v - b[i]!); // exact integers
     const w = wilcoxonSignedRank(diffs);
-    return { evolved: evolvedName, baseline, comparison: 'paired-by-training-seed', n: { evolved: e.length, baseline: b.length }, evolvedMeanRate: evolvedMean, baselineMeanRate: mean(b), meanDifference: d, interval, label: classifyE6(d, interval, settings.margin), secondary: { test: 'wilcoxon-signed-rank', m: w.m, w: w.w, p: w.p } };
+    return finish({ evolved: e.length, baseline: b.length }, 'paired-by-training-seed', mean(b), sum(diffs) / diffs.length, pairedDifferenceInterval(e, b, settings.bootstrap), { test: 'wilcoxon-signed-rank', m: w.m, w: w.w, p: w.p });
   }
-  const other = input[baseline].map(rate);
-  const interval = independentDifferenceInterval(rates, other, settings.bootstrap);
-  const d = evolvedMean - mean(other);
-  const mw = mannWhitneyU(rates, other);
-  return { evolved: evolvedName, baseline, comparison: 'independent-cohorts', n: { evolved: rates.length, baseline: other.length }, evolvedMeanRate: evolvedMean, baselineMeanRate: mean(other), meanDifference: d, interval, label: classifyE6(d, interval, settings.margin), secondary: { test: 'mann-whitney-u', n1: mw.n1, n2: mw.n2, u: mw.u, p: mw.p } };
+  const other = input[baseline].map(count);
+  const mw = mannWhitneyU(counts, other);
+  return finish({ evolved: counts.length, baseline: other.length }, 'independent-cohorts', mean(other), (sum(counts) * other.length - sum(other) * counts.length) / (counts.length * other.length), independentDifferenceInterval(counts, other, settings.bootstrap), { test: 'mann-whitney-u', n1: mw.n1, n2: mw.n2, u: mw.u, p: mw.p });
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------------
