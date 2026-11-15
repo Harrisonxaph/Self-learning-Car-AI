@@ -336,6 +336,13 @@ export function runE6HeldOut(
 ): E6HeldOutRecord {
   const manifest = checkManifestAndContext(manifestInput, context, splits);
   if (evolved.record.resultsHash !== manifest.e5.resultsHash) throw new StudyCompatibilityError('The evolved record is not the E5 record this manifest pins.');
+  // The E5 record was produced and parsed under ONE engine, and `analyseE6Records` hands one engine to both strict parsers, so an E6 look taken
+  // under another engine could never be analysed together with it: refuse before the once-only gate opens (Codex's P2 on #215).
+  for (const key of ['name', 'version', 'v8'] as const) {
+    if (evolved.record.engine[key] !== context.engine[key]) {
+      throw new StudyCompatibilityError(`The evolved E5 record was recorded under engine ${key} ${evolved.record.engine[key]}, but this run's is ${context.engine[key]}; E6 must run under the engine of the record it reads, and nothing was opened.`);
+    }
+  }
   const agents = loadE6Agents(manifest);
   const protocol = e6HeldOutProtocol(manifest, splits);
   if (canonicalJson(gate.protocol) !== canonicalJson(protocol)) {

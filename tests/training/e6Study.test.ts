@@ -231,6 +231,15 @@ describe('the held-out record of the new agents', () => {
     expect(() => runE6HeldOut(manifest, evolved, newGate(ledger), CONTEXT, SPLITS)).toThrow(HeldOutAccessError);
     expect(() => newGate(e6LedgerFromRecords([held])).open(manifest.authorisation)).toThrow(HeldOutAccessError);
   });
+  it('refuses a run under another engine than the evolved E5 record was recorded under, before the once-only gate opens (Codex P2 on #215)', () => {
+    const l = createMemoryLedger();
+    for (const key of ['name', 'version', 'v8'] as const) {
+      const other = { ...CONTEXT, engine: { ...ENGINE, [key]: `${ENGINE[key]}-other` } };
+      expect(() => runE6HeldOut(manifest, evolved, newGate(l), other, SPLITS)).toThrow(/nothing was opened/);
+    }
+    expect(l.openings()).toEqual([]); // the look was not spent
+    expect(runE6HeldOut(manifest, evolved, newGate(l), CONTEXT, SPLITS).resultsHash).toBe(held.resultsHash); // and is still available under the right engine
+  });
   it('refuses a gate made for another protocol, and an evolved record that is not the pinned one, before anything is claimed', () => {
     const l = createMemoryLedger();
     const other = createHeldOutGate({ ...e6HeldOutProtocol(manifest, SPLITS), authorisationId: 'issue-36#other' }, l, SPLITS);
