@@ -240,10 +240,29 @@ export function parseE6Manifest(input: unknown, splits: TrackSplits = BUILT_IN_T
 // ---------------------------------------------------------------------------------------------------------------------------------
 // The evolved cohorts, read from E5's record
 
+/**
+ * The evolved cohorts as LOADED and validated for exactly one E6 manifest: a private, deeply frozen copy of E5's record (the caller's object is
+ * never kept), bound to the E6 manifest hash it was validated for, the E5 manifest pin and a digest of its contents. Only `loadE6Evolved` makes
+ * one (a brand no hand-built object carries), and `runE6HeldOut` re-checks all of it before the once-only gate opens (Codex's P2 on #215).
+ */
 export interface E6Evolved {
   readonly record: E5HeldOutRecord;
   readonly e5ManifestHash: string;
+  /** The hash of the E6 manifest this snapshot was validated against. */
+  readonly e6ManifestHash: string;
+  /** The hash of the snapshot's contents (the opening and evaluations), recomputed before the opening. */
+  readonly digest: string;
 }
+const LOADED = new WeakSet<object>();
+
+function deepFreeze<T>(value: T): T {
+  if (value !== null && typeof value === 'object' && !Object.isFrozen(value)) {
+    Object.freeze(value);
+    for (const child of Object.values(value as object)) deepFreeze(child);
+  }
+  return value;
+}
+const digestOf = (record: E5HeldOutRecord): string => hashOf({ opening: record.opening, evaluations: record.evaluations });
 
 /**
  * Reads A4 and A5 from E5's held-out record through the strict E5 parser (against E5's manifest and the E4 records) and checks that this
@@ -270,7 +289,10 @@ export function loadE6Evolved(
   const record = parseE5HeldOutRecord(e5Record, e5Manifest, e4ManifestInput, e4Records, engine, splits);
   if (record.resultsHash !== manifest.e5.resultsHash) incompatible('the E5 held-out record is not the one this manifest pins (manifest.e5.resultsHash differs).');
   if (canonicalJson(e5Manifest.pairs.map((p) => p.seed)) !== canonicalJson(manifest.baselines.a2.map((p) => p.seed))) incompatible("A2's training seeds are not the E5 champion pairs' seeds, so A2 cannot be paired with them.");
-  return { record, e5ManifestHash: manifest.e5.manifestHash };
+  const snapshot = deepFreeze(plain(record)); // a private copy: later changes to the caller's record cannot reach it
+  const bound: E6Evolved = Object.freeze({ record: snapshot, e5ManifestHash: manifest.e5.manifestHash, e6ManifestHash: e6ManifestHash(manifest), digest: digestOf(snapshot) });
+  LOADED.add(bound);
+  return bound;
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------------
@@ -335,7 +357,18 @@ export function runE6HeldOut(
   splits: TrackSplits = BUILT_IN_TRACK_SPLITS,
 ): E6HeldOutRecord {
   const manifest = checkManifestAndContext(manifestInput, context, splits);
-  if (evolved.record.resultsHash !== manifest.e5.resultsHash) throw new StudyCompatibilityError('The evolved record is not the E5 record this manifest pins.');
+  // Everything about the evolved cohorts is re-checked HERE, before the once-only gate can open, so an input that the later analysis would
+  // reject can never spend the look.
+  const refuse = (message: string): never => {
+    throw new StudyCompatibilityError(`${message} Nothing was opened.`);
+  };
+  if (!LOADED.has(evolved)) refuse('The evolved cohorts were not produced by loadE6Evolved (they carry no validated binding).');
+  if (evolved.e6ManifestHash !== e6ManifestHash(manifest)) refuse('The evolved cohorts were validated for another E6 manifest (its hash differs from this one: a changed configuration, circuit, pin or analysis setting).');
+  if (evolved.e5ManifestHash !== manifest.e5.manifestHash) refuse("The evolved cohorts' E5 manifest is not the one this manifest pins.");
+  if (evolved.record.resultsHash !== manifest.e5.resultsHash) refuse('The evolved record is not the E5 record this manifest pins.');
+  if (digestOf(evolved.record) !== evolved.digest || hashOf({ opening: evolved.record.opening, evaluations: evolved.record.evaluations }) !== evolved.record.resultsHash) {
+    refuse("The evolved record's contents no longer match its pinned results hash (it was changed after loading).");
+  }
   // The E5 record was produced and parsed under ONE engine, and `analyseE6Records` hands one engine to both strict parsers, so an E6 look taken
   // under another engine could never be analysed together with it: refuse before the once-only gate opens (Codex's P2 on #215).
   for (const key of ['name', 'version', 'v8'] as const) {

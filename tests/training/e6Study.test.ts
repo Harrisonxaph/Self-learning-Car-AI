@@ -240,6 +240,74 @@ describe('the held-out record of the new agents', () => {
     expect(l.openings()).toEqual([]); // the look was not spent
     expect(runE6HeldOut(manifest, evolved, newGate(l), CONTEXT, SPLITS).resultsHash).toBe(held.resultsHash); // and is still available under the right engine
   });
+  describe('the evolved cohorts are a manifest-bound immutable snapshot, checked before the once-only opening (Codex P2 on #215)', () => {
+    const attempt = (m: Json, e: unknown) => {
+      const l = createMemoryLedger();
+      let error: unknown;
+      try {
+        runE6HeldOut(m, e as never, createHeldOutGate(e6HeldOutProtocol(m, SPLITS), l, SPLITS), CONTEXT, SPLITS);
+      } catch (caught) {
+        error = caught;
+      }
+      return { error, l };
+    };
+    it('the valid path still works, and the snapshot is bound to this manifest', () => {
+      expect(evolved.e6ManifestHash).toBe(e6ManifestHash(manifest as never));
+      const { error, l } = attempt(manifest, evolved);
+      expect(error).toBeUndefined();
+      expect(l.openings()).toHaveLength(1);
+    });
+    it('a changed E6 configuration (maxEpisodeSeconds 3 to 4) is refused although loadE6Evolved also rejects it as incompatible, and the ledger stays untouched', () => {
+      const changed = clone(manifest);
+      changed.configuration.training.maxEpisodeSeconds = 4;
+      expect(() => loadE6Evolved(changed, e5Manifest, E5_RECORD, E4_MANIFEST, E4_RECORDS, ENGINE, SPLITS)).toThrow(StudyCompatibilityError);
+      const { error, l } = attempt(changed, evolved);
+      expect(error).toBeInstanceOf(StudyCompatibilityError);
+      expect(String(error)).toMatch(/Nothing was opened/);
+      expect(l.openings()).toEqual([]);
+    });
+    it('a changed E5 manifest pin is refused before opening, and the ledger stays untouched', () => {
+      const changed = clone(manifest);
+      changed.e5.manifestHash = `sha256:${'7'.repeat(64)}`;
+      const { error, l } = attempt(changed, evolved);
+      expect(error).toBeInstanceOf(StudyCompatibilityError);
+      expect(l.openings()).toEqual([]);
+    });
+    it('a changed analysis setting or circuit list changes the manifest hash and is refused the same way', () => {
+      const changed = clone(manifest);
+      changed.description = 'another description changes the manifest hash';
+      const { error, l } = attempt(changed, evolved);
+      expect(String(error)).toMatch(/another E6 manifest/);
+      expect(l.openings()).toEqual([]);
+    });
+    it('removing an evaluation from the caller\'s E5 record after loading cannot reach the snapshot, which is a private copy', () => {
+      const mine = clone(E5_RECORD) as Json;
+      const loaded = loadE6Evolved(manifest, e5Manifest, mine, E4_MANIFEST, E4_RECORDS, ENGINE, SPLITS);
+      mine.evaluations.pop();
+      mine.evaluations[0].starts[0].episode.ticks += 1;
+      expect(loaded.record.evaluations).toHaveLength(E5_RECORD.evaluations.length);
+      const { error, l } = attempt(manifest, loaded);
+      expect(error).toBeUndefined();
+      expect(l.openings()).toHaveLength(1);
+    });
+    it('the snapshot itself is deeply frozen: an edit to it throws and changes nothing', () => {
+      expect(Object.isFrozen(evolved)).toBe(true);
+      expect(Object.isFrozen(evolved.record.evaluations)).toBe(true);
+      expect(Object.isFrozen(evolved.record.evaluations[0]!.starts[0]!.episode)).toBe(true);
+      expect(() => { (evolved.record.evaluations as unknown[]).pop(); }).toThrow(TypeError);
+      expect(() => { (evolved.record.evaluations[0]!.starts[0]!.episode as { ticks: number }).ticks += 1; }).toThrow(TypeError);
+      expect(attempt(manifest, evolved).error).toBeUndefined();
+    });
+    it('a hand-built object, a copy of the snapshot and a record with a stale hash are refused: only a loaded snapshot opens the gate', () => {
+      const handBuilt = { record: clone(E5_RECORD), e5ManifestHash: manifest.e5.manifestHash, e6ManifestHash: e6ManifestHash(manifest as never), digest: evolved.digest };
+      for (const e of [handBuilt, { ...evolved }, { record: evolved.record, e5ManifestHash: evolved.e5ManifestHash }]) {
+        const { error, l } = attempt(manifest, e);
+        expect(error).toBeInstanceOf(StudyCompatibilityError);
+        expect(String(error)).toMatch(/Nothing was opened/);
+        expect(l.openings()).toEqual([]);
+      }
+    });
+  });
   it('refuses a gate made for another protocol, and an evolved record that is not the pinned one, before anything is claimed', () => {
     const l = createMemoryLedger();
     const other = createHeldOutGate({ ...e6HeldOutProtocol(manifest, SPLITS), authorisationId: 'issue-36#other' }, l, SPLITS);
