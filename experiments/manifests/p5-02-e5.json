@@ -1,0 +1,148 @@
+{
+  "format": "self-driving-ai-evolution/p5-02-e5-manifest",
+  "version": 1,
+  "id": "p5-02-e5",
+  "label": "confirmatory",
+  "description": "P5-02 E5 study (plan steps 5 and 6): does learned braking (A5) beat the same agent without braking (A4)? Design A: the ten frozen A4 and A5 champion pairs of E4 (seeds 2001-2010, pinned by identity), each evaluated once per fresh held-out circuit (hairpin-run, sweep-hook, hook-chicane) from five fixed starts, with ONE held-out opening. Two predeclared endpoints per circuit (collision and lap time), no pooled headline, ordered progress descriptive only. Preregistered: reviewed and approved before any E5 evaluation; nothing in it changes afterwards. The analysis design was frozen in plan section 0.2 before the circuits existed. This manifest claims nothing about learning or braking.",
+  "e4": {
+    "manifestHash": "sha256:6abd4cb7d43661998169b43aad3f0632568fc3ab84d82358e8d5b6973ec950b0"
+  },
+  "pairs": [
+    {
+      "seed": 2001,
+      "a4": "sha256:af3b4f23022fae276d432a1b088452c50dac836c7187ea388dc8f85c9f083360",
+      "a5": "sha256:e130462af43ab6404f448284cf73b1677871b137e1fa751d4c4b18a98b4eeda8",
+      "e4ResultsHash": "sha256:c009b4b0931767322734c3f921a0b454e994a5dbcbd3bdf2638bf9b998598cf2"
+    },
+    {
+      "seed": 2002,
+      "a4": "sha256:28e4b6b7c8a2c248441d9e098d56a72e8b74c30b8c8f6c440a0951d5dd6e8243",
+      "a5": "sha256:c1c01e070998247830f50f0b23dd52c87bda6a77a4dd5b87b3efde685f42ebd4",
+      "e4ResultsHash": "sha256:eeecca278c75b6b59bb437b049da6c0c7338a3bf686a643771eeb5945e44318f"
+    },
+    {
+      "seed": 2003,
+      "a4": "sha256:806958cf8188534460cf8f126a7e421feae73351a4caea5317f5505af115b110",
+      "a5": "sha256:7f20093dc9c9ae102700c4d9b91cece292b266f7bcd7ecf5fce0f62614d565fa",
+      "e4ResultsHash": "sha256:7665c155b52aa15cf001dd7c05b93543fe94e9bd848128e3b55e4b96be78317d"
+    },
+    {
+      "seed": 2004,
+      "a4": "sha256:cf80be10485a6a629455589b90cb1a14fecc73cecbd979cb16dd45b445a034d6",
+      "a5": "sha256:3c5378736e865f4714e1fc934d4f8ed2a6d7b1c7cee9168006af63285660ccd6",
+      "e4ResultsHash": "sha256:62b58195210e0ad4de061e062328d17c7e190692f072d15162a3d31d589112c1"
+    },
+    {
+      "seed": 2005,
+      "a4": "sha256:fb949f98ef074e011169dd7302789d9821ed65c0b66156bd3e85f4ecac6e0781",
+      "a5": "sha256:ec4e2fc852f6745e9bcee85a20be025e735cf2b97f2f1184282e0c6e5114f5f7",
+      "e4ResultsHash": "sha256:266e84d4c68b98a5067699828d43ee62a6f50fec50ba1586bffb7b4aa97b3a35"
+    },
+    {
+      "seed": 2006,
+      "a4": "sha256:d245c1fd9a73deaa954ae88e76534ed53660a825b7a69313269f4264a7e2b3e8",
+      "a5": "sha256:1cf284c26015ae8d42f2cb64f9a173d7607bb8a65e40bf1807ce8f66d1c6b3e9",
+      "e4ResultsHash": "sha256:bce0ffa7c3766c4a032f8f0c9192fe3357570f265dd7e8e055151a0fe22af1c8"
+    },
+    {
+      "seed": 2007,
+      "a4": "sha256:c3c94183de2ce24ecc5e96456328f5a66324db8d9e21b16ea1224ef1cf2f4b8c",
+      "a5": "sha256:43f2e6046dd5e4849bc215d550c092e229b57362245d7cb5e031f385b71fe663",
+      "e4ResultsHash": "sha256:2daeb004e6465ac2226e2ee4180f5e6b01aeb64cdfa712db3dc4956c6fd0adeb"
+    },
+    {
+      "seed": 2008,
+      "a4": "sha256:a3f8166b478c1eaf67f69dd1640130934c1d7b9e744b1fc1be8829af93622962",
+      "a5": "sha256:a4dbe2b395c46b25fbf1e1b5194b7a2f0be4307d03f532178d2ed30401775251",
+      "e4ResultsHash": "sha256:9022e7589ffdb5c26f8b6ce5b4e5312454da5ba9fe099267245166fc7f98ba57"
+    },
+    {
+      "seed": 2009,
+      "a4": "sha256:9eec4af0ec681c5e373a3392e756bc160c91665710948b9b764dbe6f19a9338d",
+      "a5": "sha256:b979272b32ee7ab26e73949f82b7605a21e42c187263ba638f81b9e22e7dfd77",
+      "e4ResultsHash": "sha256:584d6e46c7f2439bb7a74a2773ca6929cab2175111ed01763bf104363817e3e7"
+    },
+    {
+      "seed": 2010,
+      "a4": "sha256:95d1d23afd446f02e2bee3b48ef45bb505887d85f27974cee38fe031970efb57",
+      "a5": "sha256:10d3bf0ac386a8ff8dd47710c01ae11cb8b62da7f4c7508c36d0c2b7ec9a1aeb",
+      "e4ResultsHash": "sha256:6bd2fac7465e1e219686e5827302604c729685bef059fb7613fe1cf56396fdce"
+    }
+  ],
+  "configuration": {
+    "generations": 100,
+    "training": {
+      "populationSize": 50,
+      "eliteCount": 2,
+      "selection": {
+        "type": "tournament",
+        "size": 3
+      },
+      "crossover": {
+        "type": "uniform",
+        "rate": 0.7
+      },
+      "mutation": {
+        "rate": 0.1,
+        "scale": 0.2
+      },
+      "maxEpisodeSeconds": 60,
+      "stallSeconds": 5,
+      "maxLaps": 3,
+      "fitness": {
+        "version": 1,
+        "checkpointWeight": 1000,
+        "partialProgressWeight": 1000,
+        "lapWeight": 5000,
+        "collisionPenalty": 500,
+        "lapTimeBonusScale": 2000,
+        "referenceLapSeconds": 30,
+        "maxLapTimeRatio": 2
+      }
+    }
+  },
+  "tracks": {
+    "heldOut": [
+      {
+        "id": "hairpin-run",
+        "contentHash": "sha256:8aae2913cd848de88ad706ea0042388cfc5afa795af7fedb4752762bfae4dc18"
+      },
+      {
+        "id": "sweep-hook",
+        "contentHash": "sha256:0358b2c5e89e8eeda939b0a06cb1e98e0ef7ee7babc7508095f46b4c115b493b"
+      },
+      {
+        "id": "hook-chicane",
+        "contentHash": "sha256:ea1076c024cef6d541363aa9d502232279f33e05d320ea58c392d54e5fabfd40"
+      }
+    ],
+    "splitManifestHash": "sha256:681d603918e4db06b4c8434f9893275ae50477dd2c7735dc67a86be3dc4bfbc5"
+  },
+  "analysis": {
+    "descriptiveMetric": "ordered-progress-gates-per-lap-v1",
+    "starts": [
+      0,
+      1,
+      2,
+      3,
+      4
+    ],
+    "endpoints": {
+      "collisionDelta": 0.2,
+      "lapTimeDeltaSeconds": 1,
+      "minEligiblePairs": 6
+    },
+    "bootstrap": {
+      "resamples": 10000,
+      "seed": 20261114,
+      "level": 0.95,
+      "method": "percentile-nearest-rank-v1"
+    },
+    "decisionRule": "p5-02-e5-decision-v2",
+    "brakeUsageThreshold": 0.05
+  },
+  "authorisation": "issue-34#issuecomment-6886405758",
+  "code": {
+    "revision": "56d58e29260fb34994949f1d1ebdc3a312a6325f"
+  }
+}
