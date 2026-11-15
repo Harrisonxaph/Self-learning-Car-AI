@@ -13,9 +13,11 @@
 //    runner must pass a ledger restored from the record's recorded openings;
 //  - an opened session evaluates each listed (agent, track) pair at most once, and nothing outside the lists.
 // Evolved networks are frozen as A5 (the brake output on) or, for E5 (docs/plans/p5-02-plan.md), A4 (the brake output masked); an agent's brake binding is part of its identity and is checked before a driver is built.
+// E6 (docs/plans/p5-04-plan.md) adds three baselines the same way: A2 (an untrained network, all outputs active) and the random-action drivers A1 and A7, whose identity is the driver kind, the published action algorithm, the hold and the seed.
 // The rule-based drivers are frozen the same way as networks: their five constants become a FrozenModel's parameters,
 // with the agent name, algorithm and brake setting in its provenance, so their identity is a content hash too.
 import { createNetworkDriver, type EpisodeDriver } from '../ai/drivers';
+import { CORRELATED_HOLD_TICKS, createCorrelatedRandomDriver, createRandomDriver, RANDOM_ACTION_ALGORITHM } from '../ai/randomDrivers';
 import {
   createRuleBasedDriver,
   RULE_A3_NB_PARAMS,
@@ -47,8 +49,16 @@ export type RuleAgent = (typeof RULE_AGENTS)[number];
 export const NETWORK_AGENT = 'A5';
 /** The evolved no-brake agent of E4 and E5. Its frozen models carry `provenance.agent = 'A4'` and `provenance.brakeEnabled = false`. */
 export const NO_BRAKE_NETWORK_AGENT = 'A4';
+/**
+ * The untrained-network baseline of E6 (P5-04): a random-weight network of the same architecture, never evolved, with all three outputs
+ * active. Its frozen models carry `provenance.agent = 'A2'` and `provenance.brakeEnabled = true`.
+ */
+export const UNTRAINED_NETWORK_AGENT = 'A2';
+/** The random-action baselines of E6 (P5-04): A1 draws a new action every tick, A7 holds each action for 30 ticks. */
+export const RANDOM_AGENTS = Object.freeze(['A1', 'A7'] as const);
+export type RandomAgent = (typeof RANDOM_AGENTS)[number];
 /** Every agent name a frozen model may record. */
-export type FrozenAgentName = RuleAgent | typeof NETWORK_AGENT | typeof NO_BRAKE_NETWORK_AGENT;
+export type FrozenAgentName = RuleAgent | typeof NETWORK_AGENT | typeof NO_BRAKE_NETWORK_AGENT | typeof UNTRAINED_NETWORK_AGENT | RandomAgent;
 
 const RULE_SETTINGS: Readonly<Record<RuleAgent, { readonly params: RuleParams; readonly brakeEnabled: boolean }>> = Object.freeze({
   A3: Object.freeze({ params: RULE_A3_PARAMS, brakeEnabled: true }),
@@ -78,12 +88,37 @@ export function freezeNoBrakeNetworkAgent(parameters: ArrayLike<number>, provena
   return freezeModel(parameters, { ...provenance, agent: NO_BRAKE_NETWORK_AGENT, brakeEnabled: false });
 }
 
+/** An untrained network as a frozen model, recorded as A2 with all three outputs active (E6's untrained baseline). */
+export function freezeUntrainedNetworkAgent(parameters: ArrayLike<number>, provenance: Readonly<Record<string, string | number | boolean>> = {}): FrozenModel {
+  return freezeModel(parameters, { ...provenance, agent: UNTRAINED_NETWORK_AGENT, brakeEnabled: true });
+}
+
+/**
+ * A random-action driver as a frozen model (E6's A1 and A7). It has no network, so its identity is the driver kind, the action algorithm, the
+ * hold and its seed: `parameters` is the one-element list `[seed]` and the rest is `provenance`. A7's hold is pinned to the published 30 ticks
+ * (a different hold is a different agent and is refused), and every output, the brake included, is active.
+ */
+export function freezeRandomAgent(agent: RandomAgent, seed: number, provenance: Readonly<Record<string, string | number | boolean>> = {}): FrozenModel {
+  if (!(RANDOM_AGENTS as readonly unknown[]).includes(agent)) throw new RangeError(`Unknown random agent "${String(agent)}"; allowed: ${RANDOM_AGENTS.join(', ')}.`);
+  return freezeModel([seed], { ...provenance, agent, algorithm: RANDOM_ACTION_ALGORITHM, holdTicks: agent === 'A1' ? 1 : CORRELATED_HOLD_TICKS, brakeEnabled: true });
+}
+
 /** The agent a frozen model records (`provenance.agent`), or throws RangeError for a model that records none. */
 export function frozenAgentName(model: FrozenModel): FrozenAgentName {
   if (!isFrozenModel(model)) throw new RangeError('model must be an unchanged frozen model (freezeModel).');
   const agent: unknown = model.provenance.agent;
-  if (agent === NETWORK_AGENT || agent === NO_BRAKE_NETWORK_AGENT || (RULE_AGENTS as readonly unknown[]).includes(agent)) return agent as FrozenAgentName;
-  throw new RangeError(`model.provenance.agent must be ${[NETWORK_AGENT, NO_BRAKE_NETWORK_AGENT, ...RULE_AGENTS].join(', ')}, got ${String(agent)}.`);
+  if (
+    agent === NETWORK_AGENT ||
+    agent === NO_BRAKE_NETWORK_AGENT ||
+    agent === UNTRAINED_NETWORK_AGENT ||
+    (RANDOM_AGENTS as readonly unknown[]).includes(agent) ||
+    (RULE_AGENTS as readonly unknown[]).includes(agent)
+  ) {
+    return agent as FrozenAgentName;
+  }
+  throw new RangeError(
+    `model.provenance.agent must be ${[NETWORK_AGENT, NO_BRAKE_NETWORK_AGENT, UNTRAINED_NETWORK_AGENT, ...RANDOM_AGENTS, ...RULE_AGENTS].join(', ')}, got ${String(agent)}.`,
+  );
 }
 
 /**
@@ -102,9 +137,32 @@ export function driverForFrozenAgent(model: FrozenModel): EpisodeDriver {
     if (brakeEnabled) throw new RangeError('An A4 model must record brakeEnabled = false.');
     return createNetworkDriver(model.parameters, { brakeEnabled });
   }
+  if (agent === UNTRAINED_NETWORK_AGENT) {
+    // An untrained network is built like an A5 (all outputs active); the brake binding is part of its identity.
+    if (!brakeEnabled) throw new RangeError('An A2 model must record brakeEnabled = true.');
+    return createNetworkDriver(model.parameters, { brakeEnabled });
+  }
+  if ((RANDOM_AGENTS as readonly unknown[]).includes(agent)) return randomDriverForModel(agent as RandomAgent, model, brakeEnabled);
   checkRuleModel(agent as RuleAgent, model, brakeEnabled);
   const params = Object.fromEntries(PARAM_ORDER.map((key, i) => [key, model.parameters[i]!])) as unknown as RuleParams;
   return createRuleBasedDriver(params, { brakeEnabled });
+}
+
+/**
+ * A frozen random-agent model must be exactly the agent it names under the supported action algorithm: the published algorithm id, that
+ * agent's hold (A1 one tick, A7 thirty) and every output active, with its seed as the single parameter. An unchanged `freezeModel` only proves
+ * integrity, so the contract is checked here, as for the rule agents.
+ */
+function randomDriverForModel(agent: RandomAgent, model: FrozenModel, brakeEnabled: boolean): EpisodeDriver {
+  if (model.provenance.algorithm !== RANDOM_ACTION_ALGORITHM) {
+    throw new RangeError(`A random agent's model must record algorithm ${RANDOM_ACTION_ALGORITHM}, got ${String(model.provenance.algorithm)}.`);
+  }
+  if (!brakeEnabled) throw new RangeError(`${agent} drives with every output active: its model must record brakeEnabled = true.`);
+  const hold = agent === 'A1' ? 1 : CORRELATED_HOLD_TICKS;
+  if (model.provenance.holdTicks !== hold) throw new RangeError(`${agent}'s hold is ${hold} tick(s), but the model records ${String(model.provenance.holdTicks)}.`);
+  if (model.parameters.length !== 1) throw new RangeError(`A random agent's model needs exactly one parameter, its seed, got ${model.parameters.length}.`);
+  const seed = model.parameters[0]!;
+  return agent === 'A1' ? createRandomDriver(seed) : createCorrelatedRandomDriver(seed, hold);
 }
 
 /**
